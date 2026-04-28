@@ -1,0 +1,59 @@
+# Seed-список таблиц для visary_db (срез из schema_export.csv)
+# Формат: <schema>.<table_name> (одна на строку, # — комментарий)
+# Скрипт scripts/generate-visary-ddl.mjs транзитивно подтянет все таблицы по FK.
+
+# === Системные (Base): минимум для FK на Owner/Creator ===
+Base.User
+Base.UserGroup
+
+# === Корневые сущности проектов и объектов ===
+Data.ConstructionProject
+Data.ConstructionSite
+Data.ConstructionSection
+Data.ConstructionType
+Data.Queues
+Data.ConstructionSite_Queues
+
+# === Помещения (impоrtType: rooms) ===
+Data.Room
+Data.RoomKind
+Data.EstateObject
+Data.EstateObjectType
+Data.EstateObject_Materials
+Data.EstateClass
+Data.FloorCategory
+Data.UseTypeArea
+
+# === ДДУ (importType: shareAgreements) ===
+Data.ShareAgreement
+Data.Contract
+Data.ContractCurrency
+Data.AcceptedContract
+Data.AddAgreement
+
+# === Платежи (importType: paymentSchedule) ===
+Data.Payment
+Data.PaymentStatus
+Data.PaymentType
+
+# === Эскроу (importType: escrowAccounts) ===
+Data.EscrowAccount
+Data.EscrowAccountStatus
+Data.EscrowAccount_SlaveObject
+
+# === Контрагенты (importType: organizations, buyers) ===
+Data.Organization
+Data.OrganizationPerson
+Data.FounderPerson
+Data.FounderEntity
+Data.CompanyGroup
+Data.ClientData
+Data.ClientSegment
+
+# === Справочники географии и прав ===
+Data.Region
+Data.Town
+Data.TownType
+Data.Right
+Data.Restriction
+Data.Unit
