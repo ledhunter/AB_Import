@@ -449,13 +449,17 @@ proxy: {
 
 ## 🎯 Чек-лист для добавления нового ListView-эндпоинта
 
+> 📝 С версии «библиотека ListView» (см. [10-listview-library.md](./10-listview-library.md))
+> сетевая часть и парсинг ответа вынесены в generic-ядро. Не реализуй `fetchXxx`,
+> `parseXxxResponse` и `useXxx` руками — используй фабрики.
+
 - [ ] Описать сырой тип `XxxRaw` в `types/listView.ts` (PascalCase, как в API)
 - [ ] Описать UI-тип `XxxItem` (camelCase, нормализованный)
-- [ ] Создать `src/services/xxxService.ts`:
+- [ ] Создать `src/services/listView/entities/xxx.ts`:
   - Константа `XXX_COLUMNS` со списком запрашиваемых колонок
-  - Функция `fetchXxx()` через `visaryPost('/listview/{mnemonic}', body)`
-  - Функция `toXxxItem(raw)` — маппинг с fallback'ами через `||`
-- [ ] Создать хук `useXxx()` с `AbortController`
-- [ ] Использовать в UI с `loading`/`error` состояниями
-- [ ] Написать unit-тесты на `toXxxItem` (особенно edge-cases: пустые поля, null, undefined)
-- [ ] Запустить тесты: `npx tsx src/services/__tests__/xxxService.test.ts`
+  - Маппер `toXxxItem(raw)` через `||` (не `??`)
+  - `xxxService = createListViewService({ mnemonic, columns, toItem, logTag })`
+- [ ] Создать хук-обёртку `hooks/useXxx.ts` через `useListView(xxxService)`
+- [ ] Использовать в UI с `loading`/`error` состояниями (контракт прежний)
+- [ ] Написать unit-тесты на `toXxxItem` в `services/listView/__tests__/xxx.test.ts`
+- [ ] Запустить тесты: `npx tsx src/services/listView/__tests__/xxx.test.ts`

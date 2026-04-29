@@ -3,15 +3,15 @@
 // =====================================================================
 
 /**
- * Запрос к Visary ListView API.
- * Поля сделаны как в реальном API (PascalCase) — сериализуются как есть.
+ * @deprecated Используй generic-типы из `services/listView/types.ts`.
+ * Сохранено только для обратной совместимости старых импортов.
  */
 export interface ListViewRequest {
   Mnemonic: string;
   PageSkip: number;
   PageSize: number;
   Columns: string[];
-  Sorts: string;                  // JSON-строка вида "[{\"selector\":\"ID\",\"desc\":true}]"
+  Sorts: string;
   Hidden: boolean;
   ExtraFilter: string | null;
   SearchString: string;
@@ -19,14 +19,7 @@ export interface ListViewRequest {
 }
 
 /**
- * Универсальный ответ Visary ListView API.
- * T — тип конкретной строки (Project / Site / ...).
- *
- * Реальная структура ответа от Visary:
- *   { Data: T[], Total: number, Summaries: unknown[] }
- *
- * Для устойчивости поддерживаем и альтернативные имена (`Items`/`TotalCount`),
- * на случай если они встретятся на других эндпоинтах.
+ * @deprecated Используй `ListViewResponseRaw<T>` из `services/listView/types.ts`.
  */
 export interface ListViewResponse<T> {
   Data?: T[];
@@ -82,4 +75,22 @@ export interface SiteItem {
   constructionPermissionNumber: string;
   constructionProjectNumber: string;
   stageNumber: string;
+  raw?: ConstructionSiteRaw;
+}
+
+/**
+ * Сырая строка объекта строительства из Visary ListView (mnemonic `constructionsite`).
+ * Имена полей соответствуют запрошенным `Columns` (PascalCase).
+ *
+ * ⚠️ Список колонок предварительный — уточнить при первом реальном запросе
+ * к Visary (как было с проектами: имена ключей ответа подтверждаются логами).
+ */
+export interface ConstructionSiteRaw {
+  ID: number;
+  Title?: string | null;
+  ConstructionPermissionNumber?: string | null;
+  ConstructionProjectNumber?: string | null;
+  StageNumber?: string | null;
+  /** FK на проект строительства — для фильтрации по выбранному проекту. */
+  ConstructionProjectID?: number | null;
 }

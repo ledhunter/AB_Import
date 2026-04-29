@@ -30,11 +30,25 @@ KiloImportService.Web/src/
 │   └── importTypes.ts                  # IMPORT_TYPES — реестр типов импорта (8 шт.)
 ├── services/                           # 🔌 Интеграция с Visary API
 │   ├── visaryApi.ts                    # fetch-обёртка + VisaryApiError/VisaryAuthError
-│   ├── projectsService.ts              # fetchProjects() + toProjectItem()
+│   ├── projectsService.ts              # @deprecated shim (re-export для обратной совместимости)
+│   ├── listView/                       # 🧰 Библиотека методов ListView (см. 10-listview-library.md)
+│   │   ├── index.ts                    # публичный re-export
+│   │   ├── types.ts                    # ListViewServiceConfig, ListViewQuery, ListViewService<T>
+│   │   ├── parseListViewResponse.ts    # generic парсер Data/Items/items
+│   │   ├── createListViewService.ts    # фабрика сервисов + buildListViewRequestBody
+│   │   ├── entities/
+│   │   │   ├── projects.ts             # mnemonic + columns + toProjectItem
+│   │   │   └── sites.ts                # + buildSitesQueryByProject
+│   │   └── __tests__/
+│   │       ├── parseListViewResponse.test.ts
+│   │       ├── createListViewService.test.ts
+│   │       └── sites.test.ts
 │   └── __tests__/
-│       └── projectsService.test.ts     # Unit-тесты маппинга (5 кейсов)
+│       └── projectsService.test.ts     # Unit-тесты маппинга (10 кейсов)
 ├── hooks/
-│   └── useProjects.ts                  # Хук: data/loading/error + AbortController
+│   ├── useListView.ts                  # generic lazy-load хук (idle/loading/success/error + AbortController)
+│   ├── useProjects.ts                  # тонкая обёртка над useListView(projectsService)
+│   └── useSites.ts                     # обёртка с фильтром по projectId
 ├── utils/
 │   ├── fileFormat.ts                   # detectFileFormat() — резолв формата по расширению
 │   └── datetime.ts                     # formatDateTime() — ISO → DD.MM.YYYY HH:mm:ss
