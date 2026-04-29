@@ -1,0 +1,14 @@
+import { readFileSync } from 'node:fs';
+const lines = readFileSync('db/visary/init/01-schema.sql', 'utf8').split('\n');
+console.log('Total lines:', lines.length);
+console.log('--- Header ---');
+console.log(lines.slice(0, 15).join('\n'));
+const idx = lines.findIndex((l) => l.startsWith('CREATE TABLE IF NOT EXISTS "Data"."Room" '));
+console.log(`\n--- Room (line ${idx + 1}) ---`);
+console.log(lines.slice(idx, idx + 25).join('\n'));
+console.log('\n--- ConstructionSection ---');
+const idx2 = lines.findIndex((l) => l.startsWith('CREATE TABLE IF NOT EXISTS "Data"."ConstructionSection"'));
+console.log(lines.slice(idx2, idx2 + 30).join('\n'));
+console.log('\n--- First 5 FK ---');
+console.log(lines.filter((l) => l.startsWith('ALTER TABLE')).slice(0, 5).join('\n'));
+console.log('\n--- Total FKs:', lines.filter((l) => l.startsWith('ALTER TABLE')).length);

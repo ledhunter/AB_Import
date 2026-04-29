@@ -1,0 +1,29 @@
+# ────────── Node / Vite ──────────
+node_modules/
+dist/
+.vite/
+*.log
+
+# ────────── .NET ──────────
+bin/
+obj/
+*.user
+*.suo
+
+# ────────── Build artifacts ──────────
+build/
+
+# ────────── Локальные секреты ──────────
+.env
+.env.local
+**/.env.local
+**/appsettings.Local.json
+
+# ────────── IDE ──────────
+.vs/
+.idea/
+.vscode/
+
+# ────────── OS ──────────
+Thumbs.db
+.DS_Store

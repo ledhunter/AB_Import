@@ -1,0 +1,136 @@
+# ════════════════════════════════════════════════════════════════════
+# KiloImportService — локальная dev-стенд (frontend + backend + 2×Postgres)
+# ════════════════════════════════════════════════════════════════════
+#
+#  Запуск:    docker compose up -d
+#  Логи:      docker compose logs -f backend
+#  Остановка: docker compose down
+#  Полный сброс БД: docker compose down -v
+#
+#  URL'ы:
+#    UI:        http://localhost:5173
+#    Backend:   http://localhost:5000  (Swagger: /swagger)
+#    Postgres service-db: localhost:5433  (db: import_service_db)
+#    Postgres visary-db:  localhost:5434  (db: visary_webapi_db)
+# ════════════════════════════════════════════════════════════════════
+
+name: kilo-import
+
+services:
+  # ──────────────────────────── PostgreSQL: служебная БД сервиса ────────────────────────────
+  postgres-service:
+    image: postgres:16-alpine
+    container_name: kilo-import-pg-service
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: import_service_db
+      POSTGRES_USER: import_service
+      POSTGRES_PASSWORD: import_service_pwd
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5433:5432"
+    volumes:
+      - pg-service-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U import_service -d import_service_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks:
+      - kilo-net
+
+  # ──────────────────────────── PostgreSQL: целевая БД (срез Visary) ────────────────────────
+  postgres-visary:
+    image: postgres:16-alpine
+    container_name: kilo-import-pg-visary
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: visary_webapi_db
+      POSTGRES_USER: visary
+      POSTGRES_PASSWORD: visary_pwd
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5434:5432"
+    volumes:
+      - pg-visary-data:/var/lib/postgresql/data
+      # Init-скрипты выполняются один раз при создании БД (по алфавиту):
+      #   01-schema.sql       — CREATE TABLE/FK (66 таблиц из CSV)
+      #   02-missing-roots.sql — ConstructionProject/Site + 30 FK
+      #   03-seed-data.sql    — справочники (User, RoomKind, тестовый проект)
+      - ./db/visary/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U visary -d visary_webapi_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks:
+      - kilo-net
+
+  # ──────────────────────────── Backend: .NET 10 Web API ────────────────────────────────────
+  backend:
+    build:
+      context: ./KiloImportService.Api
+      dockerfile: Dockerfile
+    container_name: kilo-import-backend
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:5000
+      # Service DB (под управлением EF Core миграций)
+      ConnectionStrings__ServiceDb: "Host=postgres-service;Port=5432;Database=import_service_db;Username=import_service;Password=import_service_pwd"
+      # Visary DB (целевая, DB-first — без миграций)
+      ConnectionStrings__VisaryDb: "Host=postgres-visary;Port=5432;Database=visary_webapi_db;Username=visary;Password=visary_pwd"
+      # Файлы импорта внутри контейнера
+      ImportStorage__Path: /var/lib/import-files
+      # CORS для UI
+      Cors__AllowedOrigins__0: "http://localhost:5173"
+    ports:
+      - "5000:5000"
+    volumes:
+      - import-files:/var/lib/import-files
+    depends_on:
+      postgres-service:
+        condition: service_healthy
+      postgres-visary:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:5000/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 30s
+    networks:
+      - kilo-net
+
+  # ──────────────────────────── Frontend: React + Vite ──────────────────────────────────────
+  frontend:
+    build:
+      context: ./KiloImportService.Web
+      dockerfile: Dockerfile
+    container_name: kilo-import-frontend
+    restart: unless-stopped
+    environment:
+      # Прокси берёт переменную при старте Vite (см. vite.config.ts)
+      VITE_BACKEND_URL: http://backend:5000
+      VITE_VISARY_API_URL: ${VITE_VISARY_API_URL:-https://isup-alfa-test.k8s.npc.ba}
+      VITE_VISARY_API_TOKEN: ${VITE_VISARY_API_TOKEN:-}
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+    networks:
+      - kilo-net
+
+# ──────────────────────────── Persistence ────────────────────────────────────
+volumes:
+  pg-service-data:
+    name: kilo-import_pg-service-data
+  pg-visary-data:
+    name: kilo-import_pg-visary-data
+  import-files:
+    name: kilo-import_import-files
+
+networks:
+  kilo-net:
+    name: kilo-import_net
+    driver: bridge

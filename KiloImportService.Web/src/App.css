@@ -1,0 +1,431 @@
+/* === Базовые стили === */
+* { box-sizing: border-box; }
+
+html, body, #root {
+  margin: 0;
+  padding: 0;
+  background: #f3f4f5;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Helvetica Neue", Arial, sans-serif;
+  color: #2c2d2e;
+  min-height: 100vh;
+}
+
+.app {
+  min-height: 100vh;
+}
+
+.app-header {
+  background: #fff;
+  border-bottom: 1px solid #e7e8ea;
+  padding: 24px 0;
+}
+
+.app-main {
+  padding: 32px 0 64px;
+}
+
+.container {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+/* === Карточки === */
+.card {
+  background: #fff;
+  border-radius: 16px;
+  padding: 32px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  border: 1px solid #ececec;
+}
+
+.section-gap {
+  margin: 24px 0;
+}
+
+/* === Форма === */
+.field {
+  margin-bottom: 24px;
+}
+
+.form-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.date-range {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.form-actions {
+  margin-top: 32px;
+}
+
+/* === Прогресс === */
+.report-progress {
+  padding: 8px 0;
+}
+
+.report-progress__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 12px;
+}
+
+/* === Сводка === */
+.report-summary {
+  padding: 4px 0;
+}
+
+.report-summary__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 24px;
+}
+
+.report-summary__meta {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  padding: 16px 20px;
+  background: #f7f8f9;
+  border: 1px solid #ececec;
+  border-radius: 12px;
+  margin-bottom: 16px;
+}
+
+.report-summary__meta-item {
+  min-width: 0;
+}
+
+@media (max-width: 700px) {
+  .report-summary__meta {
+    grid-template-columns: 1fr;
+  }
+}
+
+.report-summary__cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 900px) {
+  .report-summary__cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.summary-card {
+  background: #f7f8f9;
+  border-radius: 12px;
+  padding: 16px;
+  border: 1px solid #ececec;
+}
+
+/* === Фильтр-теги === */
+.filter-tags {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.filter-tag {
+  background: #f3f4f5;
+  border: 1px solid transparent;
+  border-radius: 100px;
+  padding: 8px 16px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.15s;
+  color: #2c2d2e;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.filter-tag:hover {
+  background: #ececec;
+}
+
+.filter-tag--active {
+  background: #ef3124;
+  color: #fff;
+}
+
+.filter-tag--active .filter-tag__count {
+  background: rgba(255, 255, 255, 0.25);
+  color: #fff;
+}
+
+.filter-tag__count {
+  background: #fff;
+  color: #6b7280;
+  border-radius: 100px;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  min-width: 24px;
+  text-align: center;
+}
+
+/* === Таблица === */
+.table-wrapper {
+  border: 1px solid #ececec;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.data-table thead th {
+  background: #f7f8f9;
+  text-align: left;
+  padding: 12px 16px;
+  font-weight: 600;
+  font-size: 13px;
+  color: #6b7280;
+  border-bottom: 1px solid #ececec;
+}
+
+.data-table tbody td {
+  padding: 12px 16px;
+  border-bottom: 1px solid #f3f4f5;
+  vertical-align: top;
+}
+
+.row {
+  transition: background 0.15s;
+}
+
+.row:hover {
+  background: #fafbfc;
+}
+
+.row--error {
+  background: #fef4f4;
+}
+
+.row--error:hover {
+  background: #fce9e8;
+}
+
+.row--warning {
+  background: #fffaf0;
+}
+
+.row--warning:hover {
+  background: #fef3dc;
+}
+
+/* === Ячейки === */
+.cell-source {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.source-pill {
+  background: #f3f4f5;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #404040;
+}
+
+.source-pill b {
+  color: #6b7280;
+  font-weight: 600;
+  margin-right: 4px;
+}
+
+.cell-dest {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dest-line {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 13px;
+}
+
+.dest-action {
+  font-weight: 600;
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.dest-line--created .dest-action {
+  background: #d8f1d6;
+  color: #1d7e2a;
+}
+
+.dest-line--updated .dest-action {
+  background: #d0e7fe;
+  color: #1066c4;
+}
+
+.dest-line--skipped .dest-action {
+  background: #ececec;
+  color: #6b7280;
+}
+
+.dest-entity {
+  font-weight: 600;
+}
+
+.dest-title {
+  color: #6b7280;
+}
+
+/* === Кнопка переключения === */
+.btn-toggle {
+  background: transparent;
+  border: 1px solid #ececec;
+  border-radius: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 12px;
+  color: #2c2d2e;
+  transition: all 0.15s;
+}
+
+.btn-toggle:hover {
+  background: #f3f4f5;
+  border-color: #d8d8d8;
+}
+
+/* === Раскрываемые детали === */
+.row-details td {
+  padding: 0 !important;
+}
+
+.row-details__content {
+  padding: 24px;
+  background: #fafbfc;
+  border-bottom: 1px solid #ececec;
+}
+
+.details-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin-bottom: 16px;
+}
+
+@media (max-width: 900px) {
+  .details-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.kv-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+  font-size: 13px;
+}
+
+.kv-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid #ececec;
+}
+
+.kv-table td:first-child {
+  color: #6b7280;
+  width: 40%;
+  font-weight: 500;
+}
+
+.muted {
+  color: #98989a;
+}
+
+.dest-card {
+  background: #fff;
+  border: 1px solid #ececec;
+  border-radius: 8px;
+  padding: 12px;
+  margin-top: 8px;
+  font-size: 13px;
+}
+
+.dest-card__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.dest-card__path {
+  color: #6b7280;
+  font-size: 12px;
+  margin-top: 4px;
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+}
+
+/* === Сообщения === */
+.messages {
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-top: 12px;
+}
+
+.messages--warning {
+  background: #fff5dc;
+  border: 1px solid #ffe187;
+}
+
+.messages--error {
+  background: #fde9e7;
+  border: 1px solid #fab9b3;
+}
+
+.message-row {
+  display: flex;
+  gap: 12px;
+  padding: 6px 0;
+  font-size: 13px;
+  align-items: flex-start;
+}
+
+.message-field {
+  font-weight: 600;
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  background: rgba(255, 255, 255, 0.6);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* === Загруженный файл + бейдж формата === */
+.file-uploaded {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.file-uploaded__format {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 4px;
+}
