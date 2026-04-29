@@ -24,6 +24,38 @@ namespace KiloImportService.Api.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("KiloImportService.Api.Data.Entities.CachedProject", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("IdentifierKK")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("IdentifierZPLM")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<DateTimeOffset>("LastSyncedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IdentifierKK")
+                        .HasDatabaseName("IX_CachedProject_IdentifierKK");
+
+                    b.HasIndex("Title")
+                        .HasDatabaseName("IX_CachedProject_Title");
+
+                    b.ToTable("cached_projects", "import");
+                });
+
             modelBuilder.Entity("KiloImportService.Api.Data.Entities.ImportError", b =>
                 {
                     b.Property<long>("Id")

@@ -1,7 +1,7 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Select } from '@alfalab/core-components/select';
 import { Typography } from '@alfalab/core-components/typography';
-import { useProjects } from '../../hooks/useProjects';
+import { useBackendProjects } from '../../hooks/useBackendProjects';
 import { useSites } from '../../hooks/useSites';
 
 interface Props {
@@ -34,19 +34,40 @@ const errorRow = (message: string, onRetry: () => void) => (
   </div>
 );
 
+interface ProjectOption {
+  key: string;
+  content: string;
+}
+
+const toProjectOption = (p: { id: number; title: string; code: string }): ProjectOption => ({
+  key: String(p.id),
+  content: `${p.title} (${p.code})`,
+});
+
 export const ImportForm = ({
   projectId,
   siteId,
   onProjectChange,
   onSiteChange,
 }: Props) => {
-  const projects = useProjects();
+  // Контролируемая строка поиска для Select.searchProps.
+  const [projectSearch, setProjectSearch] = useState('');
+  // ⚠️ Сохраняем полную выбранную опцию (и id, и лябл), чтобы Select продолжал рисовать
+  // выбранный проект даже когда search-фильтр исключил его из projects.data.
+  const [selectedProject, setSelectedProject] = useState<ProjectOption | null>(null);
+
+  const projects = useBackendProjects({ searchString: projectSearch, debounceMs: 300 });
   const sites = useSites(projectId);
 
-  const projectOptions = useMemo(
-    () => projects.data.map((p) => ({ key: String(p.id), content: `${p.title} (${p.code})` })),
-    [projects.data],
-  );
+  const projectOptions = useMemo(() => {
+    const list = projects.data.map(toProjectOption);
+    // Если выбранный проект отсутствует в текущем выводе search'a — всёравно включаем его в список,
+    // иначе Select не сможет показать label при selected={key}.
+    if (selectedProject && !list.some((o) => o.key === selectedProject.key)) {
+      list.unshift(selectedProject);
+    }
+    return list;
+  }, [projects.data, selectedProject]);
 
   const siteOptions = useMemo(
     () =>
@@ -63,12 +84,12 @@ export const ImportForm = ({
     [sites.data],
   );
 
-  // Lazy-load: запрашиваем список проектов только при первом открытии Select.
+  // Первый open Select → backend синхронизирует кэш проектов с Visary (идемпотентно).
   const handleProjectsOpen = (payload: { open?: boolean }) => {
     console.info(
-      `[ImportForm] Select "Проект" onOpen — open=${payload.open}, status=${projects.status}`,
+      `[ImportForm] Select "Проект" onOpen — open=${payload.open}, status=${projects.status}, warmed=${projects.isWarmed}`,
     );
-    if (payload.open) projects.load();
+    if (payload.open && !projects.isWarmed) projects.sync();
   };
 
   const handleSitesOpen = (payload: { open?: boolean }) => {
@@ -80,12 +101,18 @@ export const ImportForm = ({
 
   const projectPlaceholder = (() => {
     switch (projects.status) {
+      case 'syncing':
+        return 'Синхронизация проектов из Visary…';
       case 'loading':
-        return 'Загрузка проектов…';
+        return 'Поиск проектов…';
       case 'error':
         return 'Ошибка загрузки проектов';
       case 'success':
-        return projects.data.length === 0 ? 'Проекты не найдены' : 'Выберите проект';
+        return projects.data.length === 0
+          ? projectSearch
+            ? `Ничего не найдено по «${projectSearch}»`
+            : 'Проекты не найдены'
+          : 'Выберите проект';
       default:
         return 'Нажмите для загрузки проектов';
     }
@@ -114,13 +141,41 @@ export const ImportForm = ({
           options={projectOptions}
           selected={projectId !== null ? String(projectId) : null}
           onChange={({ selected }) => {
-            onProjectChange(selected ? Number(selected.key) : null);
+            if (selected) {
+              const opt: ProjectOption = {
+                key: String(selected.key),
+                content: String(selected.content ?? selected.key),
+              };
+              setSelectedProject(opt);
+              onProjectChange(Number(opt.key));
+              // Очищаем поиск, чтобы при повторном открытии был полный список,
+              // и Select не отображал старый запрос в поле.
+              setProjectSearch('');
+            } else {
+              setSelectedProject(null);
+              onProjectChange(null);
+            }
             onSiteChange(null);
           }}
           onOpen={handleProjectsOpen}
-          disabled={projects.status === 'loading'}
+          showSearch
+          searchProps={{
+            value: projectSearch,
+            onChange: (value: string) => setProjectSearch(value),
+            componentProps: { placeholder: 'Введите название или KK/ZPLM…' },
+          }}
+          disabled={projects.status === 'syncing'}
           block
         />
+        {projects.fromFallback && projects.status === 'success' ? (
+          <Typography.Text
+            view="primary-small"
+            color="secondary"
+            tag="span"
+          >
+            Подгружено из Visary по запросу.
+          </Typography.Text>
+        ) : null}
         {projects.status === 'error' && projects.error
           ? errorRow(projects.error, projects.refetch)
           : null}

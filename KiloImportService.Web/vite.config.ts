@@ -56,6 +56,7 @@ export default defineConfig(({ mode }) => {
         // SignalR использует WebSocket → ws: true для /hubs.
         '/api/imports': backendProxy(),
         '/api/import-types': backendProxy(),
+        '/api/projects': backendProxy(),
         '/hubs': backendProxy({ ws: true }),
         '/health': backendProxy(),
         '/swagger': backendProxy(),

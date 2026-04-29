@@ -12,9 +12,11 @@
 
   <ItemGroup>
     <!-- ASP.NET Core ─ Swagger / OpenAPI / SignalR -->
-    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.0-preview.4.25258.110" />
-    <PackageReference Include="Swashbuckle.AspNetCore" Version="7.2.0" />
-    <PackageReference Include="Swashbuckle.AspNetCore.Annotations" Version="7.2.0" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.7" />
+    <!-- ⚠️ Версии 7.x несовместимы с .NET 10 / Microsoft.OpenApi 2.0 (OperationType удалён).
+         См. doc_project/19-net10-swashbuckle.md. Пин строго на 10.1.7+. -->
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="10.1.7" />
+    <PackageReference Include="Swashbuckle.AspNetCore.Annotations" Version="10.1.7" />
 
     <!-- EF Core 9 + Npgsql (поддерживает .NET 10 на runtime) -->
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.4" />
