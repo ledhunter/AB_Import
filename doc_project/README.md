@@ -23,6 +23,9 @@
 | [15-signalr-progress.md](./15-signalr-progress.md) | 📡 SignalR прогресс импорта: `StageProgress` с троттлингом ≈50/файл, `JoinSession`, autoReconnect, защита от старых событий |
 | [16-import-cancellation.md](./16-import-cancellation.md) | 🛑 Отмена сессии: Singleton-реестр `CancellationTokenSource`, `MarkCancelledAsync` с независимым ct, парсеры с `catch (OCE) { throw }` |
 | [17-backend-tests-xunit.md](./17-backend-tests-xunit.md) | 🧪 Backend xUnit-тесты: in-memory EF, SkippableFact для ClosedXML/SkiaSharp, паттерн уникальной БД на тест |
+| [18-projects-cache.md](./18-projects-cache.md) | 🗂️ Кэш проектов Visary + поиск-as-you-type, **probe-then-sync** стратегия (sync только если кэш пуст), graceful fallback при Visary outage |
+| [19-net10-deployment-gotchas.md](./19-net10-deployment-gotchas.md) | 🐛 5 граблей при первом деплое .NET 10 + Alpine: addgroup, Swashbuckle 10.1.7, JsonDocument в InMemory, TLS revocation, varchar(64) → 255 |
+| [20-select-with-search.md](./20-select-with-search.md) | 🔍 Alfa Select + showSearch + динамические опции: пиннинг выбранной опции, очистка search на onChange |
 | [plan-listview-library.md](./plan-listview-library.md) | 🏗️ План рефакторинга ListView в переиспользуемую библиотеку (с чек-листом и логом прогресса) |
 
 ## 🎯 Контекст проекта

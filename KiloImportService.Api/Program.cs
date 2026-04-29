@@ -4,6 +4,8 @@ using KiloImportService.Api.Domain.Importing;
 using KiloImportService.Api.Domain.Importing.Parsers;
 using KiloImportService.Api.Domain.Mapping;
 using KiloImportService.Api.Domain.Pipeline;
+using KiloImportService.Api.Domain.Projects;
+using KiloImportService.Api.Domain.Visary;
 using KiloImportService.Api.Hubs;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
@@ -44,6 +46,28 @@ try
     builder.Services.AddScoped<ImportPipeline>();
     builder.Services.AddSingleton<IFileStorage, LocalFileStorage>();
     builder.Services.AddSingleton<IImportSessionCancellation, ImportSessionCancellation>();
+
+    // ─── Visary HTTP API клиент + кэш проектов ───
+    builder.Services
+        .AddOptions<VisaryApiOptions>()
+        .Bind(builder.Configuration.GetSection(VisaryApiOptions.SectionName));
+    builder.Services.AddHttpClient<IVisaryListViewClient, VisaryListViewClient>((sp, client) =>
+    {
+        var opt = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<VisaryApiOptions>>().Value;
+        if (opt.RequestTimeout > TimeSpan.Zero) client.Timeout = opt.RequestTimeout;
+    })
+    // ⚠️ В контейнере (Alpine) .NET runtime не может online-проверить статус отзыва
+    // (CRL/OCSP), и handshake падает с RevocationStatusUnknown/OfflineRevocation.
+    // Отключаем revocation-чек — для prod-окружения с настроенным OCSP responder'ом
+    // это значение надо вернуть к Online. См. doc_project/19-net10-swashbuckle.md.
+    .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+    {
+        SslOptions = new System.Net.Security.SslClientAuthenticationOptions
+        {
+            CertificateRevocationCheckMode = System.Security.Cryptography.X509Certificates.X509RevocationMode.NoCheck,
+        },
+    });
+    builder.Services.AddScoped<IProjectsCacheService, ProjectsCacheService>();
 
     // ─── SignalR ───
     builder.Services.AddSignalR();

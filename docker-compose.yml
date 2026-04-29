@@ -84,6 +84,10 @@ services:
       ImportStorage__Path: /var/lib/import-files
       # CORS для UI
       Cors__AllowedOrigins__0: "http://localhost:5173"
+      # Visary HTTP API (для кэша проектов и fallback-поиска).
+      # Значения берутся из корневого .env (gitignored). См. doc_project/18-projects-cache.md.
+      Visary__BaseUrl: ${Visary__BaseUrl:-https://isup-alfa-test.k8s.npc.ba}
+      Visary__BearerToken: ${Visary__BearerToken:-}
     ports:
       - "5000:5000"
     volumes:

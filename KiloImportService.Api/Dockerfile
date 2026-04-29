@@ -13,8 +13,11 @@ RUN dotnet publish -c Release -o /app /p:UseAppHost=false
 # ────────────── Runtime stage ──────────────
 FROM mcr.microsoft.com/dotnet/aspnet:10.0-preview-alpine AS runtime
 WORKDIR /app
+# curl нужен для healthcheck в docker-compose. icu-libs — для глобализации.
+# ⚠️ В aspnet:10.0-preview-alpine группа `app` уже создана образом — проверяем наличие.
 RUN apk add --no-cache curl icu-libs && \
-    addgroup -S app && adduser -S app -G app
+    (getent group app  >/dev/null || addgroup -S app) && \
+    (getent passwd app >/dev/null || adduser  -S app -G app)
 
 COPY --from=build /app .
 RUN mkdir -p /var/lib/import-files && chown -R app:app /var/lib/import-files /app

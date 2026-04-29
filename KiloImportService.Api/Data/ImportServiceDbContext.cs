@@ -1,6 +1,8 @@
+using System.Text.Json;
 using KiloImportService.Api.Data.Entities;
 using KiloImportService.Api.Domain.Importing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace KiloImportService.Api.Data;
 
@@ -22,6 +24,7 @@ public class ImportServiceDbContext : DbContext
     public DbSet<StagedRow> StagedRows => Set<StagedRow>();
     public DbSet<ImportError> Errors => Set<ImportError>();
     public DbSet<ImportFileSnapshot> FileSnapshots => Set<ImportFileSnapshot>();
+    public DbSet<CachedProject> CachedProjects => Set<CachedProject>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -70,8 +73,22 @@ public class ImportServiceDbContext : DbContext
         {
             e.ToTable("staged_rows");
             e.HasKey(x => x.Id);
-            e.Property(x => x.RawValues).HasColumnType("jsonb").IsRequired();
-            e.Property(x => x.MappedValues).HasColumnType("jsonb");
+
+            // ⚠️ Npgsql нативно поддерживает JsonDocument↔jsonb. InMemory-провайдер
+            // (используется в unit-тестах) такого маппинга не имеет, поэтому
+            // подключаем value-конвертер JsonDocument↔string ТОЛЬКО для не-Npgsql.
+            // См. doc_project/17-backend-tests-xunit.md и 18-projects-cache.md.
+            if (Database.IsNpgsql())
+            {
+                e.Property(x => x.RawValues).HasColumnType("jsonb").IsRequired();
+                e.Property(x => x.MappedValues).HasColumnType("jsonb");
+            }
+            else
+            {
+                e.Property(x => x.RawValues).HasConversion(JsonDocConverter).IsRequired();
+                e.Property(x => x.MappedValues).HasConversion(JsonDocConverter);
+            }
+
             e.Property(x => x.Status).HasConversion<string>().HasMaxLength(16);
             e.HasOne(x => x.Session)
              .WithMany(s => s.Rows)
@@ -111,6 +128,33 @@ public class ImportServiceDbContext : DbContext
             e.HasIndex(x => x.ImportSessionId).IsUnique();
         });
 
+        // ─── CachedProject ───
+        // Локальный кэш проектов Visary для поиска-as-you-type.
+        b.Entity<CachedProject>(e =>
+        {
+            e.ToTable("cached_projects");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Id).ValueGeneratedNever();
+            e.Property(x => x.Title).HasMaxLength(500).IsRequired();
+            // ⚠️ Коды KK/ZPLM в реальных проектах бывают длинными (встречаются >64 символов)
+            // — поэтому оставляем запас; 255 хватит с большим запасом.
+            e.Property(x => x.IdentifierKK).HasMaxLength(255);
+            e.Property(x => x.IdentifierZPLM).HasMaxLength(255);
+            // Индексы под ILIKE-поиск (citext не используем — pg_trgm не обязателен).
+            e.HasIndex(x => x.Title).HasDatabaseName("IX_CachedProject_Title");
+            e.HasIndex(x => x.IdentifierKK).HasDatabaseName("IX_CachedProject_IdentifierKK");
+        });
+
         base.OnModelCreating(b);
     }
+
+    /// <summary>
+    /// Запасной конвертер JsonDocument↔string для провайдеров без нативной jsonb-поддержки
+    /// (InMemory в тестах). Хранение происходит как сериализованная JSON-строка;
+    /// производительность нерелевантна, потому что используется только в unit-тестах.
+    /// </summary>
+    private static readonly ValueConverter<JsonDocument, string> JsonDocConverter =
+        new(
+            v => v == null ? "{}" : v.RootElement.GetRawText(),
+            v => JsonDocument.Parse(string.IsNullOrWhiteSpace(v) ? "{}" : v, default));
 }
