@@ -35,6 +35,8 @@ public abstract class ExcelDataReaderParserBase : IFileParser
                 errors.Add(new ParseError(null, "Файл пустой."));
                 return Task.FromResult(new ParseResult(headers, rows, errors));
             }
+            // ExcelDataReader.Name — текущий лист, на котором стоит cursor чтения.
+            var sheetName = reader.Name ?? string.Empty;
             for (int i = 0; i < reader.FieldCount; i++)
             {
                 headers.Add((reader.GetValue(i)?.ToString() ?? string.Empty).Trim());
@@ -64,9 +66,13 @@ public abstract class ExcelDataReaderParserBase : IFileParser
                     if (!string.IsNullOrWhiteSpace(value)) isEmpty = false;
                     cells[headers[c]] = value;
                 }
-                if (!isEmpty) rows.Add(new ParsedRow(rowIndex, cells));
+                if (!isEmpty) rows.Add(new ParsedRow(rowIndex, sheetName, cells));
                 rowIndex++;
             }
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception ex)
         {

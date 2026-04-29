@@ -1,60 +1,56 @@
 import { useMemo, useState } from 'react';
 import { Button } from '@alfalab/core-components/button';
 import { Typography } from '@alfalab/core-components/typography';
+import { Alert } from '@alfalab/core-components/alert';
 import { ImportTypePicker } from './components/ImportTypePicker/ImportTypePicker';
 import { ImportForm } from './components/ImportForm/ImportForm';
 import { FileUpload } from './components/FileUpload/FileUpload';
-import { ImportReport } from './components/ImportReport/ImportReport';
-import { MOCK_PROGRESS, MOCK_REPORT } from './mocks/data';
+import { SessionView } from './components/ImportSession/SessionView';
+import { useImportSession } from './hooks/useImportSession';
+import { useImportTypes } from './hooks/useImportTypes';
 import { detectFileFormat } from './utils/fileFormat';
-import type { ImportType, ImportProgress, ImportReport as ImportReportT } from './types/import';
+import type { ImportType } from './types/import';
 import './App.css';
 
-type Stage = 'form' | 'processing' | 'completed';
-
 export default function App() {
-  const [stage, setStage] = useState<Stage>('form');
   const [importType, setImportType] = useState<ImportType | null>(null);
   const [projectId, setProjectId] = useState<number | null>(null);
   const [siteId, setSiteId] = useState<number | null>(null);
   const [file, setFile] = useState<File | null>(null);
-  const [progress, setProgress] = useState<ImportProgress | null>(null);
-  const [report, setReport] = useState<ImportReportT | null>(null);
+
+  const importSession = useImportSession();
+  const importTypes = useImportTypes();
 
   const detectedFormat = useMemo(() => (file ? detectFileFormat(file.name) : null), [file]);
+  const importTypeLabel = useMemo(
+    () => importTypes.data.find((t) => t.id === importType)?.label ?? importType ?? undefined,
+    [importTypes.data, importType],
+  );
+
   const canSubmit =
-    importType !== null && projectId !== null && siteId !== null && file !== null && detectedFormat !== null;
+    importType !== null &&
+    projectId !== null &&
+    siteId !== null &&
+    file !== null &&
+    detectedFormat !== null &&
+    importSession.phase === 'idle';
 
-  const handleSubmit = () => {
-    setStage('processing');
-    setProgress({ ...MOCK_PROGRESS, currentRow: 0, percentComplete: 0 });
-    setReport(null);
-
-    let cur = 0;
-    const total = MOCK_PROGRESS.totalRows;
-    const interval = setInterval(() => {
-      cur += Math.ceil(total / 25);
-      if (cur >= total) {
-        clearInterval(interval);
-        setProgress({ ...MOCK_PROGRESS, currentRow: total, percentComplete: 100 });
-        setReport(MOCK_REPORT);
-        setStage('completed');
-      } else {
-        setProgress({
-          ...MOCK_PROGRESS,
-          currentRow: cur,
-          percentComplete: Math.round((cur / total) * 100),
-        });
-      }
-    }, 200);
+  const handleSubmit = async () => {
+    if (!file || !importType || projectId === null || siteId === null) return;
+    await importSession.start({
+      importTypeCode: importType,
+      file,
+      projectId,
+      siteId,
+    });
   };
 
   const handleReset = () => {
-    setStage('form');
+    importSession.reset();
     setFile(null);
-    setProgress(null);
-    setReport(null);
   };
+
+  const isFormPhase = importSession.phase === 'idle';
 
   return (
     <div className="app">
@@ -63,16 +59,26 @@ export default function App() {
           <Typography.Title view="medium" tag="h1" weight="bold" style={{ margin: 0 }}>
             Сервис импорта файлов
           </Typography.Title>
-          <Typography.Text view="primary-medium" color="secondary" tag="div" style={{ marginTop: 4 }}>
+          <Typography.Text
+            view="primary-medium"
+            color="secondary"
+            tag="div"
+            style={{ marginTop: 4 }}
+          >
             Visary · Альфа Банк — Управление проектами
           </Typography.Text>
         </div>
       </header>
 
       <main className="container app-main">
-        {stage === 'form' && (
+        {isFormPhase && (
           <div className="card">
-            <Typography.Title view="small" tag="h2" weight="bold" style={{ margin: '0 0 24px' }}>
+            <Typography.Title
+              view="small"
+              tag="h2"
+              weight="bold"
+              style={{ margin: '0 0 24px' }}
+            >
               Параметры импорта
             </Typography.Title>
 
@@ -85,31 +91,43 @@ export default function App() {
               onSiteChange={setSiteId}
             />
 
-            <FileUpload file={file} detectedFormat={detectedFormat} onFileSelect={setFile} />
+            <FileUpload
+              file={file}
+              detectedFormat={detectedFormat}
+              onFileSelect={setFile}
+            />
+
+            {importSession.error && (
+              <div style={{ marginBottom: 16 }}>
+                <Alert view="negative">{importSession.error}</Alert>
+              </div>
+            )}
 
             <div className="form-actions">
-              <Button view="primary" size={56} onClick={handleSubmit} disabled={!canSubmit} block>
+              <Button
+                view="primary"
+                size={56}
+                onClick={handleSubmit}
+                disabled={!canSubmit}
+                loading={importSession.phase === 'uploading'}
+                block
+              >
                 Запустить импорт
               </Button>
             </div>
           </div>
         )}
 
-        {(stage === 'processing' || stage === 'completed') && (
-          <>
-            <ImportReport
-              report={report}
-              progress={progress}
-              isProcessing={stage === 'processing'}
-            />
-            {stage === 'completed' && (
-              <div className="form-actions" style={{ marginTop: 24 }}>
-                <Button view="secondary" size={56} onClick={handleReset}>
-                  Новый импорт
-                </Button>
-              </div>
-            )}
-          </>
+        {!isFormPhase && (
+          <SessionView
+            phase={importSession.phase}
+            session={importSession.session}
+            report={importSession.report}
+            importTypeLabel={importTypeLabel}
+            onApply={importSession.apply}
+            onCancel={importSession.cancel}
+            onReset={handleReset}
+          />
         )}
       </main>
     </div>

@@ -43,6 +43,7 @@ try
     // ─── Pipeline + Storage ───
     builder.Services.AddScoped<ImportPipeline>();
     builder.Services.AddSingleton<IFileStorage, LocalFileStorage>();
+    builder.Services.AddSingleton<IImportSessionCancellation, ImportSessionCancellation>();
 
     // ─── SignalR ───
     builder.Services.AddSignalR();
@@ -68,8 +69,12 @@ try
 
     // ─── Auto-apply миграций для service-db при старте ───
     // (Visary-БД управляется внешними init-скриптами, миграциями не трогаем.)
-    using (var scope = app.Services.CreateScope())
+    // ⚠️ EF tools (dotnet ef migrations add) выполняют код Program.cs до app.RunAsync(),
+    // чтобы построить хост и достать DbContext. Без guard EF.IsDesignTime попытка
+    // подключиться к реальному Postgres сломает scaffolding, когда БД не запущена.
+    if (!EF.IsDesignTime)
     {
+        using var scope = app.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ImportServiceDbContext>();
         Log.Information("Applying ImportServiceDb migrations…");
         await db.Database.MigrateAsync();

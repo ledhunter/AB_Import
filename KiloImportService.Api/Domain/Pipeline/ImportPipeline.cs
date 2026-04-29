@@ -111,8 +111,23 @@ public sealed class ImportPipeline
 
     /// <summary>
     /// Парсить файл и валидировать строки. Вызывается в фоновом потоке после Upload.
+    /// При <see cref="OperationCanceledException"/> (Cancel-endpoint) переводим
+    /// сессию в <c>Cancelled</c> и пробрасываем исключение наружу.
     /// </summary>
     public async Task ParseAndValidateAsync(Guid sessionId, CancellationToken ct)
+    {
+        try
+        {
+            await ParseAndValidateCoreAsync(sessionId, ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            await MarkCancelledAsync(sessionId, "Импорт отменён пользователем.", default);
+            throw;
+        }
+    }
+
+    private async Task ParseAndValidateCoreAsync(Guid sessionId, CancellationToken ct)
     {
         var session = await _serviceDb.Sessions
             .Include(s => s.FileSnapshot)
@@ -178,16 +193,28 @@ public sealed class ImportPipeline
         }
 
         // Сохраняем StagedRow + ImportError для каждой строки.
+        // Параллельно публикуем StageProgress в SignalR — раз в N строк, чтобы не
+        // спамить хаб тысячами событий на больших файлах.
         int successCount = 0, errorCount = 0;
+        var totalRowsValidate = validation.Rows.Count;
+        var notifyEvery = Math.Max(1, totalRowsValidate / 50); // ≈ 50 апдейтов на файл
         for (int i = 0; i < validation.Rows.Count; i++)
         {
+            ct.ThrowIfCancellationRequested();
             var mr = validation.Rows[i];
             var raw = parseResult.Rows[i];
+            // Сохраняем не только Cells, но и Sheet — чтобы UI мог показать,
+            // на каком листе находилась строка.
+            var rawPayload = new Dictionary<string, object?>
+            {
+                ["sheet"] = raw.Sheet,
+                ["cells"] = raw.Cells,
+            };
             _serviceDb.StagedRows.Add(new StagedRow
             {
                 ImportSessionId = sessionId,
                 SourceRowNumber = mr.SourceRowNumber,
-                RawValues = System.Text.Json.JsonSerializer.SerializeToDocument(raw.Cells),
+                RawValues = System.Text.Json.JsonSerializer.SerializeToDocument(rawPayload),
                 MappedValues = mr.MappedValues,
                 Status = mr.IsValid ? StagedRowStatus.Valid : StagedRowStatus.Invalid,
             });
@@ -203,6 +230,22 @@ public sealed class ImportPipeline
                 });
             }
             if (mr.IsValid) successCount++; else errorCount++;
+
+            var processed = i + 1;
+            if (processed == totalRowsValidate || processed % notifyEvery == 0)
+            {
+                var percent = totalRowsValidate == 0 ? 100 : (int)Math.Round((processed * 100.0) / totalRowsValidate);
+                validateStage.ProgressPercent = percent;
+                await _hub.Clients.Group(groupName).SendAsync("StageProgress", new
+                {
+                    sessionId,
+                    stage = "Validate",
+                    currentRow = processed,
+                    totalRows = totalRowsValidate,
+                    percentComplete = percent,
+                    sheet = raw.Sheet,
+                }, ct);
+            }
         }
         session.TotalRows = parseResult.Rows.Count;
         session.SuccessRows = successCount;
@@ -225,6 +268,19 @@ public sealed class ImportPipeline
     /// Применить валидированные строки в visary_db. Только из статуса Validated.
     /// </summary>
     public async Task ApplyAsync(Guid sessionId, CancellationToken ct)
+    {
+        try
+        {
+            await ApplyCoreAsync(sessionId, ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            await MarkCancelledAsync(sessionId, "Применение отменено пользователем.", default);
+            throw;
+        }
+    }
+
+    private async Task ApplyCoreAsync(Guid sessionId, CancellationToken ct)
     {
         var session = await _serviceDb.Sessions.FirstAsync(s => s.Id == sessionId, ct);
         if (session.Status != ImportStatus.Validated)
@@ -309,6 +365,34 @@ public sealed class ImportPipeline
         await _serviceDb.SaveChangesAsync(ct);
         await _hub.Clients.Group(ImportProgressHub.GroupName(session.Id))
             .SendAsync("SessionStatus", new { sessionId = session.Id, status = newStatus.ToString() }, ct);
+    }
+
+    /// <summary>
+    /// Помечает сессию как отменённую — вызывается после <see cref="OperationCanceledException"/>.
+    /// Использует НЕсвязанный <see cref="CancellationToken"/> (default), чтобы запись в БД
+    /// прошла даже после отмены исходного токена.
+    /// </summary>
+    private async Task MarkCancelledAsync(Guid sessionId, string reason, CancellationToken ct)
+    {
+        try
+        {
+            var session = await _serviceDb.Sessions.FirstOrDefaultAsync(s => s.Id == sessionId, ct);
+            if (session is null) return;
+            // Если кто-то уже выставил финальный статус — не перетираем.
+            if (session.Status is ImportStatus.Applied or ImportStatus.Failed or ImportStatus.Cancelled)
+                return;
+            session.Status = ImportStatus.Cancelled;
+            session.CompletedAt = DateTimeOffset.UtcNow;
+            session.ErrorMessage = reason;
+            await _serviceDb.SaveChangesAsync(ct);
+            await _hub.Clients.Group(ImportProgressHub.GroupName(sessionId))
+                .SendAsync("SessionStatus", new { sessionId, status = ImportStatus.Cancelled.ToString() }, ct);
+            _log.LogInformation("Session {SessionId} marked as Cancelled: {Reason}", sessionId, reason);
+        }
+        catch (Exception ex)
+        {
+            _log.LogError(ex, "MarkCancelledAsync failed for session {SessionId}", sessionId);
+        }
     }
 
     private static string ContentTypeFor(FileFormat f) => f switch

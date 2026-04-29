@@ -15,6 +15,9 @@ public sealed class CsvParser : IFileParser
 
     public async Task<ParseResult> ParseAsync(Stream stream, CancellationToken ct = default)
     {
+        // У CSV «листа» нет — используем общую метку «CSV» для отчёта.
+        const string SheetName = "CSV";
+
         var headers = new List<string>();
         var rows = new List<ParsedRow>();
         var errors = new List<ParseError>();
@@ -65,9 +68,15 @@ public sealed class CsvParser : IFileParser
                     if (!string.IsNullOrWhiteSpace(value)) isEmpty = false;
                     cells[headers[c]] = value;
                 }
-                if (!isEmpty) rows.Add(new ParsedRow(rowIndex, cells));
+                if (!isEmpty) rows.Add(new ParsedRow(rowIndex, SheetName, cells));
                 rowIndex++;
             }
+        }
+        catch (OperationCanceledException)
+        {
+            // Отмену пробрасываем наружу — это управляющая ситуация,
+            // а не ошибка парсинга.
+            throw;
         }
         catch (Exception ex)
         {

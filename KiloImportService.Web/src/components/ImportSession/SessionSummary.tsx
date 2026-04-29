@@ -1,14 +1,13 @@
 import { Typography } from '@alfalab/core-components/typography';
-import type { ImportReport } from '../../types/import';
-import { IMPORT_TYPES } from '../../mocks/importTypes';
+import { SessionStatusBadge } from './SessionStatusBadge';
+import { SESSION_STATUS_LABELS } from './labels';
 import { formatDateTime } from '../../utils/datetime';
+import type { UiSession } from '../../types/session';
 
 interface Props {
-  report: ImportReport;
+  session: UiSession;
+  importTypeLabel?: string;
 }
-
-const getImportTypeLabel = (id: string): string =>
-  IMPORT_TYPES.find((t) => t.id === id)?.label ?? id;
 
 interface Card {
   label: string;
@@ -16,19 +15,23 @@ interface Card {
   color: 'positive' | 'link' | 'secondary' | 'attention' | 'negative';
 }
 
-export const ReportSummary = ({ report }: Props) => {
-  const { summary } = report;
-
+export const SessionSummary = ({ session, importTypeLabel }: Props) => {
   const cards: Card[] = [
-    { label: 'Всего строк', value: summary.totalRows, color: 'secondary' },
-    { label: 'Помещений создано', value: summary.roomsCreated, color: 'positive' },
-    { label: 'Помещений обновлено', value: summary.roomsUpdated, color: 'link' },
-    { label: 'ДДУ создано', value: summary.shareAgreementsCreated, color: 'positive' },
-    { label: 'ДДУ обновлено', value: summary.shareAgreementsUpdated, color: 'link' },
-    { label: 'Пропущено', value: summary.roomsSkipped + summary.shareAgreementsSkipped, color: 'secondary' },
-    { label: 'Предупреждений', value: summary.warningsCount, color: 'attention' },
-    { label: 'Ошибок', value: summary.errorsCount, color: 'negative' },
+    { label: 'Всего строк', value: session.totalRows, color: 'secondary' },
+    { label: 'Валидных', value: session.successRows, color: 'positive' },
+    { label: 'С ошибками', value: session.errorRows, color: 'negative' },
+    {
+      label: 'Файл',
+      value: session.fileFormat ? session.fileFormat.toUpperCase() : '—',
+      color: 'link',
+    },
   ];
+
+  const subtitleParts = [
+    session.fileName,
+    session.fileFormat ? session.fileFormat.toUpperCase() : null,
+    `Тип: ${importTypeLabel ?? session.importTypeCode}`,
+  ].filter(Boolean);
 
   return (
     <div className="report-summary">
@@ -38,9 +41,13 @@ export const ReportSummary = ({ report }: Props) => {
             Отчёт импорта
           </Typography.Title>
           <Typography.Text view="primary-small" color="secondary" tag="div" style={{ marginTop: 4 }}>
-            {report.fileName} · {report.fileFormat.toUpperCase()} · Тип: {getImportTypeLabel(report.importType)}
+            {subtitleParts.join(' · ')}
           </Typography.Text>
         </div>
+        <SessionStatusBadge
+          variant={session.variant}
+          label={SESSION_STATUS_LABELS[session.status]}
+        />
       </div>
 
       <div className="report-summary__meta">
@@ -49,7 +56,7 @@ export const ReportSummary = ({ report }: Props) => {
             Начало импорта
           </Typography.Text>
           <Typography.Text view="primary-medium" weight="bold" tag="div" style={{ marginTop: 2 }}>
-            {formatDateTime(report.startedAt)}
+            {formatDateTime(session.startedAt)}
           </Typography.Text>
         </div>
         <div className="report-summary__meta-item">
@@ -57,7 +64,7 @@ export const ReportSummary = ({ report }: Props) => {
             Окончание импорта
           </Typography.Text>
           <Typography.Text view="primary-medium" weight="bold" tag="div" style={{ marginTop: 2 }}>
-            {formatDateTime(report.completedAt)}
+            {formatDateTime(session.completedAt)}
           </Typography.Text>
         </div>
         <div className="report-summary__meta-item">
@@ -65,7 +72,7 @@ export const ReportSummary = ({ report }: Props) => {
             Длительность
           </Typography.Text>
           <Typography.Text view="primary-medium" weight="bold" tag="div" style={{ marginTop: 2 }}>
-            {report.duration ?? '—'}
+            {session.duration ?? '—'}
           </Typography.Text>
         </div>
       </div>
@@ -82,6 +89,12 @@ export const ReportSummary = ({ report }: Props) => {
           </div>
         ))}
       </div>
+
+      {session.errorMessage && (
+        <Typography.Text view="primary-small" color="negative" tag="div" style={{ marginTop: 12 }}>
+          {session.errorMessage}
+        </Typography.Text>
+      )}
     </div>
   );
 };
