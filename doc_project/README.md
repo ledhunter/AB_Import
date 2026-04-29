@@ -17,6 +17,12 @@
 | [09-lazy-loaded-select.md](./09-lazy-loaded-select.md) | 🎯 Lazy-load паттерн для Select (`idle/loading/success/error`, `onOpen`, `AbortController`) |
 | [10-listview-library.md](./10-listview-library.md) | 🧰 Библиотека методов Visary ListView (generic-ядро + per-entity адаптеры, как добавить новый эндпоинт за 3 шага) |
 | [11-react-refs-discipline.md](./11-react-refs-discipline.md) | 🪝 Дисциплина `useRef` в React 19: правила записи `ref.current`, паттерн «latest value» через `useEffect`, типичные ошибки |
+| [12-ef-core-migrations.md](./12-ef-core-migrations.md) | 🗄️ EF Core миграции для service-db: guard `EF.IsDesignTime`, `MigrationsHistoryTable`, partial unique index, команды dotnet-ef |
+| [13-vite-proxy-backend.md](./13-vite-proxy-backend.md) | 🔌 Vite proxy для собственного backend: префиксы `/api/imports`, `/hubs` с `ws: true`, факторинг через `backendProxy()` helper |
+| [14-imports-backend-integration.md](./14-imports-backend-integration.md) | 🔄 Полный контур UI ↔ backend: importsService + importsHub + useImportSession + DTO ↔ UI mapper |
+| [15-signalr-progress.md](./15-signalr-progress.md) | 📡 SignalR прогресс импорта: `StageProgress` с троттлингом ≈50/файл, `JoinSession`, autoReconnect, защита от старых событий |
+| [16-import-cancellation.md](./16-import-cancellation.md) | 🛑 Отмена сессии: Singleton-реестр `CancellationTokenSource`, `MarkCancelledAsync` с независимым ct, парсеры с `catch (OCE) { throw }` |
+| [17-backend-tests-xunit.md](./17-backend-tests-xunit.md) | 🧪 Backend xUnit-тесты: in-memory EF, SkippableFact для ClosedXML/SkiaSharp, паттерн уникальной БД на тест |
 | [plan-listview-library.md](./plan-listview-library.md) | 🏗️ План рефакторинга ListView в переиспользуемую библиотеку (с чек-листом и логом прогресса) |
 
 ## 🎯 Контекст проекта

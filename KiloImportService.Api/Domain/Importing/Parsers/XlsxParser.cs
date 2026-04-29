@@ -33,6 +33,8 @@ public sealed class XlsxParser : IFileParser
                 return Task.FromResult(new ParseResult(headers, rows, errors));
             }
 
+            var sheetName = sheet.Name ?? string.Empty;
+
             var firstRow = range.FirstRow();
             foreach (var cell in firstRow.Cells())
             {
@@ -59,8 +61,12 @@ public sealed class XlsxParser : IFileParser
                     cells[headers[c]] = value ?? string.Empty;
                 }
                 if (isEmpty) continue; // пропускаем полностью пустые строки
-                rows.Add(new ParsedRow(rowIndex, cells));
+                rows.Add(new ParsedRow(rowIndex, sheetName, cells));
             }
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception ex)
         {
