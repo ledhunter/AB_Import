@@ -72,25 +72,40 @@ export interface ProjectItem {
 export interface SiteItem {
   id: number;
   title: string;
-  constructionPermissionNumber: string;
+  address: string;
   constructionProjectNumber: string;
-  stageNumber: string;
+  type: string;
+  totalArea: number | null;
   raw?: ConstructionSiteRaw;
 }
 
 /**
  * Сырая строка объекта строительства из Visary ListView (mnemonic `constructionsite`).
- * Имена полей соответствуют запрошенным `Columns` (PascalCase).
- *
- * ⚠️ Список колонок предварительный — уточнить при первом реальном запросе
- * к Visary (как было с проектами: имена ключей ответа подтверждаются логами).
+ * Имена полей соответствуют запрашиваемым `Columns` (PascalCase).
  */
 export interface ConstructionSiteRaw {
   ID: number;
+  Date?: string | null;
+  Project?: string | null;
   Title?: string | null;
-  ConstructionPermissionNumber?: string | null;
+  Location?: string | null;
   ConstructionProjectNumber?: string | null;
-  StageNumber?: string | null;
-  /** FK на проект строительства — для фильтрации по выбранному проекту. */
-  ConstructionProjectID?: number | null;
+  Address?: string | null;
+  Type?: string | null;
+  EstateClass?: string | null;
+  BuildingMaterial?: string | null;
+  FinishingMaterial?: string | null;
+  TotalArea?: number | null;
+  StartDate?: string | null;
+  FinishDate?: string | null;
+  MonthDuration?: number | null;
+  TempOfConstruction?: string | null;
+  ClaimedCost?: number | null;
+  AreaCost?: number | null;
+  RiskFund?: number | null;
+  Borrower?: string | null;
+  ComplexID?: number | null;
+  Town?: string | null;
+  Comment?: string | null;
+  RowVersion?: string | number | null;
 }

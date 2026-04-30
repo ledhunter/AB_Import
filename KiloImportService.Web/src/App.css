@@ -429,3 +429,16 @@ html, body, #root {
   gap: 8px;
   padding-left: 4px;
 }
+
+/* === Центрирование модального окна Select === */
+[class*="modal__component"] {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+[class*="modal__content"] {
+  margin: auto !important;
+  max-width: 600px !important;
+  width: 90% !important;
+}

@@ -20,10 +20,13 @@ import type { SiteItem } from '../types/listView';
 export function useSites(projectId: number | null): UseListViewState<SiteItem> {
   // Стабилизируем ссылку на query — useListView сравнивает по ссылке, чтобы
   // понять, нужно ли сбросить кэш. См. реализацию useListView.
-  const query = useMemo(
-    () => (projectId !== null ? buildSitesQueryByProject(projectId) : undefined),
-    [projectId],
-  );
+  const query = useMemo(() => {
+    if (projectId !== null) {
+      console.info(`[useSites] создаю query для projectId=${projectId}`);
+      return buildSitesQueryByProject(projectId);
+    }
+    return undefined;
+  }, [projectId]);
 
   const state = useListView(sitesService, {
     query,

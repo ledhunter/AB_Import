@@ -29,6 +29,14 @@ export interface ListViewResponseRaw<T> {
 }
 
 /**
+ * Фильтр ассоциаций для Visary ListView API (используется для связанных сущностей).
+ */
+export interface AssociationFilter {
+  AssociatedId: number;
+  Filters: unknown | null;
+}
+
+/**
  * Запрос-параметры, которые потребитель сервиса может варьировать на каждом вызове.
  * Не путать с конфигурацией сервиса (`ListViewServiceConfig`) — там фиксированные
  * mnemonic + columns + сортировка по умолчанию.
@@ -39,7 +47,10 @@ export interface ListViewQuery {
   searchString?: string;
   /** JSON-строка фильтра Visary (см. ExtraFilter в API). */
   extraFilter?: string | null;
+  /** @deprecated Используй associationFilter для связанных сущностей */
   associatedId?: number | null;
+  /** Фильтр ассоциаций (для связанных сущностей, например объекты по проекту) */
+  associationFilter?: AssociationFilter;
   /** Переопределить сортировку, заданную в ListViewServiceConfig.defaultSort. */
   sorts?: string;
   /** AbortSignal — пробрасывается в fetch. */
@@ -69,6 +80,8 @@ export type ListViewMapper<TRaw, TItem> = (raw: TRaw) => TItem;
 export interface ListViewServiceConfig<TRaw, TItem> {
   /** Mnemonic эндпоинта Visary, например 'constructionproject' или 'constructionsite'. */
   mnemonic: string;
+  /** Кастомный путь к API (если нужен специальный эндпоинт, например '/onetomany/Project') */
+  pathSuffix?: string;
   /** Список колонок для запроса (PascalCase, как в Visary API). */
   columns: string[];
   /** Сортировка по умолчанию: JSON-строка вида '[{"selector":"ID","desc":true}]'. */

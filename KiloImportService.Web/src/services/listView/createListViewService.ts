@@ -21,7 +21,10 @@ interface ListViewRequestBody {
   Hidden: boolean;
   ExtraFilter: string | null;
   SearchString: string;
-  AssociatedID: number | null;
+  AssociationFilter?: {
+    AssociatedId: number;
+    Filters: unknown | null;
+  } | null;
 }
 
 const DEFAULT_PAGE_SIZE = 50;
@@ -44,7 +47,7 @@ export function buildListViewRequestBody<TRaw, TItem>(
     Hidden: false,
     ExtraFilter: query.extraFilter ?? null,
     SearchString: query.searchString ?? '',
-    AssociatedID: query.associatedId ?? null,
+    AssociationFilter: query.associationFilter ?? null,
   };
 }
 
@@ -64,13 +67,26 @@ export function buildListViewRequestBody<TRaw, TItem>(
 export function createListViewService<TRaw, TItem>(
   config: ListViewServiceConfig<TRaw, TItem>,
 ): ListViewService<TItem> {
-  const path = `/listview/${config.mnemonic}`;
+  const path = `/listview/${config.mnemonic}${config.pathSuffix ?? ''}`;
   const logTag = config.logTag ?? `[${config.mnemonic}]`;
 
   async function fetch(query: ListViewQuery = {}): Promise<ListViewResult<TItem>> {
     const body = buildListViewRequestBody(config, query);
+    
+    // Для эндпоинта /onetomany/Project нужен query parameter associationId
+    const queryParams = query.associationFilter?.AssociatedId
+      ? { associationId: query.associationFilter.AssociatedId }
+      : undefined;
+    
+    console.groupCollapsed(`${logTag} запрос к ${path}`);
+    console.log('Query:', query);
+    console.log('Query params:', queryParams);
+    console.log('Request body:', JSON.stringify(body, null, 2));
+    console.groupEnd();
+    
     const raw = await visaryPost<ListViewResponseRaw<TRaw>>(path, body, {
       signal: query.signal,
+      queryParams,
     });
     const result = parseListViewResponse(raw, config.toItem);
     console.info(

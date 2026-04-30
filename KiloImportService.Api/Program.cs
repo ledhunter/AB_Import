@@ -39,7 +39,7 @@ try
 
     // ─── Мапперы (Strategy per importType) ───
     builder.Services.AddSingleton<IImportMapper, RoomsImportMapper>();
-    // … добавлять по мере реализации новых типов импорта
+    builder.Services.AddSingleton<IImportMapper, FinModelImportMapper>();
     builder.Services.AddSingleton<IImportMapperRegistry, ImportMapperRegistry>();
 
     // ─── Pipeline + Storage ───
@@ -51,22 +51,26 @@ try
     builder.Services
         .AddOptions<VisaryApiOptions>()
         .Bind(builder.Configuration.GetSection(VisaryApiOptions.SectionName));
+    
+    var httpHandler = () => new SocketsHttpHandler
+    {
+        SslOptions = new System.Net.Security.SslClientAuthenticationOptions
+        {
+            // ⚠️ В контейнере (Alpine) .NET runtime не может online-проверить статус отзыва
+            // (CRL/OCSP), и handshake падает с RevocationStatusUnknown/OfflineRevocation.
+            // Отключаем revocation-чек — для prod-окружения с настроенным OCSP responder'ом
+            // это значение надо вернуть к Online. См. doc_project/19-net10-swashbuckle.md.
+            CertificateRevocationCheckMode = System.Security.Cryptography.X509Certificates.X509RevocationMode.NoCheck,
+        },
+    };
+    
     builder.Services.AddHttpClient<IVisaryListViewClient, VisaryListViewClient>((sp, client) =>
     {
         var opt = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<VisaryApiOptions>>().Value;
         if (opt.RequestTimeout > TimeSpan.Zero) client.Timeout = opt.RequestTimeout;
     })
-    // ⚠️ В контейнере (Alpine) .NET runtime не может online-проверить статус отзыва
-    // (CRL/OCSP), и handshake падает с RevocationStatusUnknown/OfflineRevocation.
-    // Отключаем revocation-чек — для prod-окружения с настроенным OCSP responder'ом
-    // это значение надо вернуть к Online. См. doc_project/19-net10-swashbuckle.md.
-    .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
-    {
-        SslOptions = new System.Net.Security.SslClientAuthenticationOptions
-        {
-            CertificateRevocationCheckMode = System.Security.Cryptography.X509Certificates.X509RevocationMode.NoCheck,
-        },
-    });
+    .ConfigurePrimaryHttpMessageHandler(httpHandler);
+    
     builder.Services.AddScoped<IProjectsCacheService, ProjectsCacheService>();
 
     // ─── SignalR ───

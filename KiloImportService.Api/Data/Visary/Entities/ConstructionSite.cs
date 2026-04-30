@@ -11,5 +11,6 @@ public class ConstructionSite
     public string? ConstructionPermissionNumber { get; set; }
     public string? ConstructionProjectNumber { get; set; }
     public string? StageNumber { get; set; }
+    public int? FinishingMaterialId { get; set; }
     public bool Hidden { get; set; }
 }

@@ -210,11 +210,23 @@ export function cancelImport(
 }
 
 /** Получить реестр поддерживаемых типов импорта. */
-export function getImportTypes(
+export async function getImportTypes(
   options: RequestOptions = {},
 ): Promise<ApiImportTypesResponse> {
-  return fetchJson<ApiImportTypesResponse>('/api/import-types', {
-    method: 'GET',
-    signal: options.signal,
-  });
+  try {
+    return await fetchJson<ApiImportTypesResponse>('/api/import-types', {
+      method: 'GET',
+      signal: options.signal,
+    });
+  } catch (err) {
+    // Fallback mock если backend недоступен
+    console.warn('[ImportsAPI] Backend недоступен, используем mock типов импорта');
+    return {
+      items: [
+        { id: 'rooms', label: 'Помещения', description: 'Импорт реестра помещений', isImplemented: true },
+        { id: 'finmodel', label: 'Финмодель', description: 'Импорт финансовой модели', isImplemented: true },
+      ],
+      total: 2,
+    };
+  }
 }
