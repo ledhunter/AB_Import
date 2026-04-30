@@ -26,6 +26,10 @@
 | [18-projects-cache.md](./18-projects-cache.md) | 🗂️ Кэш проектов Visary + поиск-as-you-type, **probe-then-sync** стратегия (sync только если кэш пуст), graceful fallback при Visary outage |
 | [19-net10-deployment-gotchas.md](./19-net10-deployment-gotchas.md) | 🐛 5 граблей при первом деплое .NET 10 + Alpine: addgroup, Swashbuckle 10.1.7, JsonDocument в InMemory, TLS revocation, varchar(64) → 255 |
 | [20-select-with-search.md](./20-select-with-search.md) | 🔍 Alfa Select + showSearch + динамические опции: пиннинг выбранной опции, очистка search на onChange |
+| [21-sites-by-project.md](./21-sites-by-project.md) | 🏗️ Получение объектов строительства по проекту: специальный эндпоинт `/onetomany/Project`, AssociationFilter, полный список колонок |
+| [22-update-finishing-material.md](./22-update-finishing-material.md) | 🏗️ Обновление типа отделки объекта строительства через Visary CRUD API |
+| [23-finmodel-import.md](./23-finmodel-import.md) | 📊 Импорт "Финмодель": обновление параметров объекта строительства (тип отделки) из Excel |
+| [24-finmodel-testing-and-fixes.md](./24-finmodel-testing-and-fixes.md) | 🧪 Тестирование и исправление ошибок: in-memory БД, Docker, типичные проблемы при добавлении мапперов |
 | [plan-listview-library.md](./plan-listview-library.md) | 🏗️ План рефакторинга ListView в переиспользуемую библиотеку (с чек-листом и логом прогресса) |
 
 ## 🎯 Контекст проекта

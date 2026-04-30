@@ -69,20 +69,27 @@ export const ImportForm = ({
     return list;
   }, [projects.data, selectedProject]);
 
-  const siteOptions = useMemo(
-    () =>
-      sites.data.map((s) => ({
+  const siteOptions = useMemo(() => {
+    const options = sites.data.map((s) => {
+      // Преобразуем все поля в строки, чтобы избежать [object Object]
+      const parts = [
+        s.title,
+        typeof s.address === 'string' ? s.address : '',
+        typeof s.type === 'string' ? s.type : '',
+      ].filter(Boolean);
+      
+      return {
         key: String(s.id),
-        content: [
-          s.title,
-          s.constructionPermissionNumber,
-          s.stageNumber,
-        ]
-          .filter(Boolean)
-          .join(' · '),
-      })),
-    [sites.data],
-  );
+        content: parts.join(' · '),
+      };
+    });
+    
+    if (options.length > 0) {
+      console.info('[ImportForm] siteOptions первый элемент:', sites.data[0]);
+    }
+    
+    return options;
+  }, [sites.data]);
 
   // Первый open Select → backend синхронизирует кэш проектов с Visary (идемпотентно).
   const handleProjectsOpen = (payload: { open?: boolean }) => {

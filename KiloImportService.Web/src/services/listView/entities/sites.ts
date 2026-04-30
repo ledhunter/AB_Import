@@ -4,19 +4,33 @@ import type { ConstructionSiteRaw, SiteItem } from '../../../types/listView';
 
 /**
  * Колонки, запрашиваемые у Visary для списка объектов строительства.
- *
- * ⚠️ Список предварительный — уточнить при первом реальном запросе.
- * Если Visary вернёт другие имена полей, обновить и `ConstructionSiteRaw`,
- * и эту константу одновременно (см. doc_project/08-visary-api-integration.md,
- * раздел про `Data` vs `Items`).
+ * Список соответствует API Visary ListView.
  */
 export const SITE_COLUMNS = [
   'ID',
+  'Date',
+  'Project',
   'Title',
-  'ConstructionPermissionNumber',
+  'Location',
   'ConstructionProjectNumber',
-  'StageNumber',
-  'ConstructionProjectID',
+  'Address',
+  'Type',
+  'EstateClass',
+  'BuildingMaterial',
+  'FinishingMaterial',
+  'TotalArea',
+  'StartDate',
+  'FinishDate',
+  'MonthDuration',
+  'TempOfConstruction',
+  'ClaimedCost',
+  'AreaCost',
+  'RiskFund',
+  'Borrower',
+  'ComplexID',
+  'Town',
+  'Comment',
+  'RowVersion',
 ];
 
 /**
@@ -26,37 +40,39 @@ export const SITE_COLUMNS = [
 export const toSiteItem: ListViewMapper<ConstructionSiteRaw, SiteItem> = (raw) => ({
   id: raw.ID,
   title: raw.Title || `Объект #${raw.ID}`,
-  constructionPermissionNumber: raw.ConstructionPermissionNumber || '',
+  address: raw.Address || '',
   constructionProjectNumber: raw.ConstructionProjectNumber || '',
-  stageNumber: raw.StageNumber || '',
+  type: raw.Type || '',
+  totalArea: raw.TotalArea ?? null,
   raw,
 });
 
 /**
  * Сервис для получения списка объектов строительства из Visary ListView API.
+ * Использует специальный эндпоинт /onetomany/Project для фильтрации по проекту.
  */
 export const sitesService = createListViewService<ConstructionSiteRaw, SiteItem>({
   mnemonic: 'constructionsite',
+  pathSuffix: '/onetomany/Project',
   columns: SITE_COLUMNS,
-  defaultSort: '[{"selector":"ID","desc":true}]',
+  defaultSort: '[{"selector":"ID","desc":false}]',
   toItem: toSiteItem,
   logTag: '[sites]',
 });
 
 /**
  * Helper: построить ListViewQuery с фильтром «объекты данного проекта».
- *
- * ⚠️ Точный формат `ExtraFilter` зависит от Visary — здесь dev-вариант на
- * базе DevExtreme-синтаксиса (`[["ConstructionProjectID","=",projectId]]`).
- * Реальное значение подтвердить логами + тестом на реальном API.
+ * Использует AssociationFilter для фильтрации по связанному проекту.
  */
 export function buildSitesQueryByProject(
   projectId: number,
-  query: Omit<ListViewQuery, 'extraFilter' | 'associatedId'> = {},
+  query: Omit<ListViewQuery, 'associationFilter'> = {},
 ): ListViewQuery {
   return {
     ...query,
-    associatedId: projectId,
-    extraFilter: `[["ConstructionProjectID","=",${projectId}]]`,
+    associationFilter: {
+      AssociatedId: projectId,
+      Filters: null,
+    },
   };
 }

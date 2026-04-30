@@ -1,5 +1,4 @@
 import { useRef, useState } from 'react';
-import { Dropzone } from '@alfalab/core-components/dropzone';
 import { FileUploadItem } from '@alfalab/core-components/file-upload-item';
 import { Typography } from '@alfalab/core-components/typography';
 import { Status } from '@alfalab/core-components/status';
@@ -28,7 +27,6 @@ export const FileUpload = ({ file, detectedFormat, onFileSelect }: Props) => {
     onFileSelect(f);
   };
 
-  const handleDrop = (files: File[]) => validateAndSelect(files[0]);
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => validateAndSelect(e.target.files?.[0]);
   const handleClick = () => inputRef.current?.click();
 
@@ -40,25 +38,28 @@ export const FileUpload = ({ file, detectedFormat, onFileSelect }: Props) => {
 
       {!file ? (
         <>
-          <div onClick={handleClick} style={{ cursor: 'pointer' }}>
-            <Dropzone onDrop={handleDrop} block error={!!error}>
-              <div style={{ padding: '40px 20px', textAlign: 'center' }}>
-                <Typography.Text view="primary-medium" color="primary" tag="div">
-                  Перетащите файл сюда или нажмите для выбора
-                </Typography.Text>
-                <Typography.Text view="primary-small" color="secondary" tag="div" style={{ marginTop: 4 }}>
-                  Поддерживаются: CSV, XLS, XLSB, XLSX · Макс. размер: 50 МБ
-                </Typography.Text>
-              </div>
-            </Dropzone>
-            <input
-              ref={inputRef}
-              type="file"
-              accept={ACCEPT_ALL_SUPPORTED}
-              onChange={handleChange}
-              style={{ display: 'none' }}
-            />
+          <div style={{ 
+            border: '2px dashed #d8d8d8', 
+            borderRadius: '12px', 
+            padding: '40px 20px', 
+            textAlign: 'center',
+            backgroundColor: error ? '#fef4f4' : '#fafbfc',
+            cursor: 'pointer',
+          }} onClick={handleClick}>
+            <Typography.Text view="primary-medium" color="primary" tag="div">
+              Перетащите файл сюда или нажмите для выбора
+            </Typography.Text>
+            <Typography.Text view="primary-small" color="secondary" tag="div" style={{ marginTop: 4 }}>
+              Поддерживаются: CSV, XLS, XLSB, XLSX · Макс. размер: 50 МБ
+            </Typography.Text>
           </div>
+          <input
+            ref={inputRef}
+            type="file"
+            accept={ACCEPT_ALL_SUPPORTED}
+            onChange={handleChange}
+            style={{ display: 'none' }}
+          />
           {error && (
             <Typography.Text view="primary-small" color="negative" tag="div" style={{ marginTop: 8 }}>
               {error}
@@ -79,7 +80,7 @@ export const FileUpload = ({ file, detectedFormat, onFileSelect }: Props) => {
               <Typography.Text view="primary-small" color="secondary" tag="span">
                 Определён формат:
               </Typography.Text>
-              <Status color="blue" view="soft">
+              <Status color="blue" view="muted-alt">
                 {detectedFormat.toUpperCase()}
               </Status>
             </div>
