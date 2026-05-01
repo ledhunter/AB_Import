@@ -73,9 +73,6 @@ public class ProjectsController : ControllerBase
                 {
                     id = p.Id,
                     title = p.Title,
-                    code = !string.IsNullOrEmpty(p.IdentifierKK)
-                        ? p.IdentifierKK
-                        : (!string.IsNullOrEmpty(p.IdentifierZPLM) ? p.IdentifierZPLM : $"ID-{p.Id}"),
                 }),
                 fromFallback = result.FromFallback,
                 total = result.Items.Count,

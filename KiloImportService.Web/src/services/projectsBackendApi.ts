@@ -13,7 +13,6 @@ import type { ProjectItem } from '../types/listView';
 export interface BackendProjectDto {
   id: number;
   title: string;
-  code: string;
 }
 
 export interface ProjectsSearchResponse {
@@ -84,9 +83,9 @@ export async function searchProjects(
   return data;
 }
 
-/** Маппинг backend DTO → UI-тип, идентичный тому, что использует Visary-ветка. */
+/** Маппинг backend DTO → UI-тип. */
 export function toProjectItem(dto: BackendProjectDto): ProjectItem {
-  return { id: dto.id, title: dto.title, code: dto.code };
+  return { id: dto.id, title: dto.title };
 }
 
 async function safeBody(r: Response): Promise<string> {

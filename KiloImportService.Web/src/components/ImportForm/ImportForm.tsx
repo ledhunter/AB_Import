@@ -39,9 +39,9 @@ interface ProjectOption {
   content: string;
 }
 
-const toProjectOption = (p: { id: number; title: string; code: string }): ProjectOption => ({
+const toProjectOption = (p: { id: number; title: string }): ProjectOption => ({
   key: String(p.id),
-  content: `${p.title} (${p.code})`,
+  content: p.title,
 });
 
 export const ImportForm = ({
@@ -61,10 +61,12 @@ export const ImportForm = ({
 
   const projectOptions = useMemo(() => {
     const list = projects.data.map(toProjectOption);
+    console.info('[ImportForm] projectOptions count:', list.length, 'first:', list[0]);
     // Если выбранный проект отсутствует в текущем выводе search'a — всёравно включаем его в список,
     // иначе Select не сможет показать label при selected={key}.
     if (selectedProject && !list.some((o) => o.key === selectedProject.key)) {
       list.unshift(selectedProject);
+      console.info('[ImportForm] adding selectedProject to list:', selectedProject);
     }
     return list;
   }, [projects.data, selectedProject]);

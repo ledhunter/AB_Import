@@ -35,7 +35,6 @@ test('toProjectItem: Title и IdentifierKK заполнены', () => {
   const item = toProjectItem(raw);
   assert.equal(item.id, 42);
   assert.equal(item.title, 'ЖК Алые Паруса');
-  assert.equal(item.code, 'KK-001', 'IdentifierKK имеет приоритет над IdentifierZPLM');
   assert.equal(item.raw, raw);
 });
 
@@ -47,7 +46,8 @@ test('toProjectItem: IdentifierKK пустой → fallback на IdentifierZPLM'
     IdentifierZPLM: 'ZPLM-555',
   };
   const item = toProjectItem(raw);
-  assert.equal(item.code, 'ZPLM-555');
+  // code удален — проверяем только title
+  assert.equal(item.title, 'Проект Б');
 });
 
 test('toProjectItem: оба идентификатора пустые → fallback на ID-{id}', () => {
@@ -58,7 +58,8 @@ test('toProjectItem: оба идентификатора пустые → fallba
     IdentifierZPLM: null,
   };
   const item = toProjectItem(raw);
-  assert.equal(item.code, 'ID-99');
+  // code удален — проверяем только title
+  assert.equal(item.title, 'Проект В');
 });
 
 test('toProjectItem: пустой Title → "Проект #{id}"', () => {
@@ -76,7 +77,7 @@ test('toProjectItem: undefined Title (опциональное поле) → "П
   const raw = { ID: 11 } as ConstructionProjectRaw;
   const item = toProjectItem(raw);
   assert.equal(item.title, 'Проект #11');
-  assert.equal(item.code, 'ID-11');
+  // code удален — проверяем только title
 });
 
 // =====================================================================

@@ -13,8 +13,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace KiloImportService.Api.Migrations
 {
     [DbContext(typeof(ImportServiceDbContext))]
-    [Migration("20260429084812_Initial")]
-    partial class Initial
+    [Migration("20260430213808_RemoveFileSha256Constraint")]
+    partial class RemoveFileSha256Constraint
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -26,6 +26,38 @@ namespace KiloImportService.Api.Migrations
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
+
+            modelBuilder.Entity("KiloImportService.Api.Data.Entities.CachedProject", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("IdentifierKK")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("IdentifierZPLM")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<DateTimeOffset>("LastSyncedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IdentifierKK")
+                        .HasDatabaseName("IX_CachedProject_IdentifierKK");
+
+                    b.HasIndex("Title")
+                        .HasDatabaseName("IX_CachedProject_Title");
+
+                    b.ToTable("cached_projects", "import");
+                });
 
             modelBuilder.Entity("KiloImportService.Api.Data.Entities.ImportError", b =>
                 {
@@ -122,11 +154,6 @@ namespace KiloImportService.Api.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
-                    b.Property<string>("FileSha256")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
                     b.Property<long>("FileSize")
                         .HasColumnType("bigint");
 
@@ -161,14 +188,12 @@ namespace KiloImportService.Api.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ImportTypeCode")
+                        .HasDatabaseName("IX_ImportSession_Type");
+
                     b.HasIndex("StartedAt");
 
                     b.HasIndex("Status");
-
-                    b.HasIndex("ImportTypeCode", "FileSha256")
-                        .IsUnique()
-                        .HasDatabaseName("UX_ImportSession_TypeAndSha")
-                        .HasFilter("\"Status\" NOT IN ('Failed','Cancelled')");
 
                     b.ToTable("import_sessions", "import");
                 });

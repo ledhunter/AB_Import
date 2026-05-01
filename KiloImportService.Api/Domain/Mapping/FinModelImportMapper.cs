@@ -37,6 +37,8 @@ public sealed class FinModelImportMapper : IImportMapper
         VisaryDbContext visaryDb,
         CancellationToken ct)
     {
+        _log.LogInformation("FinModelImportMapper.ValidateAsync: siteId={SiteId}, rows={RowCount}", context.VisarySiteId, rows.Count);
+
         var fileErrors = new List<RowError>();
 
         if (context.VisarySiteId is null)
@@ -47,9 +49,11 @@ public sealed class FinModelImportMapper : IImportMapper
         }
 
         // Проверяем существование выбранного site
+        _log.LogInformation("FinModelImportMapper.ValidateAsync: querying ConstructionSite {SiteId}", context.VisarySiteId.Value);
         var site = await visaryDb.ConstructionSites
             .AsNoTracking()
             .FirstOrDefaultAsync(s => s.Id == context.VisarySiteId.Value && !s.Hidden, ct);
+        _log.LogInformation("FinModelImportMapper.ValidateAsync: ConstructionSite query completed siteFound={SiteFound}", site != null);
 
         if (site is null)
         {
@@ -60,10 +64,16 @@ public sealed class FinModelImportMapper : IImportMapper
 
         var mappedRows = new List<MappedRow>(rows.Count);
 
-        foreach (var row in rows)
+        for (int i = 0; i < rows.Count; i++)
         {
             ct.ThrowIfCancellationRequested();
+            var row = rows[i];
             var rowErrors = new List<RowError>();
+
+            if (i % 500 == 0 || i == rows.Count - 1)
+            {
+                _log.LogInformation("FinModelImportMapper.ValidateAsync: processing row {Current}/{Total}", i + 1, rows.Count);
+            }
 
             // Ищем колонку "Тип отделки"
             var finishingTypeCol = row.Cells.Keys.FirstOrDefault(k =>
@@ -112,6 +122,7 @@ public sealed class FinModelImportMapper : IImportMapper
             ));
         }
 
+        _log.LogInformation("FinModelImportMapper.ValidateAsync: completed mappedRows={MappedRowCount} fileErrors={FileErrorCount}", mappedRows.Count, fileErrors.Count);
         return new ValidationResult(mappedRows, fileErrors);
     }
 

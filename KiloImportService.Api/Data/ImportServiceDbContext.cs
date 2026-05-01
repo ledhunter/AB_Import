@@ -38,17 +38,14 @@ public class ImportServiceDbContext : DbContext
             e.Property(x => x.Id).ValueGeneratedNever();
             e.Property(x => x.ImportTypeCode).HasMaxLength(64).IsRequired();
             e.Property(x => x.FileName).HasMaxLength(500).IsRequired();
-            e.Property(x => x.FileSha256).HasMaxLength(64).IsRequired();
             e.Property(x => x.FileFormat).HasConversion<string>().HasMaxLength(8);
             e.Property(x => x.Status).HasConversion<string>().HasMaxLength(16);
             e.Property(x => x.UserId).HasMaxLength(128);
             e.Property(x => x.ErrorMessage).HasMaxLength(4000);
 
-            // Защита от повторного импорта одного и того же файла в один и тот же тип.
-            e.HasIndex(x => new { x.ImportTypeCode, x.FileSha256 })
-                .HasDatabaseName("UX_ImportSession_TypeAndSha")
-                .IsUnique()
-                .HasFilter("\"Status\" NOT IN ('Failed','Cancelled')");
+            // Пользователь может загружать один и тот же файл несколько раз (с разными проектами/объектами).
+            // SHA256 больше не используется как уникальное ограничение.
+            e.HasIndex(x => x.ImportTypeCode).HasDatabaseName("IX_ImportSession_Type");
 
             e.HasIndex(x => x.Status);
             e.HasIndex(x => x.StartedAt);

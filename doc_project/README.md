@@ -30,6 +30,10 @@
 | [22-update-finishing-material.md](./22-update-finishing-material.md) | 🏗️ Обновление типа отделки объекта строительства через Visary CRUD API |
 | [23-finmodel-import.md](./23-finmodel-import.md) | 📊 Импорт "Финмодель": обновление параметров объекта строительства (тип отделки) из Excel |
 | [24-finmodel-testing-and-fixes.md](./24-finmodel-testing-and-fixes.md) | 🧪 Тестирование и исправление ошибок: in-memory БД, Docker, типичные проблемы при добавлении мапперов |
+| [25-ui-project-options-display.md](./25-ui-project-options-display.md) | 📋 Отображение проектов в Select без лишних символов: убран `code`, одни и те же файлы можно загружать несколько раз |
+| [26-troubleshooting.md](./26-troubleshooting.md) | 🛠️ Решение проблем: запуск backend, проверка БД, отладка импорта "Финмодель" |
+| [27-checklists.md](./27-checklists.md) | ✅ Чек-листы: запуск цикла, добавление маппера, деплой |
+| [28-faq.md](./28-faq.md) | ❓ Частые вопросы: пустой Select, бэком не отвечает, обновление токена |
 | [plan-listview-library.md](./plan-listview-library.md) | 🏗️ План рефакторинга ListView в переиспользуемую библиотеку (с чек-листом и логом прогресса) |
 
 ## 🎯 Контекст проекта

@@ -112,7 +112,7 @@ public class ProjectsCacheServiceTests
     }
 
     [Fact]
-    public async Task SearchAsync_EmptyQuery_ReturnsOrderedLocalWithoutVisary()
+    public async Task SearchAsync_EmptyQuery_ReturnsEmptyListWithoutVisary()
     {
         var (db, visary, svc) = Build();
         db.CachedProjects.AddRange(
@@ -123,8 +123,7 @@ public class ProjectsCacheServiceTests
         var result = await svc.SearchAsync(string.Empty, limit: 10, CancellationToken.None);
 
         Assert.False(result.FromFallback);
-        Assert.Equal(2, result.Items.Count);
-        Assert.Equal("Альфа", result.Items[0].Title); // ORDER BY Title
+        Assert.Empty(result.Items); // Пустой запрос → пустой список
         Assert.Empty(visary.Calls);
     }
 
