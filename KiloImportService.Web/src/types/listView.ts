@@ -61,11 +61,11 @@ export interface ConstructionProjectRaw {
 
 /**
  * Нормализованный проект для UI (после маппинга из Visary API).
+ * code удален — отображаем только title в Select.
  */
 export interface ProjectItem {
   id: number;
   title: string;
-  code: string;                   // IdentifierKK || IdentifierZPLM (для подписи в Select)
   raw?: ConstructionProjectRaw;   // оригинальная строка (на случай нужды деталей)
 }
 

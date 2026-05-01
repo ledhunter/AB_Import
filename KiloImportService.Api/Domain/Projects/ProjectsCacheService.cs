@@ -120,10 +120,7 @@ public sealed class ProjectsCacheService : IProjectsCacheService
     {
         if (string.IsNullOrEmpty(query))
         {
-            return await _db.CachedProjects
-                .OrderBy(p => p.Title)
-                .Take(take)
-                .ToListAsync(ct);
+            return new List<CachedProject>();
         }
 
         // Кейс-инсенситивный contains. Провайдер-агностично:
@@ -134,9 +131,9 @@ public sealed class ProjectsCacheService : IProjectsCacheService
         var lowered = query.ToLowerInvariant();
         return await _db.CachedProjects
             .Where(p =>
-                p.Title.ToLower().Contains(lowered) ||
-                (p.IdentifierKK != null && p.IdentifierKK.ToLower().Contains(lowered)) ||
-                (p.IdentifierZPLM != null && p.IdentifierZPLM.ToLower().Contains(lowered)))
+                EF.Functions.Like(p.Title.ToLower(), $"%{lowered}%") ||
+                (p.IdentifierKK != null && EF.Functions.Like(p.IdentifierKK.ToLower(), $"%{lowered}%")) ||
+                (p.IdentifierZPLM != null && EF.Functions.Like(p.IdentifierZPLM.ToLower(), $"%{lowered}%")))
             .OrderBy(p => p.Title)
             .Take(take)
             .ToListAsync(ct);

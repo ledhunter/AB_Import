@@ -17,9 +17,6 @@ public class ImportSession
     public long FileSize { get; set; }
     public FileFormat FileFormat { get; set; }
 
-    /// <summary>SHA-256 файла — для дедупликации повторной загрузки.</summary>
-    public string FileSha256 { get; set; } = null!;
-
     public ImportStatus Status { get; set; } = ImportStatus.Pending;
 
     /// <summary>Целевой проект Visary (необязательный для некоторых типов импорта).</summary>

@@ -87,7 +87,6 @@ public sealed class ImportPipeline
             FileName = fileName,
             FileSize = ms.Length,
             FileFormat = format,
-            FileSha256 = sha256Hex,
             VisaryProjectId = visaryProjectId,
             VisarySiteId = visarySiteId,
             UserId = userId,
@@ -103,8 +102,8 @@ public sealed class ImportPipeline
         _serviceDb.Sessions.Add(session);
         await _serviceDb.SaveChangesAsync(ct);
 
-        _log.LogInformation("Import session {SessionId} created: type={Type} file={File} ({Size} bytes, sha256={Sha}…)",
-            session.Id, importTypeCode, fileName, ms.Length, sha256Hex[..12]);
+        _log.LogInformation("Import session {SessionId} created: type={Type} file={File} ({Size} bytes)",
+            session.Id, importTypeCode, fileName, ms.Length);
 
         return session;
     }
@@ -172,12 +171,16 @@ public sealed class ImportPipeline
         }
 
         // ── VALIDATE ──
+        _log.LogInformation("Session {SessionId}: starting VALIDATE stage", sessionId);
         await TransitionAsync(session, ImportStatus.Validating, ct);
         var validateStage = await StartStageAsync(sessionId, ImportStageKind.Validate, "Валидация строк…", ct);
         await _hub.Clients.Group(groupName).SendAsync("StageStarted", new { sessionId, stage = "Validate" }, ct);
 
+        _log.LogInformation("Session {SessionId}: calling mapper.ValidateAsync", sessionId);
         var ctx = new ImportContext(sessionId, session.VisaryProjectId, session.VisarySiteId, session.UserId);
         var validation = await mapper.ValidateAsync(ctx, parseResult.Rows, _visaryDb, ct);
+        _log.LogInformation("Session {SessionId}: mapper.ValidateAsync returned rows={RowsCount} errors={ErrorsCount}", 
+            sessionId, validation.Rows.Count, validation.FileLevelErrors.Count);
 
         // File-level ошибки валидации.
         foreach (var fe in validation.FileLevelErrors)

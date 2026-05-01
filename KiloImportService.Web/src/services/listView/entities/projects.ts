@@ -31,7 +31,6 @@ export const PROJECT_COLUMNS = [
 export const toProjectItem: ListViewMapper<ConstructionProjectRaw, ProjectItem> = (raw) => ({
   id: raw.ID,
   title: raw.Title || `Проект #${raw.ID}`,
-  code: raw.IdentifierKK || raw.IdentifierZPLM || `ID-${raw.ID}`,
   raw,
 });
 

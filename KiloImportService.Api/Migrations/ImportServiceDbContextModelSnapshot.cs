@@ -151,11 +151,6 @@ namespace KiloImportService.Api.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
-                    b.Property<string>("FileSha256")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
                     b.Property<long>("FileSize")
                         .HasColumnType("bigint");
 
@@ -190,14 +185,12 @@ namespace KiloImportService.Api.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ImportTypeCode")
+                        .HasDatabaseName("IX_ImportSession_Type");
+
                     b.HasIndex("StartedAt");
 
                     b.HasIndex("Status");
-
-                    b.HasIndex("ImportTypeCode", "FileSha256")
-                        .IsUnique()
-                        .HasDatabaseName("UX_ImportSession_TypeAndSha")
-                        .HasFilter("\"Status\" NOT IN ('Failed','Cancelled')");
 
                     b.ToTable("import_sessions", "import");
                 });
