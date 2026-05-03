@@ -1,6 +1,6 @@
 using System;
 
-namespace Visary.Api.Exceptions;
+namespace KiloImportService.Api.Domain.Visary;
 
 public sealed class VisaryAuthException : Exception
 {

@@ -1,36 +1,41 @@
-using System.Net;
+using System;
+using System.Collections.Generic;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Logging;
+using Visary.Api.Dto;
+using Visary.Api.Exceptions;
 
 namespace Visary.Api.ListView;
 
-using Dto;
-using Exceptions;
+public interface IListViewClient : IDisposable
+{
+    Task<ListViewResponse<ConstructionProjectRaw>> GetProjectsAsync(
+        string? search = null,
+        int pageSize = 200,
+        CancellationToken ct = default);
+
+    Task<ListViewResponse<ConstructionSiteRaw>> GetSitesByProjectAsync(
+        int projectId,
+        CancellationToken ct = default);
+
+    Task<ConstructionSiteRaw?> GetSiteByIdAsync(
+        int siteId,
+        CancellationToken ct = default);
+}
 
 public sealed class ListViewClient : IListViewClient
 {
-    private static readonly JsonSerializerOptions Json = new()
+    private const string ProjectMnemonic = "constructionproject";
+    private const string SiteMnemonic = "constructionsite";
+
+    private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNameCaseInsensitive = true,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-    };
-
-    private static readonly string[] ProjectColumns =
-    {
-        "ID", "IdentifierKK", "IdentifierZPLM", "Title", "Type", "Phase",
-        "Region", "Town", "Developer", "ProjectManagment", "Sponsor",
-        "ProjectPeriod", "RowVersion",
-    };
-
-    private static readonly string[] SiteColumns =
-    {
-        "ID", "Title", "ConstructionProjectID", "ConstructionPermissionNumber",
-        "ConstructionProjectNumber", "StageNumber", "RegionID", "TownID",
-        "Address", "Hidden", "Version", "FinishingMaterialId",
     };
 
     private readonly HttpClient _http;
@@ -48,157 +53,121 @@ public sealed class ListViewClient : IListViewClient
     }
 
     public async Task<ListViewResponse<ConstructionProjectRaw>> GetProjectsAsync(
-        string? search = null,
-        int pageSize = 200,
-        CancellationToken ct = default)
+        string? search, int pageSize, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(_options.BaseUrl))
-            throw new InvalidOperationException(
-                "Visary:BaseUrl не задан в конфигурации. См. appsettings.json.");
+            throw new InvalidOperationException("Visary:BaseUrl не задан.");
         if (string.IsNullOrWhiteSpace(_options.BearerToken))
-            throw new InvalidOperationException(
-                "Visary:BearerToken не задан. Заполни через секреты или переменные окружения.");
+            throw new InvalidOperationException("Visary:BearerToken не задан.");
 
         var body = new
         {
-            Mnemonic = "constructionproject",
+            Mnemonic = ProjectMnemonic,
             PageSkip = 0,
             PageSize = pageSize,
-            Columns = ProjectColumns,
-            Sorts = "[{\"selector\":\"ID\",\"desc\":true}]",
-            Hidden = false,
-            ExtraFilter = (string?)null,
+            Columns = new[] { "ID", "Title", "IdentifierKK", "IdentifierZPLM", "Hidden" },
             SearchString = search ?? string.Empty,
-            AssociatedID = (int?)null,
         };
 
         using var req = new HttpRequestMessage(HttpMethod.Post,
-            $"{_options.BaseUrl.TrimEnd('/')}/api/visary/listview/constructionproject")
+            $"{_options.BaseUrl.TrimEnd('/')}/api/visary/listview/{ProjectMnemonic}")
         {
-            Content = JsonContent.Create(body, options: Json),
+            Content = JsonContent.Create(body, options: JsonOptions),
         };
         req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _options.BearerToken);
 
-        _log.LogDebug(
-            "Visary → POST listview/constructionproject pageSize={Size} search='{Search}'",
-            pageSize, search);
+        _log.LogDebug("Visary → GET listview/{Mnemonic} search='{Search}'", ProjectMnemonic, search);
 
-        var sw = System.Diagnostics.Stopwatch.StartNew();
         using var response = await _http.SendAsync(req, ct);
-        sw.Stop();
 
-        if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
-        {
-            var body401 = await SafeReadBodyAsync(response, ct);
-            _log.LogError("Visary auth error {Status} ({Ms}ms): {Body}",
-                (int)response.StatusCode, sw.ElapsedMilliseconds, body401);
-            throw new VisaryAuthException(
-                $"Visary вернул {(int)response.StatusCode} — токен истёк или невалиден.");
-        }
-
-        if (!response.IsSuccessStatusCode)
-        {
-            var bodyErr = await SafeReadBodyAsync(response, ct);
-            _log.LogError("Visary error {Status} ({Ms}ms): {Body}",
-                (int)response.StatusCode, sw.ElapsedMilliseconds, bodyErr);
-            throw new HttpRequestException(
-                $"Visary ListView вернул {(int)response.StatusCode} {response.ReasonPhrase}");
-        }
+        HandleAuthError(response, ct);
+        HandleError(response, ct);
 
         var parsed = await response.Content
-            .ReadFromJsonAsync<ListViewResponse<ConstructionProjectRaw>>(Json, ct)
+            .ReadFromJsonAsync<ListViewResponse<ConstructionProjectRaw>>(JsonOptions, ct)
             ?? new ListViewResponse<ConstructionProjectRaw>();
 
-        _log.LogInformation(
-            "Visary ← 200 listview/constructionproject ({Ms}ms): {Rows} of {Total}",
-            sw.ElapsedMilliseconds, parsed.Rows.Count, parsed.TotalRows);
+        _log.LogInformation("Visary ← 200 listview/{Mnemonic}: {Count} rows, total={Total}",
+            ProjectMnemonic, parsed.Data.Count, parsed.Total);
 
         return parsed;
     }
 
     public async Task<ListViewResponse<ConstructionSiteRaw>> GetSitesByProjectAsync(
-        int projectId,
-        CancellationToken ct = default)
+        int projectId, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(_options.BaseUrl))
-            throw new InvalidOperationException(
-                "Visary:BaseUrl не задан в конфигурации. См. appsettings.json.");
+            throw new InvalidOperationException("Visary:BaseUrl не задан.");
         if (string.IsNullOrWhiteSpace(_options.BearerToken))
-            throw new InvalidOperationException(
-                "Visary:BearerToken не задан. Заполни через секреты или переменные окружения.");
+            throw new InvalidOperationException("Visary:BearerToken не задан.");
 
         var body = new
         {
-            Mnemonic = "constructionsite",
+            Mnemonic = SiteMnemonic,
             PageSkip = 0,
-            PageSize = 100,
-            Columns = SiteColumns,
-            Sorts = (string?)null,
-            Hidden = false,
-            ExtraFilter = (string?)null,
-            SearchString = string.Empty,
+            PageSize = 200,
+            Columns = new[] { "ID", "Title", "ConstructionProjectID", "Hidden" },
             AssociatedID = projectId,
         };
 
         using var req = new HttpRequestMessage(HttpMethod.Post,
-            $"{_options.BaseUrl.TrimEnd('/')}/api/visary/listview/constructionsite")
+            $"{_options.BaseUrl.TrimEnd('/')}/api/visary/listview/{SiteMnemonic}")
         {
-            Content = JsonContent.Create(body, options: Json),
+            Content = JsonContent.Create(body, options: JsonOptions),
         };
         req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _options.BearerToken);
 
-        _log.LogDebug("Visary → POST listview/constructionsite projectId={ProjectId}", projectId);
+        _log.LogDebug("Visary → GET listview/{Mnemonic} projectId={ProjectId}", SiteMnemonic, projectId);
 
         using var response = await _http.SendAsync(req, ct);
 
-        if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
-        {
-            var body401 = await SafeReadBodyAsync(response, ct);
-            _log.LogError("Visary auth error {Status}: {Body}",
-                (int)response.StatusCode, body401);
-            throw new VisaryAuthException(
-                $"Visary вернул {(int)response.StatusCode} — токен истёк или невалиден.");
-        }
-
-        if (!response.IsSuccessStatusCode)
-        {
-            var bodyErr = await SafeReadBodyAsync(response, ct);
-            _log.LogError("Visary error {Status}: {Body}",
-                (int)response.StatusCode, bodyErr);
-            throw new HttpRequestException(
-                $"Visary ListView вернул {(int)response.StatusCode} {response.ReasonPhrase}");
-        }
+        HandleAuthError(response, ct);
+        HandleError(response, ct);
 
         var parsed = await response.Content
-            .ReadFromJsonAsync<ListViewResponse<ConstructionSiteRaw>>(Json, ct)
+            .ReadFromJsonAsync<ListViewResponse<ConstructionSiteRaw>>(JsonOptions, ct)
             ?? new ListViewResponse<ConstructionSiteRaw>();
 
-        _log.LogInformation(
-            "Visary ← 200 listview/constructionsite projectId={ProjectId}: {Rows} rows",
-            projectId, parsed.Rows.Count);
+        _log.LogInformation("Visary ← 200 listview/{Mnemonic} projectId={ProjectId}: {Count} rows",
+            SiteMnemonic, projectId, parsed.Data.Count);
 
         return parsed;
     }
 
-    public async Task<ConstructionSiteRaw?> GetSiteByIdAsync(
-        int siteId,
-        CancellationToken ct = default)
+    public async Task<ConstructionSiteRaw?> GetSiteByIdAsync(int siteId, CancellationToken ct)
     {
-        var sites = await GetSitesByProjectAsync(siteId, ct);
-        
-        if (sites.Rows.Count == 0)
-            return null;
-
-        return sites.Rows[0];
+        var response = await GetSitesByProjectAsync(siteId, ct);
+        return response.Data.FirstOrDefault();
     }
 
-    public void Dispose()
+    private void HandleAuthError(HttpResponseMessage response, CancellationToken ct)
     {
+        if (response.StatusCode is System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden)
+        {
+            var body = SafeReadBodyAsync(response, ct).GetAwaiter().GetResult();
+            _log.LogError("Visary auth error {Status}: {Body}", (int)response.StatusCode, body);
+            throw new VisaryAuthException($"Visary вернул {(int)response.StatusCode} — токен истёк.");
+        }
+    }
+
+    private void HandleError(HttpResponseMessage response, CancellationToken ct)
+    {
+        if (!response.IsSuccessStatusCode)
+        {
+            var body = SafeReadBodyAsync(response, ct).GetAwaiter().GetResult();
+            _log.LogError("Visary error {Status}: {Body}", (int)response.StatusCode, body);
+            throw new HttpRequestException($"Visary вернул {(int)response.StatusCode} {response.ReasonPhrase}");
+        }
     }
 
     private static async Task<string> SafeReadBodyAsync(HttpResponseMessage r, CancellationToken ct)
     {
         try { return await r.Content.ReadAsStringAsync(ct); }
         catch { return string.Empty; }
+    }
+
+    public void Dispose()
+    {
+        GC.SuppressFinalize(this);
     }
 }

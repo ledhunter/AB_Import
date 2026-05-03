@@ -1,15 +1,21 @@
-using System.Net;
-using System.Net.Http.Headers;
+using System;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Logging;
+using Visary.Api.Dto;
+using Visary.Api.Exceptions;
 
 namespace Visary.Api.CRUD;
 
-using Dto;
-using Exceptions;
+public interface ICrudClient : IDisposable
+{
+    Task<bool> UpdateSiteFinishingMaterialAsync(
+        int siteId,
+        int finishingMaterialId,
+        CancellationToken ct = default);
+}
 
 public sealed class CrudClient : ICrudClient
 {
@@ -35,44 +41,34 @@ public sealed class CrudClient : ICrudClient
         _log = log;
     }
 
-    public async Task<bool> UpdateSiteFinishingMaterialAsync(int siteId, int finishingMaterialId, CancellationToken ct)
+    public async Task<bool> UpdateSiteFinishingMaterialAsync(
+        int siteId, int finishingMaterialId, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(_options.BaseUrl))
-            throw new InvalidOperationException(
-                "Visary:BaseUrl не задан в конфигурации. См. appsettings.json.");
-        if (string.IsNullOrWhiteSpace(_options.BearerToken))
-            throw new InvalidOperationException(
-                "Visary:BearerToken не задан. Заполни через секреты или переменные окружения.");
-
         var siteData = await FetchSiteDataAsync(siteId, ct);
         if (siteData == null)
-        {
             throw new KeyNotFoundException($"ConstructionSite with ID={siteId} not found in Visary");
-        }
 
         siteData.FinishingMaterialId = finishingMaterialId;
 
         await UpdateSiteAsync(siteData, ct);
 
-        _log.LogInformation(
-            "CrudClient.UpdateSiteFinishingMaterialAsync: siteId={SiteId} finishingMaterialId={FinishingMaterialId} success",
-            siteId, finishingMaterialId);
-
+        _log.LogInformation("CrudClient.UpdateSiteFinishingMaterialAsync: siteId={SiteId} success", siteId);
         return true;
     }
 
     private async Task<SiteUpdateData?> FetchSiteDataAsync(int siteId, CancellationToken ct)
     {
+        if (string.IsNullOrWhiteSpace(_options.BaseUrl))
+            throw new InvalidOperationException("Visary:BaseUrl не задан.");
+        if (string.IsNullOrWhiteSpace(_options.BearerToken))
+            throw new InvalidOperationException("Visary:BearerToken не задан.");
+
         var body = new
         {
             Mnemonic = Mnemonic,
             PageSkip = 0,
             PageSize = 1,
             Columns = new[] { "ID", "FinishingMaterialId", "Version" },
-            Sorts = (string?)null,
-            Hidden = false,
-            ExtraFilter = (string?)null,
-            SearchString = string.Empty,
             AssociatedID = siteId,
         };
 
@@ -81,44 +77,36 @@ public sealed class CrudClient : ICrudClient
         {
             Content = JsonContent.Create(body, options: JsonOptions),
         };
-        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _options.BearerToken);
+        req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _options.BearerToken);
 
         _log.LogDebug("Visary → GET constructionsite by ID={SiteId}", siteId);
 
         using var response = await _http.SendAsync(req, ct);
 
-        if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
-        {
-            var body401 = await SafeReadBodyAsync(response, ct);
-            _log.LogError("Visary auth error {Status}: {Body}", (int)response.StatusCode, body401);
-            throw new VisaryAuthException(
-                $"Visary вернул {(int)response.StatusCode} — токен истёк или невалиден.");
-        }
-
-        if (!response.IsSuccessStatusCode)
-        {
-            var bodyErr = await SafeReadBodyAsync(response, ct);
-            _log.LogError("Visary error {Status}: {Body}", (int)response.StatusCode, bodyErr);
-            throw new HttpRequestException(
-                $"Visary ListView вернул {(int)response.StatusCode} {response.ReasonPhrase}");
-        }
+        HandleAuthError(response, ct);
+        HandleError(response, ct);
 
         var parsed = await response.Content
-            .ReadFromJsonAsync<ListViewResponse<SiteUpdateData>>(JsonOptions, ct)
-            ?? new ListViewResponse<SiteUpdateData>();
+            .ReadFromJsonAsync<Visary.Api.Dto.ListViewResponse<SiteUpdateData>>(JsonOptions, ct)
+            ?? new Visary.Api.Dto.ListViewResponse<SiteUpdateData>();
 
-        if (parsed.Rows.Count == 0)
+        if (parsed.Data.Count == 0)
         {
             _log.LogWarning("Visary ← 200 constructionsite siteId={SiteId}: no rows", siteId);
             return null;
         }
 
         _log.LogInformation("Visary ← 200 constructionsite siteId={SiteId}: 1 row", siteId);
-        return parsed.Rows[0];
+        return parsed.Data[0];
     }
 
     private async Task UpdateSiteAsync(SiteUpdateData siteData, CancellationToken ct)
     {
+        if (string.IsNullOrWhiteSpace(_options.BaseUrl))
+            throw new InvalidOperationException("Visary:BaseUrl не задан.");
+        if (string.IsNullOrWhiteSpace(_options.BearerToken))
+            throw new InvalidOperationException("Visary:BearerToken не задан.");
+
         var body = new
         {
             Mnemonic = Mnemonic,
@@ -130,46 +118,61 @@ public sealed class CrudClient : ICrudClient
         {
             Content = JsonContent.Create(body, options: JsonOptions),
         };
-        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _options.BearerToken);
+        req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _options.BearerToken);
 
         _log.LogDebug("Visary → PUT constructionsite ID={SiteId}", siteData.ID);
 
         using var response = await _http.SendAsync(req, ct);
 
-        if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
-        {
-            var body401 = await SafeReadBodyAsync(response, ct);
-            _log.LogError("Visary auth error {Status}: {Body}", (int)response.StatusCode, body401);
-            throw new VisaryAuthException(
-                $"Visary вернул {(int)response.StatusCode} — токен истёк или невалиден.");
-        }
+        HandleAuthError(response, ct);
 
-        if (response.StatusCode == HttpStatusCode.Conflict)
+        if (response.StatusCode == System.Net.HttpStatusCode.Conflict)
         {
-            var body409 = await SafeReadBodyAsync(response, ct);
+            var body409 = SafeReadBodyAsync(response, ct).GetAwaiter().GetResult();
             _log.LogError("Visary conflict error 409: {Body}", body409);
-            throw new HttpRequestException(
-                $"Visary вернул 409 Conflict — вероятно, Version устарела. SiteId={siteData.ID}");
+            throw new HttpRequestException($"Visary вернул 409 Conflict — вероятно, Version устарела. SiteId={siteData.ID}");
         }
 
-        if (!response.IsSuccessStatusCode)
-        {
-            var bodyErr = await SafeReadBodyAsync(response, ct);
-            _log.LogError("Visary error {Status}: {Body}", (int)response.StatusCode, bodyErr);
-            throw new HttpRequestException(
-                $"Visary ListView вернул {(int)response.StatusCode} {response.ReasonPhrase}");
-        }
+        HandleError(response, ct);
 
         _log.LogInformation("Visary ← 200 PUT constructionsite ID={SiteId}", siteData.ID);
     }
 
-    public void Dispose()
+    private void HandleAuthError(System.Net.Http.HttpResponseMessage response, CancellationToken ct)
     {
+        if (response.StatusCode is System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden)
+        {
+            var body = SafeReadBodyAsync(response, ct).GetAwaiter().GetResult();
+            _log.LogError("Visary auth error {Status}: {Body}", (int)response.StatusCode, body);
+            throw new VisaryAuthException($"Visary вернул {(int)response.StatusCode} — токен истёк.");
+        }
     }
 
-    private static async Task<string> SafeReadBodyAsync(HttpResponseMessage r, CancellationToken ct)
+    private void HandleError(System.Net.Http.HttpResponseMessage response, CancellationToken ct)
+    {
+        if (!response.IsSuccessStatusCode)
+        {
+            var body = SafeReadBodyAsync(response, ct).GetAwaiter().GetResult();
+            _log.LogError("Visary error {Status}: {Body}", (int)response.StatusCode, body);
+            throw new HttpRequestException($"Visary вернул {(int)response.StatusCode} {response.ReasonPhrase}");
+        }
+    }
+
+    private static async Task<string> SafeReadBodyAsync(System.Net.Http.HttpResponseMessage r, CancellationToken ct)
     {
         try { return await r.Content.ReadAsStringAsync(ct); }
         catch { return string.Empty; }
+    }
+
+    public void Dispose()
+    {
+        GC.SuppressFinalize(this);
+    }
+
+    public sealed class SiteUpdateData
+    {
+        public int ID { get; set; }
+        public int? FinishingMaterialId { get; set; }
+        public DateTime? Version { get; set; }
     }
 }
