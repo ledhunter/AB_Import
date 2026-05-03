@@ -38,6 +38,9 @@
 | [37-sites-sync.md](./37-sites-sync.md) | 🗃️ Синхронизация объектов строительства: SitesSyncService + VisarySitesCrudClient |
 | [38-visary-client-refactoring.md](./38-visary-client-refactoring.md) | 🧰 План рефакторинга Visary API клиентов в переиспользуемую библиотеку |
 | [39-visary-api-refactoring.md](./39-visary-api-refactoring.md) | 🧰 Рефакторинг Visary API клиентов в библиотеку `Visary.Api.Client` (64/64 backend, 28/28 frontend tests) |
+| [40-visary-api-refactoring-completed.md](./40-visary-api-refactoring-completed.md) | 🧰 Рефакторинг завершён: Visary.Api.Client, все тесты проходят, frontend работает без изменений |
+| [41-missing-dtos.md](./41-missing-dtos.md) | 🧰 Восстановленные DTO типы (ListViewResponse<T>, ConstructionProjectRaw, ConstructionSiteRaw, VisaryOptions) |
+| [42-global-using-alias.md](./42-global-using-alias.md) | 🧰 Паттерн глобальных using alias для разрешения конфликтов имён (VisaryOptions) |
 
 ## 🎯 Контекст проекта
 

@@ -3,11 +3,7 @@ using KiloImportService.Api.Data.Visary;
 using KiloImportService.Api.Data.Visary.Entities;
 using KiloImportService.Api.Domain.Importing;
 using Microsoft.EntityFrameworkCore;
-using Visary.Api;
 using Visary.Api.CRUD;
-using Visary.Api.Dto;
-using Visary.Api.Exceptions;
-using Visary.Api.ListView;
 
 namespace KiloImportService.Api.Domain.Mapping;
 
@@ -30,14 +26,14 @@ public sealed class FinModelImportMapper : IImportMapper
     private static readonly string[] FinishingTypeAliases = ["Тип отделки", "FinishingType", "Finishing"];
 
     private readonly ILogger<FinModelImportMapper> _log;
-    private readonly ICrudClient _crudClient;
+    private readonly ICrudClient _visaryClient;
 
     public FinModelImportMapper(
         ILogger<FinModelImportMapper> log,
-        ICrudClient crudClient)
+        ICrudClient visaryClient)
     {
         _log = log;
-        _crudClient = crudClient;
+        _visaryClient = visaryClient;
     }
 
     public async Task<ValidationResult> ValidateAsync(
@@ -164,15 +160,8 @@ public sealed class FinModelImportMapper : IImportMapper
         // Обновление через Visary CRUD API
         try
         {
-            var success = await _crudClient.UpdateSiteFinishingMaterialAsync(
+            var success = await _visaryClient.UpdateSiteFinishingMaterialAsync(
                 context.VisarySiteId.Value, finishingMaterialId, ct);
-            
-            if (!success)
-            {
-                errors.Add(new RowError(null, "visary_update_failed",
-                    "Не удалось обновить тип отделки в Visary."));
-                return new ApplyResult(0, errors);
-            }
             
             _log.LogInformation(
                 "FinModelImportMapper.ApplyAsync: обновление FinishingMaterialId={FinishingMaterialId} для SiteId={SiteId} успешно",

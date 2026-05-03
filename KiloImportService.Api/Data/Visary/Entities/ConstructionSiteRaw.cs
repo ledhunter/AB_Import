@@ -1,15 +1,4 @@
-using System.Collections.Generic;
-
-namespace Visary.Api.Dto;
-
-public sealed class ConstructionProjectRaw
-{
-    public int ID { get; set; }
-    public string? Title { get; set; }
-    public string? IdentifierKK { get; set; }
-    public string? IdentifierZPLM { get; set; }
-    public bool? Hidden { get; set; }
-}
+namespace KiloImportService.Api.Data.Visary;
 
 public sealed class ConstructionSiteRaw
 {

@@ -1,11 +1,6 @@
-using System;
-using System.Net.Http.Json;
-using System.Text.Json;
-using System.Text.Json.Serialization;
+namespace KiloImportService.Api.Domain.Visary;
 
-namespace Visary.Api.Dto;
-
-public sealed class VisaryOptions
+public sealed class VisaryApiOptions
 {
     public const string SectionName = "Visary";
 

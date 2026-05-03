@@ -1,11 +1,10 @@
 using KiloImportService.Api.Data;
 using KiloImportService.Api.Data.Entities;
-using Visary.Api;
-using Visary.Api.Dto;
-using Visary.Api.Exceptions;
-using Visary.Api.ListView;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Visary.Api;
+using Visary.Api.Dto;
+using Visary.Api.ListView;
 
 namespace KiloImportService.Api.Domain.Projects;
 
@@ -43,18 +42,18 @@ public sealed class ProjectsCacheService : IProjectsCacheService
     private const int FallbackPageSize = 50;
 
     private readonly ImportServiceDbContext _db;
-    private readonly IListViewClient _listViewClient;
+    private readonly IListViewClient _visaryClient;
     private readonly VisaryOptions _options;
     private readonly ILogger<ProjectsCacheService> _log;
 
     public ProjectsCacheService(
         ImportServiceDbContext db,
-        IListViewClient listViewClient,
+        IListViewClient visaryClient,
         IOptions<VisaryOptions> options,
         ILogger<ProjectsCacheService> log)
     {
         _db = db;
-        _listViewClient = listViewClient;
+        _visaryClient = visaryClient;
         _options = options.Value;
         _log = log;
     }
@@ -70,12 +69,12 @@ public sealed class ProjectsCacheService : IProjectsCacheService
         while (true)
         {
             ct.ThrowIfCancellationRequested();
-            var page = await _listViewClient.GetProjectsAsync(null, pageSize, ct);
-            total = page.TotalRows;
-            if (page.Rows.Count == 0) break;
+            var page = await _visaryClient.GetProjectsAsync(null, pageSize, ct);
+            total = page.Total;
+            if (page.Data.Count == 0) break;
 
-            upserted += await UpsertAsync(page.Rows, ct);
-            skip += page.Rows.Count;
+            upserted += await UpsertAsync(page.Data, ct);
+            skip += page.Data.Count;
             if (skip >= total) break;
         }
 
@@ -106,13 +105,13 @@ public sealed class ProjectsCacheService : IProjectsCacheService
             "ProjectsCacheService.SearchAsync: local miss query='{Q}' → fallback to Visary",
             trimmed);
 
-        var page = await _listViewClient.GetProjectsAsync(trimmed, FallbackPageSize, ct);
-        if (page.Rows.Count == 0)
+                    var page = await _visaryClient.GetProjectsAsync(trimmed, FallbackPageSize, ct);
+        if (page.Data.Count == 0)
         {
             return new SearchResult(Array.Empty<CachedProject>(), FromFallback: true);
         }
 
-        await UpsertAsync(page.Rows, ct);
+        await UpsertAsync(page.Data, ct);
         var fallback = await SearchLocalAsync(trimmed, take, ct);
         return new SearchResult(fallback, FromFallback: true);
     }
@@ -156,8 +155,6 @@ public sealed class ProjectsCacheService : IProjectsCacheService
 
         foreach (var r in list)
         {
-            // ⚠️ Используем ?? только тут — если Title null, сохраняем заглушку,
-            // т.к. колонка NOT NULL. Логика fallback'а в UI остаётся (там через ||).
             var title = string.IsNullOrEmpty(r.Title) ? $"Проект #{r.ID}" : r.Title!;
             if (existing.TryGetValue(r.ID, out var entity))
             {

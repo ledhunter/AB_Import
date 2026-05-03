@@ -7,13 +7,14 @@ using KiloImportService.Api.Domain.Pipeline;
 using KiloImportService.Api.Domain.Projects;
 using KiloImportService.Api.Domain.Sites;
 using KiloImportService.Api.Hubs;
+using Microsoft.EntityFrameworkCore;
+using Serilog;
+using Microsoft.Extensions.Options;
 using Visary.Api;
 using Visary.Api.CRUD;
 using Visary.Api.Exceptions;
 using Visary.Api.ListView;
-using Microsoft.EntityFrameworkCore;
-using Serilog;
-using Microsoft.Extensions.Options;
+using Visary.Api.Dto;
 
 // ─────────────────────────── Serilog (раннее логирование) ───────────────────────────
 Log.Logger = new LoggerConfiguration()
@@ -50,33 +51,33 @@ try
     // ─── Pipeline + Storage ───
     builder.Services.AddScoped<ImportPipeline>();
     builder.Services.AddSingleton<IFileStorage, LocalFileStorage>();
-    builder.Services.AddSingleton<IImportSessionCancellation, ImportSessionCancellation>();
+     builder.Services.AddSingleton<IImportSessionCancellation, ImportSessionCancellation>();
 
     // ─── Visary HTTP API клиент + кэш проектов ───
     builder.Services
-        .AddOptions<VisaryOptions>()
-        .Bind(builder.Configuration.GetSection(VisaryOptions.SectionName));
+        .AddVisaryClient(opt =>
+        {
+            opt.BaseUrl = builder.Configuration["Visary:BaseUrl"] ?? string.Empty;
+            opt.BearerToken = builder.Configuration["Visary:BearerToken"] ?? string.Empty;
+            opt.RequestTimeout = TimeSpan.FromSeconds(30);
+        })
+        .Configure<VisaryOptions>(builder.Configuration.GetSection(VisaryOptions.SectionName));
     
     var httpHandler = () => new SocketsHttpHandler
     {
         SslOptions = new System.Net.Security.SslClientAuthenticationOptions
         {
-            // ⚠️ В контейнере (Alpine) .NET runtime не может online-проверить статус отзыва
-            // (CRL/OCSP), и handshake падает с RevocationStatusUnknown/OfflineRevocation.
-            // Отключаем revocation-чек — для prod-окружения с настроенным OCSP responder'ом
-            // это значение надо вернуть к Online. См. doc_project/19-net10-swashbuckle.md.
             CertificateRevocationCheckMode = System.Security.Cryptography.X509Certificates.X509RevocationMode.NoCheck,
         },
     };
     
-    builder.Services.AddVisaryClient(opt =>
+    builder.Services.AddHttpClient<IProjectsCacheService, ProjectsCacheService>((sp, client) =>
     {
-        opt.BaseUrl = builder.Configuration.GetSection("Visary:BaseUrl").GetValue<string>(string.Empty);
-        opt.BearerToken = builder.Configuration.GetSection("Visary:BearerToken").GetValue<string>(string.Empty);
-        opt.RequestTimeout = TimeSpan.FromSeconds(30);
-    });
+        var opt = sp.GetRequiredService<IOptions<VisaryOptions>>().Value;
+        if (opt.RequestTimeout > TimeSpan.Zero) client.Timeout = opt.RequestTimeout;
+    })
+    .ConfigurePrimaryHttpMessageHandler(httpHandler);
     
-    builder.Services.AddScoped<IProjectsCacheService, ProjectsCacheService>();
     builder.Services.AddScoped<ISitesSyncService, SitesSyncService>();
 
     // ─── SignalR ───
