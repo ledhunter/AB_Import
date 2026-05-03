@@ -4,6 +4,9 @@ using KiloImportService.Api.Domain.Importing;
 using KiloImportService.Api.Domain.Mapping;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
+using Visary.Api;
+using Visary.Api.CRUD;
 using Xunit;
 
 namespace KiloImportService.Api.Tests.Mapping;
@@ -15,7 +18,14 @@ public class FinModelImportMapperTests : IDisposable
 
     public FinModelImportMapperTests()
     {
-        _mapper = new FinModelImportMapper(NullLogger<FinModelImportMapper>.Instance);
+        var mockCrudClient = new Mock<ICrudClient>();
+        mockCrudClient.Setup(c => c.UpdateSiteFinishingMaterialAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+        
+        _mapper = new FinModelImportMapper(
+            NullLogger<FinModelImportMapper>.Instance,
+            mockCrudClient.Object
+        );
         
         // Создаём in-memory БД для тестов
         var options = new DbContextOptionsBuilder<VisaryDbContext>()
@@ -39,7 +49,7 @@ public class FinModelImportMapperTests : IDisposable
     }
 
     [Fact]
-    public void TypeCode_Is_finmodel()
+    public async Task TypeCode_Is_finmodel()
     {
         Assert.Equal("finmodel", _mapper.ImportTypeCode);
     }
@@ -48,7 +58,7 @@ public class FinModelImportMapperTests : IDisposable
     [InlineData("Черновая", 3)]
     [InlineData("Предчистовая", 2)]
     [InlineData("Чистовая", 1)]
-    public void GetFinishingMaterialId_ValidValues_ReturnsCorrectId(string title, int expectedId)
+    public async Task ValidateAsync_ValidValues_ReturnsCorrectId(string title, int expectedId)
     {
         // Arrange
         var row = new ParsedRow(
@@ -58,12 +68,12 @@ public class FinModelImportMapperTests : IDisposable
         );
 
         // Act
-        var result = _mapper.ValidateAsync(
+        var result = await _mapper.ValidateAsync(
             new ImportContext(Guid.NewGuid(), null, 123, null),
             new[] { row },
             _dbContext,
             CancellationToken.None
-        ).Result;
+        );
 
         // Assert
         Assert.Single(result.Rows);
@@ -73,7 +83,7 @@ public class FinModelImportMapperTests : IDisposable
     }
 
     [Fact]
-    public void ValidateAsync_MissingColumn_ReturnsError()
+    public async Task ValidateAsync_MissingColumn_ReturnsError()
     {
         // Arrange
         var row = new ParsedRow(
@@ -83,12 +93,12 @@ public class FinModelImportMapperTests : IDisposable
         );
 
         // Act
-        var result = _mapper.ValidateAsync(
+        var result = await _mapper.ValidateAsync(
             new ImportContext(Guid.NewGuid(), null, 123, null),
             new[] { row },
             _dbContext,
             CancellationToken.None
-        ).Result;
+        );
 
         // Assert
         Assert.Single(result.Rows);
@@ -97,7 +107,7 @@ public class FinModelImportMapperTests : IDisposable
     }
 
     [Fact]
-    public void ValidateAsync_EmptyValue_ReturnsError()
+    public async Task ValidateAsync_EmptyValue_ReturnsError()
     {
         // Arrange
         var row = new ParsedRow(
@@ -107,12 +117,12 @@ public class FinModelImportMapperTests : IDisposable
         );
 
         // Act
-        var result = _mapper.ValidateAsync(
+        var result = await _mapper.ValidateAsync(
             new ImportContext(Guid.NewGuid(), null, 123, null),
             new[] { row },
             _dbContext,
             CancellationToken.None
-        ).Result;
+        );
 
         // Assert
         Assert.Single(result.Rows);
@@ -121,7 +131,7 @@ public class FinModelImportMapperTests : IDisposable
     }
 
     [Fact]
-    public void ValidateAsync_InvalidValue_ReturnsError()
+    public async Task ValidateAsync_InvalidValue_ReturnsError()
     {
         // Arrange
         var row = new ParsedRow(
@@ -131,12 +141,12 @@ public class FinModelImportMapperTests : IDisposable
         );
 
         // Act
-        var result = _mapper.ValidateAsync(
+        var result = await _mapper.ValidateAsync(
             new ImportContext(Guid.NewGuid(), null, 123, null),
             new[] { row },
             _dbContext,
             CancellationToken.None
-        ).Result;
+        );
 
         // Assert
         Assert.Single(result.Rows);
@@ -145,7 +155,7 @@ public class FinModelImportMapperTests : IDisposable
     }
 
     [Fact]
-    public void ValidateAsync_NoSiteId_ReturnsFileError()
+    public async Task ValidateAsync_NoSiteId_ReturnsFileError()
     {
         // Arrange
         var row = new ParsedRow(
@@ -155,12 +165,12 @@ public class FinModelImportMapperTests : IDisposable
         );
 
         // Act
-        var result = _mapper.ValidateAsync(
+        var result = await _mapper.ValidateAsync(
             new ImportContext(Guid.NewGuid(), null, null, null), // siteId = null
             new[] { row },
             _dbContext,
             CancellationToken.None
-        ).Result;
+        );
 
         // Assert
         Assert.Empty(result.Rows);
@@ -171,7 +181,7 @@ public class FinModelImportMapperTests : IDisposable
     [InlineData("FinishingType")]
     [InlineData("Finishing")]
     [InlineData("тип отделки")] // case-insensitive
-    public void ValidateAsync_ColumnAliases_WorksCorrectly(string columnName)
+    public async Task ValidateAsync_ColumnAliases_WorksCorrectly(string columnName)
     {
         // Arrange
         var row = new ParsedRow(
@@ -181,12 +191,12 @@ public class FinModelImportMapperTests : IDisposable
         );
 
         // Act
-        var result = _mapper.ValidateAsync(
+        var result = await _mapper.ValidateAsync(
             new ImportContext(Guid.NewGuid(), null, 123, null),
             new[] { row },
             _dbContext,
             CancellationToken.None
-        ).Result;
+        );
 
         // Assert
         Assert.Single(result.Rows);

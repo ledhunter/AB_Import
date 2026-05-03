@@ -5,10 +5,15 @@ using KiloImportService.Api.Domain.Importing.Parsers;
 using KiloImportService.Api.Domain.Mapping;
 using KiloImportService.Api.Domain.Pipeline;
 using KiloImportService.Api.Domain.Projects;
-using KiloImportService.Api.Domain.Visary;
+using KiloImportService.Api.Domain.Sites;
 using KiloImportService.Api.Hubs;
+using Visary.Api;
+using Visary.Api.CRUD;
+using Visary.Api.Exceptions;
+using Visary.Api.ListView;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
+using Microsoft.Extensions.Options;
 
 // ─────────────────────────── Serilog (раннее логирование) ───────────────────────────
 Log.Logger = new LoggerConfiguration()
@@ -49,8 +54,8 @@ try
 
     // ─── Visary HTTP API клиент + кэш проектов ───
     builder.Services
-        .AddOptions<VisaryApiOptions>()
-        .Bind(builder.Configuration.GetSection(VisaryApiOptions.SectionName));
+        .AddOptions<VisaryOptions>()
+        .Bind(builder.Configuration.GetSection(VisaryOptions.SectionName));
     
     var httpHandler = () => new SocketsHttpHandler
     {
@@ -64,14 +69,15 @@ try
         },
     };
     
-    builder.Services.AddHttpClient<IVisaryListViewClient, VisaryListViewClient>((sp, client) =>
+    builder.Services.AddVisaryClient(opt =>
     {
-        var opt = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<VisaryApiOptions>>().Value;
-        if (opt.RequestTimeout > TimeSpan.Zero) client.Timeout = opt.RequestTimeout;
-    })
-    .ConfigurePrimaryHttpMessageHandler(httpHandler);
+        opt.BaseUrl = builder.Configuration.GetSection("Visary:BaseUrl").GetValue<string>(string.Empty);
+        opt.BearerToken = builder.Configuration.GetSection("Visary:BearerToken").GetValue<string>(string.Empty);
+        opt.RequestTimeout = TimeSpan.FromSeconds(30);
+    });
     
     builder.Services.AddScoped<IProjectsCacheService, ProjectsCacheService>();
+    builder.Services.AddScoped<ISitesSyncService, SitesSyncService>();
 
     // ─── SignalR ───
     builder.Services.AddSignalR();

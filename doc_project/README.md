@@ -35,6 +35,9 @@
 | [27-checklists.md](./27-checklists.md) | ✅ Чек-листы: запуск цикла, добавление маппера, деплой |
 | [28-faq.md](./28-faq.md) | ❓ Частые вопросы: пустой Select, бэком не отвечает, обновление токена |
 | [plan-listview-library.md](./plan-listview-library.md) | 🏗️ План рефакторинга ListView в переиспользуемую библиотеку (с чек-листом и логом прогресса) |
+| [37-sites-sync.md](./37-sites-sync.md) | 🗃️ Синхронизация объектов строительства: SitesSyncService + VisarySitesCrudClient |
+| [38-visary-client-refactoring.md](./38-visary-client-refactoring.md) | 🧰 План рефакторинга Visary API клиентов в переиспользуемую библиотеку |
+| [39-visary-api-refactoring.md](./39-visary-api-refactoring.md) | 🧰 Рефакторинг Visary API клиентов в библиотеку `Visary.Api.Client` (64/64 backend, 28/28 frontend tests) |
 
 ## 🎯 Контекст проекта
 

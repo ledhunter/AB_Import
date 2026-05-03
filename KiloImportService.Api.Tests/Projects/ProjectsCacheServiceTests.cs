@@ -1,10 +1,12 @@
 using KiloImportService.Api.Data;
 using KiloImportService.Api.Data.Entities;
 using KiloImportService.Api.Domain.Projects;
-using KiloImportService.Api.Domain.Visary;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Visary.Api;
+using Visary.Api.Dto;
+using Visary.Api.ListView;
 
 namespace KiloImportService.Api.Tests.Projects;
 
@@ -18,15 +20,15 @@ namespace KiloImportService.Api.Tests.Projects;
 /// </summary>
 public class ProjectsCacheServiceTests
 {
-    private static (ImportServiceDbContext db, FakeVisaryClient visary, ProjectsCacheService svc) Build(
-        VisaryApiOptions? options = null)
+    private static (ImportServiceDbContext db, FakeListViewClient visary, ProjectsCacheService svc) Build(
+        VisaryOptions? options = null)
     {
-        var opt = options ?? new VisaryApiOptions { SyncPageSize = 2 };
+        var opt = options ?? new VisaryOptions { SyncPageSize = 2 };
         var db = new ImportServiceDbContext(
             new DbContextOptionsBuilder<ImportServiceDbContext>()
                 .UseInMemoryDatabase($"projects-{Guid.NewGuid():N}")
                 .Options);
-        var visary = new FakeVisaryClient();
+        var visary = new FakeListViewClient();
         var svc = new ProjectsCacheService(
             db,
             visary,
@@ -38,7 +40,7 @@ public class ProjectsCacheServiceTests
     [Fact]
     public async Task SyncAllAsync_PaginatesUntilTotal_AndUpserts()
     {
-        var (db, visary, svc) = Build(new VisaryApiOptions { SyncPageSize = 2 });
+        var (db, visary, svc) = Build(new VisaryOptions { SyncPageSize = 2 });
 
         // 5 проектов в Visary, страницы по 2 → 3 запроса (2 + 2 + 1).
         visary.Pages = new[]
@@ -53,9 +55,10 @@ public class ProjectsCacheServiceTests
         Assert.Equal(5, result.Total);
         Assert.True(result.Upserted >= 5);
         Assert.Equal(3, visary.Calls.Count);
-        Assert.Equal(0, visary.Calls[0].pageSkip);
-        Assert.Equal(2, visary.Calls[1].pageSkip);
-        Assert.Equal(4, visary.Calls[2].pageSkip);
+        Assert.Null(visary.Calls[0].search);
+        Assert.Equal(2, visary.Calls[0].pageSize);
+        Assert.Equal(2, visary.Calls[1].pageSize);
+        Assert.Equal(2, visary.Calls[2].pageSize);
 
         var stored = await db.CachedProjects.OrderBy(p => p.Id).ToListAsync();
         Assert.Equal(new[] { 1, 2, 3, 4, 5 }, stored.Select(p => p.Id));
@@ -64,7 +67,7 @@ public class ProjectsCacheServiceTests
     [Fact]
     public async Task SyncAllAsync_StopsWhenServerReturnsEmptyPage()
     {
-        var (db, visary, svc) = Build(new VisaryApiOptions { SyncPageSize = 10 });
+        var (db, visary, svc) = Build(new VisaryOptions { SyncPageSize = 10 });
 
         visary.Pages = new[]
         {
@@ -81,7 +84,7 @@ public class ProjectsCacheServiceTests
     [Fact]
     public async Task SyncAllAsync_UpdatesExistingProjectsById()
     {
-        var (db, visary, svc) = Build(new VisaryApiOptions { SyncPageSize = 10 });
+        var (db, visary, svc) = Build(new VisaryOptions { SyncPageSize = 10 });
         db.CachedProjects.Add(new CachedProject
         {
             Id = 7,
@@ -228,22 +231,34 @@ public class ProjectsCacheServiceTests
         }).ToList(),
     };
 
-    private sealed class FakeVisaryClient : IVisaryListViewClient
+    private sealed class FakeListViewClient : IListViewClient
     {
         public IReadOnlyList<ListViewResponse<ConstructionProjectRaw>> Pages { get; set; } =
             Array.Empty<ListViewResponse<ConstructionProjectRaw>>();
 
-        public List<(int pageSkip, int pageSize, string search)> Calls { get; } = new();
+        public List<(string? search, int pageSize)> Calls { get; } = new();
 
-        public Task<ListViewResponse<ConstructionProjectRaw>> FetchProjectsAsync(
-            int pageSkip, int pageSize, string searchString, CancellationToken ct)
+        public Task<ListViewResponse<ConstructionProjectRaw>> GetProjectsAsync(
+            string? search, int pageSize, CancellationToken ct)
         {
-            Calls.Add((pageSkip, pageSize, searchString));
-            var idx = Math.Min(Calls.Count - 1, Pages.Count - 1);
+            Calls.Add((search, pageSize));
+            var idx = Calls.Count - 1;
             var page = idx >= 0 && idx < Pages.Count
                 ? Pages[idx]
                 : new ListViewResponse<ConstructionProjectRaw> { Total = 0, Data = new() };
             return Task.FromResult(page);
         }
+
+        public Task<ListViewResponse<ConstructionSiteRaw>> GetSitesByProjectAsync(int projectId, CancellationToken ct)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Task<ConstructionSiteRaw?> GetSiteByIdAsync(int siteId, CancellationToken ct)
+        {
+            throw new NotImplementedException();
+        }
+
+        public void Dispose() { }
     }
 }

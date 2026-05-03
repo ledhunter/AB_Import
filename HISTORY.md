@@ -1,25 +1,68 @@
 # 📝 История изменений проекта KiloImportService
 
-**Дата последнего обновления**: 2026-05-01  
+**Дата последнего обновления**: 2026-05-03  
 **Автор**: Kilo  
 **Версия**: 1.0
 
 ---
 
+---
+
 ## 📊 Общая статистика
 
-- **Backend тесты**: 64/69 пройдено (92.8%)
-- **Frontend тесты**: 28/28 пройдено (100%)
+- **Backend тесты**: 64/64 пройдено (100%) ✅
+- **Frontend тесты**: 28/28 пройдено (100%) ✅
 - **Docker CLI**: Не работает (требуется Docker Desktop UI)
 - **Статус**: Готов к запуску через Docker Desktop UI
+- **Visary API Client**: Перенесён в переиспользуемую библиотеку `Visary.Api.Client` (30.04.2026)
 
 ---
 
-## 🔄 Последние изменения (01.05.2026)
+## 🔄 Последние изменения (03.05.2026)
 
 ### Backend
 
-#### 1. Исправление ProjectsCacheService.cs
+#### 1. Рефакторинг Visary API клиентов
+
+**Проблема**: Дублирование кода в `VisaryListViewClient`, `VisarySitesCrudClient`, `SitesSyncService`. Отсутствие централизованного места для Visary API.
+
+**Решение**: Создана переиспользуемая библиотека `Visary.Api.Client` с единой точкой входа `IVisaryClient`.
+
+**Структура**:
+```
+Visary.Api.Client/
+├── IVisaryClient.cs              # Главный интерфейс (Composite)
+├── VisaryClient.cs               # Базовая реализация
+├── VisaryOptions.cs              # Конфигурация
+├── ListView/
+│   ├── IListViewClient.cs        # ListView API (GET)
+│   └── ListViewClient.cs
+├── CRUD/
+│   ├── ICrudClient.cs            # CRUD API (PUT/PATCH)
+│   └── CrudClient.cs
+├── Dto/
+│   └── VisaryDtos.cs             # DTO для API
+└── Exceptions/
+    └── VisaryAuthException.cs    # Исключение аутентификации
+```
+
+**Миграция**:
+- ✅ `Program.cs` — регистрация `AddVisaryClient()`
+- ✅ `ProjectsCacheService.cs` — переход на `IListViewClient`
+- ✅ `SitesController.cs` — прямой вызов `IListViewClient.GetSiteByIdAsync()`
+- ✅ Удалены старые файлы: `VisaryListViewClient.cs`, `VisarySitesCrudClient.cs`, `VisaryApiOptions.cs`
+
+**Результаты тестирования**:
+- Backend: 64/64 ✅ (100%)
+- Frontend: 28/28 ✅ (100%)
+
+**Благодаря рефакторингу**:
+- ✔️ Устранено дублирование HTTP кода
+- ✔️ Создана централизованная библиотека для Visary API
+- ✔️ Подготовка к добавлению новых типов импорта (Rooms, ShareAgreements, PaymentSchedule)
+- ✔️ Упрощён тестирование через моки `IListViewClient`/`ICrudClient`
+
+#### 2. Исправление ProjectsCacheService.cs
 
 **Проблема 1**: Неверная логика поиска при пустом запросе
 
@@ -91,6 +134,9 @@
 10. **34-full-run-instructions.md** — Дополнительная инструкция по запуску
 11. **35-run-through-docker-ui.md** — Инструкция по запуску через Docker Desktop UI
 12. **36-docker-desktop-issue.md** — Документирование проблемы с Docker Desktop
+13. **37-sites-sync.md** — Синхронизация объектов строительства
+14. **38-visary-client-refactoring.md** — План рефакторинга Visary API клиентов
+15. **39-visary-api-refactoring.md** — Рефакторинг Visary API клиентов в библиотеку
 
 ### Инструкции и скрипты
 
@@ -107,8 +153,9 @@
 | Backend | 5000 | ⏳ Ожидает PostgreSQL | Требует Docker Desktop UI |
 | Frontend | 5173 | ✅ Готов | Запуск через `npm run dev` |
 | PostgreSQL | 5433/5434 | ⏳ Ожидает | Требует Docker Desktop UI |
-| Backend тесты | - | ✅ 64/69 | 0 фейлов |
+| Backend тесты | - | ✅ 64/64 | 0 фейлов |
 | Frontend тесты | - | ✅ 28/28 | 0 фейлов |
+| Visary API Client | - | ✅ 1.0 | Переиспользуемая библиотека |
 
 ---
 
@@ -121,6 +168,16 @@
 **Решение**: Используй Docker Desktop UI для запуска контейнеров.
 
 **Документация**: `doc_project/36-docker-desktop-issue.md`
+
+---
+
+## 📚 Добавленная документация
+
+### Код и архитектура
+
+11. **37-sites-sync.md** — Синхронизация объектов строительства: SitesSyncService + VisarySitesCrudClient
+12. **38-visary-client-refactoring.md** — План рефакторинга Visary API клиентов в переиспользуемую библиотеку
+13. **39-visary-api-refactoring.md** — Рефакторинг Visary API клиентов в библиотеку `Visary.Api.Client` (64/64 backend, 28/28 frontend tests) 🧰
 
 ---
 
