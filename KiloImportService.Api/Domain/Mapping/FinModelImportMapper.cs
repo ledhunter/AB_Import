@@ -3,15 +3,20 @@ using KiloImportService.Api.Data.Visary;
 using KiloImportService.Api.Data.Visary.Entities;
 using KiloImportService.Api.Domain.Importing;
 using Microsoft.EntityFrameworkCore;
+using Visary.Api;
+using Visary.Api.CRUD;
+using Visary.Api.Dto;
+using Visary.Api.Exceptions;
+using Visary.Api.ListView;
 
 namespace KiloImportService.Api.Domain.Mapping;
 
 /// <summary>
 /// Маппер импорта типа "Финмодель" (finmodel).
-/// Обновляет параметры объекта строительства на основе данных из Excel.
+/// Обновление типа отделки объекта строительства через Visary CRUD API.
 /// 
 /// Поддерживаемые параметры:
-/// - "Тип отделки" → ConstructionSite.FinishingMaterialId
+/// - "Тип отделки" → обновление FinishingMaterialId через Visary API
 /// 
 /// Справочник "Тип отделки":
 /// - "Черновая" → ID=3
@@ -25,10 +30,14 @@ public sealed class FinModelImportMapper : IImportMapper
     private static readonly string[] FinishingTypeAliases = ["Тип отделки", "FinishingType", "Finishing"];
 
     private readonly ILogger<FinModelImportMapper> _log;
+    private readonly ICrudClient _crudClient;
 
-    public FinModelImportMapper(ILogger<FinModelImportMapper> log)
+    public FinModelImportMapper(
+        ILogger<FinModelImportMapper> log,
+        ICrudClient crudClient)
     {
         _log = log;
+        _crudClient = crudClient;
     }
 
     public async Task<ValidationResult> ValidateAsync(
@@ -151,39 +160,38 @@ public sealed class FinModelImportMapper : IImportMapper
         // Берём первую валидную строку (предполагается, что в файле одна строка с параметрами)
         var firstRow = validRows[0];
         var finishingMaterialId = firstRow.MappedValues.RootElement.GetProperty("FinishingMaterialId").GetInt32();
-
+        
+        // Обновление через Visary CRUD API
         try
         {
-            // Получаем объект строительства
-            var site = await visaryDb.ConstructionSites
-                .FirstOrDefaultAsync(s => s.Id == context.VisarySiteId.Value && !s.Hidden, ct);
-
-            if (site is null)
+            var success = await _crudClient.UpdateSiteFinishingMaterialAsync(
+                context.VisarySiteId.Value, finishingMaterialId, ct);
+            
+            if (!success)
             {
-                errors.Add(new RowError(null, "site_not_found",
-                    $"Объект строительства с ID={context.VisarySiteId} не найден или скрыт."));
+                errors.Add(new RowError(null, "visary_update_failed",
+                    "Не удалось обновить тип отделки в Visary."));
                 return new ApplyResult(0, errors);
             }
-
+            
             _log.LogInformation(
-                "Обновление объекта строительства {SiteId}: FinishingMaterialId={FinishingMaterialId}",
-                context.VisarySiteId.Value, finishingMaterialId);
-
-            // Обновляем FinishingMaterialId
-            site.FinishingMaterialId = finishingMaterialId;
-
-            await visaryDb.SaveChangesAsync(ct);
-
-            _log.LogInformation(
-                "✓ Объект строительства {SiteId} успешно обновлён: FinishingMaterialId={FinishingMaterialId}",
-                context.VisarySiteId.Value, finishingMaterialId);
-
+                "FinModelImportMapper.ApplyAsync: обновление FinishingMaterialId={FinishingMaterialId} для SiteId={SiteId} успешно",
+                finishingMaterialId, context.VisarySiteId.Value);
+            
             return new ApplyResult(1, errors);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            _log.LogError(ex, "Visary site not found for siteId={SiteId}", context.VisarySiteId);
+            errors.Add(new RowError(null, "visary_site_not_found",
+                $"Объект строительства {context.VisarySiteId} не найден в Visary."));
+            return new ApplyResult(0, errors);
         }
         catch (Exception ex)
         {
-            _log.LogError(ex, "Ошибка при обновлении объекта строительства {SiteId}", context.VisarySiteId);
-            errors.Add(new RowError(null, "apply_failed", $"Ошибка обновления: {ex.Message}"));
+            _log.LogError(ex, "Visary update failed for siteId={SiteId}", context.VisarySiteId);
+            errors.Add(new RowError(null, "visary_update_error",
+                $"Ошибка обновления в Visary: {ex.Message}"));
             return new ApplyResult(0, errors);
         }
     }

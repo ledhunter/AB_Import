@@ -3,6 +3,7 @@ import { Select } from '@alfalab/core-components/select';
 import { Typography } from '@alfalab/core-components/typography';
 import { useBackendProjects } from '../../hooks/useBackendProjects';
 import { useSites } from '../../hooks/useSites';
+import { syncSite } from '../../services/sitesSync';
 
 interface Props {
   projectId: number | null;
@@ -196,7 +197,21 @@ export const ImportForm = ({
           placeholder={sitePlaceholder}
           options={siteOptions}
           selected={siteId !== null ? String(siteId) : null}
-          onChange={({ selected }) => onSiteChange(selected ? Number(selected.key) : null)}
+          onChange={async ({ selected }) => {
+            const newSiteId = selected ? Number(selected.key) : null;
+            if (newSiteId) {
+              try {
+                await syncSite(newSiteId);
+              } catch (err) {
+                console.error('[ImportForm] Failed to sync site', newSiteId, err);
+                if (err instanceof Error) {
+                  alert(`Ошибка синхронизации объекта: ${err.message}`);
+                }
+                return;
+              }
+            }
+            onSiteChange(newSiteId);
+          }}
           onOpen={handleSitesOpen}
           disabled={!projectId || sites.status === 'loading'}
           block

@@ -47,7 +47,12 @@ public class VisaryDbContext : DbContext
             e.Property(x => x.ConstructionPermissionNumber).HasColumnName("ConstructionPermissionNumber");
             e.Property(x => x.ConstructionProjectNumber).HasColumnName("ConstructionProjectNumber");
             e.Property(x => x.StageNumber).HasColumnName("StageNumber");
+            e.Property(x => x.RegionId).HasColumnName("RegionID");
+            e.Property(x => x.TownId).HasColumnName("TownID");
+            e.Property(x => x.Address).HasColumnName("Address");
             e.Property(x => x.Hidden).HasColumnName("Hidden");
+            e.Property(x => x.Version).HasColumnName("Version");
+            e.Property(x => x.FinishingMaterialId).HasColumnName("FinishingMaterialId");
         });
 
         // ─── RoomKind ───

@@ -1,7 +1,11 @@
 using KiloImportService.Api.Data;
 using KiloImportService.Api.Data.Entities;
-using KiloImportService.Api.Domain.Visary;
+using Visary.Api;
+using Visary.Api.Dto;
+using Visary.Api.Exceptions;
+using Visary.Api.ListView;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace KiloImportService.Api.Domain.Projects;
 
@@ -39,18 +43,18 @@ public sealed class ProjectsCacheService : IProjectsCacheService
     private const int FallbackPageSize = 50;
 
     private readonly ImportServiceDbContext _db;
-    private readonly IVisaryListViewClient _visary;
-    private readonly VisaryApiOptions _options;
+    private readonly IListViewClient _listViewClient;
+    private readonly VisaryOptions _options;
     private readonly ILogger<ProjectsCacheService> _log;
 
     public ProjectsCacheService(
         ImportServiceDbContext db,
-        IVisaryListViewClient visary,
-        Microsoft.Extensions.Options.IOptions<VisaryApiOptions> options,
+        IListViewClient listViewClient,
+        IOptions<VisaryOptions> options,
         ILogger<ProjectsCacheService> log)
     {
         _db = db;
-        _visary = visary;
+        _listViewClient = listViewClient;
         _options = options.Value;
         _log = log;
     }
@@ -66,7 +70,7 @@ public sealed class ProjectsCacheService : IProjectsCacheService
         while (true)
         {
             ct.ThrowIfCancellationRequested();
-            var page = await _visary.FetchProjectsAsync(skip, pageSize, string.Empty, ct);
+            var page = await _listViewClient.GetProjectsAsync(null, pageSize, ct);
             total = page.TotalRows;
             if (page.Rows.Count == 0) break;
 
@@ -102,7 +106,7 @@ public sealed class ProjectsCacheService : IProjectsCacheService
             "ProjectsCacheService.SearchAsync: local miss query='{Q}' → fallback to Visary",
             trimmed);
 
-        var page = await _visary.FetchProjectsAsync(0, FallbackPageSize, trimmed, ct);
+        var page = await _listViewClient.GetProjectsAsync(trimmed, FallbackPageSize, ct);
         if (page.Rows.Count == 0)
         {
             return new SearchResult(Array.Empty<CachedProject>(), FromFallback: true);

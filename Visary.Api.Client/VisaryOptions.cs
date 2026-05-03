@@ -1,11 +1,11 @@
-namespace KiloImportService.Api.Domain.Visary;
+namespace Visary.Api;
 
 /// <summary>
 /// Конфигурация Visary HTTP API.
 /// Привязывается к секции <c>Visary</c> в appsettings или
 /// переменным окружения <c>Visary__BaseUrl</c> / <c>Visary__BearerToken</c>.
 /// </summary>
-public sealed class VisaryApiOptions
+public sealed class VisaryOptions
 {
     public const string SectionName = "Visary";
 
