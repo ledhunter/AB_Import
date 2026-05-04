@@ -259,6 +259,11 @@ public class ProjectsCacheServiceTests
             throw new NotImplementedException();
         }
 
+        public Task<ConstructionSiteRaw?> GetSiteByProjectAndIdAsync(int projectId, int siteId, CancellationToken ct)
+        {
+            throw new NotImplementedException();
+        }
+
         public void Dispose() { }
     }
 }

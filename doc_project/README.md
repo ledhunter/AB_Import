@@ -44,7 +44,8 @@
 | [43-sites-filter-fix.md](./43-sites-filter-fix.md) | 🔧 Исправление фильтрации объектов строительства по проекту (associationId в query, SearchPhrase, Summaries) |
 | [44-listview-body-contract.md](./44-listview-body-contract.md) | 📡 Актуальный контракт тела Visary ListView: `SearchPhrase`, `Summaries`, разница `/listview` vs `/onetomany`, типичные ошибки |
 | [45-vite-token-refresh.md](./45-vite-token-refresh.md) | 🔑 Обновление токена Visary и кэш Vite: пошаговая процедура, curl-проверка, очистка `node_modules/.vite` |
-| [46-post-refactoring-gotchas.md](./46-post-refactoring-gotchas.md) | 🪲 Грабли после рефакторинга `Visary.Api.Client`: Docker build context, EF schema vs init.sql, `AddHttpClient` → `AddScoped` |
+| [47-visary-client-duplicates.md](./47-visary-client-duplicates.md) | 🧰 Миграция с дубликатов клиентов Visary API в библиотеку: паттерн удаления старых классов, чек-лист |
+| [../../INCOMPLETE_PARTS.md](../../INCOMPLETE_PARTS.md) | ⚠️ Технический долг проекта: баги, незавершённые тесты, дубликаты кода |
 
 ## 🎯 Контекст проекта
 

@@ -20,11 +20,11 @@ public class SitesController : ControllerBase
     }
 
     [HttpPost("sync/{id:int}")]
-    public async Task<IActionResult> Sync(int id, CancellationToken ct)
+    public async Task<IActionResult> Sync(int id, [FromQuery] int projectId, CancellationToken ct)
     {
         try
         {
-            var result = await _service.SyncAsync(id, ct);
+            var result = await _service.SyncAsync(id, projectId, ct);
             return Ok(new { success = result, siteId = id });
         }
         catch (KeyNotFoundException ex)

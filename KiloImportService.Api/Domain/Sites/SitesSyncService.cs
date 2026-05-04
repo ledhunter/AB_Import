@@ -15,7 +15,7 @@ namespace KiloImportService.Api.Domain.Sites;
 
 public interface ISitesSyncService
 {
-    Task<bool> SyncAsync(int siteId, CancellationToken ct);
+    Task<bool> SyncAsync(int siteId, int projectId, CancellationToken ct);
     Task<bool> UpdateSiteFinishingMaterialAsync(int siteId, int finishingMaterialId, CancellationToken ct);
 }
 
@@ -46,12 +46,12 @@ public sealed class SitesSyncService : ISitesSyncService
         _log = log;
     }
 
-    public async Task<bool> SyncAsync(int siteId, CancellationToken ct)
+    public async Task<bool> SyncAsync(int siteId, int projectId, CancellationToken ct)
     {
         var client = GetListViewClient();
-        var siteData = await client.GetSiteByIdAsync(siteId, ct);
+        var siteData = await client.GetSiteByProjectAndIdAsync(projectId, siteId, ct);
         if (siteData == null)
-            throw new KeyNotFoundException($"ConstructionSite with ID={siteId} not found in Visary");
+            throw new KeyNotFoundException($"ConstructionSite with ID={siteId} not found in Visary (projectId={projectId})");
 
         await UpsertAsync(siteData, ct);
         return true;
