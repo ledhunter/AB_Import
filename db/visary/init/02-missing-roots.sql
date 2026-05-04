@@ -41,6 +41,7 @@ CREATE TABLE IF NOT EXISTS "Data"."ConstructionSite" (
     "Address"                       text,
     "Hidden"                        boolean NOT NULL DEFAULT false,
     "Version"                       timestamp with time zone,
+    "FinishingMaterialId"           integer,
     CONSTRAINT "PK_ConstructionSite" PRIMARY KEY ("ID")
 );
 

@@ -63,21 +63,9 @@ try
         })
         .Configure<VisaryOptions>(builder.Configuration.GetSection(VisaryOptions.SectionName));
     
-    var httpHandler = () => new SocketsHttpHandler
-    {
-        SslOptions = new System.Net.Security.SslClientAuthenticationOptions
-        {
-            CertificateRevocationCheckMode = System.Security.Cryptography.X509Certificates.X509RevocationMode.NoCheck,
-        },
-    };
-    
-    builder.Services.AddHttpClient<IProjectsCacheService, ProjectsCacheService>((sp, client) =>
-    {
-        var opt = sp.GetRequiredService<IOptions<VisaryOptions>>().Value;
-        if (opt.RequestTimeout > TimeSpan.Zero) client.Timeout = opt.RequestTimeout;
-    })
-    .ConfigurePrimaryHttpMessageHandler(httpHandler);
-    
+    // ProjectsCacheService теперь использует IListViewClient (см. AddVisaryClient выше),
+    // а не сырой HttpClient. Регистрируем как обычный scoped-сервис.
+    builder.Services.AddScoped<IProjectsCacheService, ProjectsCacheService>();
     builder.Services.AddScoped<ISitesSyncService, SitesSyncService>();
 
     // ─── SignalR ───

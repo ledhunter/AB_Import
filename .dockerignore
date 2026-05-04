@@ -1,0 +1,37 @@
+# Контекст билда — корень репозитория (см. docker-compose.yml: context: .)
+# Исключаем всё ненужное для сборки backend-образа.
+
+# .NET артефакты
+**/bin/
+**/obj/
+**/.vs/
+
+# Frontend
+KiloImportService.Web/
+
+# Тесты
+KiloImportService.Api.Tests/
+
+# Базы данных и логи
+db/
+*.log
+docker-up.log
+
+# Документация и заметки
+doc_project/
+Context/
+Alfa/
+FinModel/
+*.md
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+.windsurf/
+
+# Прочее
+scripts/
