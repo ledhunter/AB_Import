@@ -26,17 +26,18 @@ test('toSiteItem: все поля заполнены → точное соотв
   const raw: ConstructionSiteRaw = {
     ID: 1,
     Title: 'Корпус 5',
-    ConstructionPermissionNumber: 'РНС-001',
+    Address: 'ул. Ленина, 10',
     ConstructionProjectNumber: 'CPN-77',
-    StageNumber: 'Этап 2',
-    ConstructionProjectID: 42,
+    Type: 'Жилой',
+    TotalArea: 1500,
   };
   const item = toSiteItem(raw);
   assert.equal(item.id, 1);
   assert.equal(item.title, 'Корпус 5');
-  assert.equal(item.constructionPermissionNumber, 'РНС-001');
+  assert.equal(item.address, 'ул. Ленина, 10');
   assert.equal(item.constructionProjectNumber, 'CPN-77');
-  assert.equal(item.stageNumber, 'Этап 2');
+  assert.equal(item.type, 'Жилой');
+  assert.equal(item.totalArea, 1500);
   assert.equal(item.raw, raw);
 });
 
@@ -54,19 +55,21 @@ test('toSiteItem: пустые опциональные строки → пус�
   const item = toSiteItem({
     ID: 3,
     Title: 'X',
-    ConstructionPermissionNumber: null,
+    Address: null,
     ConstructionProjectNumber: undefined,
-    StageNumber: '',
+    Type: '',
   });
-  assert.equal(item.constructionPermissionNumber, '');
+  assert.equal(item.address, '');
   assert.equal(item.constructionProjectNumber, '');
-  assert.equal(item.stageNumber, '');
+  assert.equal(item.type, '');
 });
 
-test('buildSitesQueryByProject: формирует ExtraFilter и AssociatedID', () => {
+test('buildSitesQueryByProject: формирует AssociationFilter', () => {
   const q = buildSitesQueryByProject(123);
-  assert.equal(q.associatedId, 123);
-  assert.equal(q.extraFilter, '[["ConstructionProjectID","=",123]]');
+  assert.deepEqual(q.associationFilter, {
+    AssociatedId: 123,
+    Filters: null,
+  });
 });
 
 test('buildSitesQueryByProject: сохраняет переданные пагинационные параметры', () => {
@@ -74,7 +77,10 @@ test('buildSitesQueryByProject: сохраняет переданные паги
   assert.equal(q.pageSkip, 50);
   assert.equal(q.pageSize, 25);
   assert.equal(q.searchString, 'foo');
-  assert.equal(q.associatedId, 7);
+  assert.deepEqual(q.associationFilter, {
+    AssociatedId: 7,
+    Filters: null,
+  });
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

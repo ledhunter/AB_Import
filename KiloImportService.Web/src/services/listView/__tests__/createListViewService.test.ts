@@ -43,8 +43,8 @@ test('buildListViewRequestBody: дефолты при пустом query', () =>
   assert.equal(body.Sorts, '[{"selector":"ID","desc":true}]', 'дефолтная сортировка по ID desc');
   assert.equal(body.Hidden, false);
   assert.equal(body.ExtraFilter, null);
-  assert.equal(body.SearchString, '');
-  assert.equal(body.AssociatedID, null);
+  assert.equal(body.SearchPhrase, null);
+  assert.deepEqual(body.Summaries, []);
 });
 
 test('buildListViewRequestBody: query переопределяет дефолты', () => {
@@ -53,14 +53,12 @@ test('buildListViewRequestBody: query переопределяет дефолт�
     pageSize: 25,
     searchString: 'abc',
     extraFilter: '[["X","=",1]]',
-    associatedId: 42,
     sorts: '[{"selector":"Title","desc":false}]',
   });
   assert.equal(body.PageSkip, 100);
   assert.equal(body.PageSize, 25);
-  assert.equal(body.SearchString, 'abc');
+  assert.equal(body.SearchPhrase, 'abc');
   assert.equal(body.ExtraFilter, '[["X","=",1]]');
-  assert.equal(body.AssociatedID, 42);
   assert.equal(body.Sorts, '[{"selector":"Title","desc":false}]');
 });
 
@@ -92,6 +90,24 @@ test('buildListViewRequestBody: signal не попадает в тело зап�
   const controller = new AbortController();
   const body = buildListViewRequestBody(baseConfig, { signal: controller.signal });
   assert.equal('signal' in body, false);
+});
+
+test('buildListViewRequestBody: AssociationFilter НЕ попадает в тело для /onetomany эндпоинтов', () => {
+  const configWithOnetomany = {
+    ...baseConfig,
+    pathSuffix: '/onetomany/Project',
+  };
+  const body = buildListViewRequestBody(configWithOnetomany, {
+    associationFilter: { AssociatedId: 123, Filters: null },
+  });
+  assert.equal('AssociationFilter' in body, false, 'AssociationFilter не должен быть в теле для /onetomany');
+});
+
+test('buildListViewRequestBody: AssociationFilter попадает в тело для обычных эндпоинтов', () => {
+  const body = buildListViewRequestBody(baseConfig, {
+    associationFilter: { AssociatedId: 456, Filters: null },
+  });
+  assert.deepEqual(body.AssociationFilter, { AssociatedId: 456, Filters: null });
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

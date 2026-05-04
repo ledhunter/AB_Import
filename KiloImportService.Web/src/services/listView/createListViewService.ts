@@ -19,8 +19,9 @@ interface ListViewRequestBody {
   Columns: string[];
   Sorts: string;
   Hidden: boolean;
-  ExtraFilter: string | null;
-  SearchString: string;
+  ExtraFilter?: string | null;
+  SearchPhrase: string | null;
+  Summaries: unknown[];
   AssociationFilter?: {
     AssociatedId: number;
     Filters: unknown | null;
@@ -38,7 +39,7 @@ export function buildListViewRequestBody<TRaw, TItem>(
   config: ListViewServiceConfig<TRaw, TItem>,
   query: ListViewQuery = {},
 ): ListViewRequestBody {
-  return {
+  const body: ListViewRequestBody = {
     Mnemonic: config.mnemonic,
     PageSkip: query.pageSkip ?? 0,
     PageSize: query.pageSize ?? config.defaultPageSize ?? DEFAULT_PAGE_SIZE,
@@ -46,9 +47,18 @@ export function buildListViewRequestBody<TRaw, TItem>(
     Sorts: query.sorts ?? config.defaultSort ?? DEFAULT_SORT,
     Hidden: false,
     ExtraFilter: query.extraFilter ?? null,
-    SearchString: query.searchString ?? '',
-    AssociationFilter: query.associationFilter ?? null,
+    SearchPhrase: query.searchString || null,
+    Summaries: [],
   };
+  
+  // AssociationFilter НЕ передаётся в теле для /onetomany эндпоинтов.
+  // Вместо этого используется query parameter associationId (см. createListViewService).
+  // Оставляем поле только для обратной совместимости с другими эндпоинтами.
+  if (query.associationFilter && !config.pathSuffix?.includes('/onetomany/')) {
+    body.AssociationFilter = query.associationFilter;
+  }
+  
+  return body;
 }
 
 /**

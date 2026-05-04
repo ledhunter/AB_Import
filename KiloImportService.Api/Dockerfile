@@ -1,14 +1,18 @@
 # ────────────── Build stage ──────────────
+# Контекст билда — корень репо (см. docker-compose.yml: context: .)
+# чтобы был доступен соседний проект Visary.Api.Client.
 FROM mcr.microsoft.com/dotnet/sdk:10.0-preview-alpine AS build
 WORKDIR /src
 
-# Сначала копируем .csproj для кэша restore
-COPY KiloImportService.Api.csproj .
-RUN dotnet restore
+# Сначала копируем .csproj обоих проектов для кэша restore
+COPY KiloImportService.Api/KiloImportService.Api.csproj KiloImportService.Api/
+COPY Visary.Api.Client/Visary.Api.Client.csproj Visary.Api.Client/
+RUN dotnet restore KiloImportService.Api/KiloImportService.Api.csproj
 
 # Затем — исходники, и публикуем
-COPY . .
-RUN dotnet publish -c Release -o /app /p:UseAppHost=false
+COPY KiloImportService.Api/ KiloImportService.Api/
+COPY Visary.Api.Client/   Visary.Api.Client/
+RUN dotnet publish KiloImportService.Api/KiloImportService.Api.csproj -c Release -o /app /p:UseAppHost=false
 
 # ────────────── Runtime stage ──────────────
 FROM mcr.microsoft.com/dotnet/aspnet:10.0-preview-alpine AS runtime

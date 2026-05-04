@@ -11,8 +11,11 @@
 ## 🔌 API эндпоинт
 
 ```
-POST https://isup-alfa-test.k8s.npc.ba/api/visary/listview/constructionsite/onetomany/Project
+POST https://isup-alfa-test.k8s.npc.ba/api/visary/listview/constructionsite/onetomany/Project?associationId=123
 ```
+
+> ⚠️ **КРИТИЧНО:** ID проекта передаётся как **query parameter** `associationId`, а **НЕ** в теле через `AssociationFilter`.
+> Если передать `AssociationFilter` в теле для эндпоинта `/onetomany/Project` — Visary игнорирует фильтр и возвращает все объекты системы.
 
 ### Тело запроса
 
@@ -33,13 +36,16 @@ POST https://isup-alfa-test.k8s.npc.ba/api/visary/listview/constructionsite/onet
   "Sorts": "[{\"selector\":\"ID\",\"desc\":false}]",
   "Hidden": false,
   "ExtraFilter": null,
-  "SearchString": "",
-  "AssociationFilter": {
-    "AssociatedId": 123,  // ID выбранного проекта
-    "Filters": null
-  }
+  "SearchPhrase": null,
+  "Summaries": []
 }
 ```
+
+> 📝 **Поля тела запроса:**
+> - `SearchPhrase` (НЕ `SearchString`) — фраза полнотекстового поиска, `null` когда не используется
+> - `Summaries` — массив агрегаций, всегда передавать как `[]`
+> - `AssociationFilter` — **НЕ передавать** для `/onetomany/*` эндпоинтов
+> - Фильтрация делается через `?associationId=<projectId>` в URL
 
 ### Заголовки
 

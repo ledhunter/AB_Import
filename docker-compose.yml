@@ -69,8 +69,8 @@ services:
   # ──────────────────────────── Backend: .NET 10 Web API ────────────────────────────────────
   backend:
     build:
-      context: ./KiloImportService.Api
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: KiloImportService.Api/Dockerfile
     container_name: kilo-import-backend
     restart: unless-stopped
     environment:
