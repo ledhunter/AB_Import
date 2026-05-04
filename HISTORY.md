@@ -1,6 +1,6 @@
 # 📝 История изменений проекта KiloImportService
 
-**Дата последнего обновления**: 2026-05-03  
+**Дата последнего обновления**: 2026-05-04  
 **Автор**: Kilo  
 **Версия**: 1.0
 
@@ -15,10 +15,26 @@
 - **Docker CLI**: Не работает (требуется Docker Desktop UI)
 - **Статус**: Готов к запуску через Docker Desktop UI
 - **Visary API Client**: Перенесён в переиспользуемую библиотеку `Visary.Api.Client` (30.04.2026)
+- **Незавершённые части**: 5 критичных/баг проблем (04.05.2026)
 
 ---
 
-## 🔄 Последние изменения (03.05.2026)
+## 🔄 Последние изменения (04.05.2026)
+
+### Документация
+
+#### Добавлена обновлённая документация граблей после рефакторинга
+
+- **Файл**: `doc_project/47-post-refactoring-gotchas-updated.md`
+- **Содержание**: Незавершённые части, баги, дубликаты кода,TODO, чек-лист действий
+- **Проблемы**:
+  - 🔴 `FakeListViewClient` выбрасывает `NotImplementedException` в тестах
+  - 🟡 Баг с вычислением времени в `sitesSync.ts` (всегда 0ms)
+  - 🟡 Устаревший TODO в `importsHub.ts`
+  - 🟢 Дубликаты `VisaryListViewClient.cs` и `VisaryApiOptions.cs`
+  - 🟢 Файл в некорректном пути (пробел в имени папки)
+
+### 2026-05-03 — Последние изменения (03.05.2026)
 
 ### Backend
 
@@ -137,6 +153,14 @@ Visary.Api.Client/
 13. **37-sites-sync.md** — Синхронизация объектов строительства
 14. **38-visary-client-refactoring.md** — План рефакторинга Visary API клиентов
 15. **39-visary-api-refactoring.md** — Рефакторинг Visary API клиентов в библиотеку
+16. **40-visary-api-refactoring-completed.md** — Рефакторинг завершён
+17. **41-missing-dtos.md** — Восстановленные DTO типы
+18. **42-global-using-alias.md** — Паттерн глобальных using alias
+19. **43-sites-filter-fix.md** — Исправление фильтрации объектов строительства
+20. **44-listview-body-contract.md** — Актуальный контракт тела Visary ListView
+21. **45-vite-token-refresh.md** — Обновление токена Visary и кэш Vite
+22. **46-post-refactoring-gotchas.md** — Грабли после рефакторинга Visary.Api.Client
+23. **47-post-refactoring-gotchas-updated.md** — 🪲 Обновлённые грабли: незавершённые части, баги, дубликаты, TODO, чек-лист
 
 ### Инструкции и скрипты
 

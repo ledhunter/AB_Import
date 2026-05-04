@@ -201,7 +201,7 @@ export const ImportForm = ({
             const newSiteId = selected ? Number(selected.key) : null;
             if (newSiteId) {
               try {
-                await syncSite(newSiteId);
+                await syncSite(newSiteId, projectId!);
               } catch (err) {
                 console.error('[ImportForm] Failed to sync site', newSiteId, err);
                 if (err instanceof Error) {

@@ -12,12 +12,12 @@ export interface SiteSyncResult {
   id: number;
 }
 
-export async function syncSite(siteId: number): Promise<SiteSyncResult> {
+export async function syncSite(siteId: number, projectId: number): Promise<SiteSyncResult> {
   const requestId = Math.random().toString(36).slice(2, 8);
 
-  console.info(`[SitesSync] → POST /api/sites/sync/${siteId} #${requestId}`);
+  console.info(`[SitesSync] → POST /api/sites/sync/${siteId}?projectId=${projectId} #${requestId}`);
 
-  const response = await fetch(`/api/sites/sync/${siteId}`, {
+  const response = await fetch(`/api/sites/sync/${siteId}?projectId=${projectId}`, {
     method: 'POST',
   });
 

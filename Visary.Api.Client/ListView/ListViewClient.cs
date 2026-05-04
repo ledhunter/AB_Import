@@ -25,6 +25,11 @@ public interface IListViewClient : IDisposable
     Task<ConstructionSiteRaw?> GetSiteByIdAsync(
         int siteId,
         CancellationToken ct = default);
+
+    Task<ConstructionSiteRaw?> GetSiteByProjectAndIdAsync(
+        int projectId,
+        int siteId,
+        CancellationToken ct = default);
 }
 
 public sealed class ListViewClient : IListViewClient
@@ -105,19 +110,26 @@ public sealed class ListViewClient : IListViewClient
         {
             Mnemonic = SiteMnemonic,
             PageSkip = 0,
-            PageSize = 200,
-            Columns = new[] { "ID", "Title", "ConstructionProjectID", "Hidden" },
-            AssociatedID = projectId,
+            PageSize = 500,
+            Columns = new[]
+            {
+                "ID", "Title", "ConstructionProjectId",
+                "ConstructionPermissionNumber", "ConstructionProjectNumber",
+                "RegionId", "TownId", "Address",
+                "Hidden", "Version", "FinishingMaterialId",
+            },
+            SearchPhrase = (string?)null,
+            Summaries = Array.Empty<object>(),
         };
 
         using var req = new HttpRequestMessage(HttpMethod.Post,
-            $"{_options.BaseUrl.TrimEnd('/')}/api/visary/listview/{SiteMnemonic}")
+            $"{_options.BaseUrl.TrimEnd('/')}/api/visary/listview/{SiteMnemonic}/onetomany/Project?associationId={projectId}")
         {
             Content = JsonContent.Create(body, options: JsonOptions),
         };
         req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _options.BearerToken);
 
-        _log.LogDebug("Visary → GET listview/{Mnemonic} projectId={ProjectId}", SiteMnemonic, projectId);
+        _log.LogDebug("Visary → GET listview/{Mnemonic}/onetomany/Project projectId={ProjectId}", SiteMnemonic, projectId);
 
         using var response = await _http.SendAsync(req, ct);
 
@@ -128,16 +140,22 @@ public sealed class ListViewClient : IListViewClient
             .ReadFromJsonAsync<ListViewResponse<ConstructionSiteRaw>>(JsonOptions, ct)
             ?? new ListViewResponse<ConstructionSiteRaw>();
 
-        _log.LogInformation("Visary ← 200 listview/{Mnemonic} projectId={ProjectId}: {Count} rows",
+        _log.LogInformation("Visary ← 200 listview/{Mnemonic}/onetomany/Project projectId={ProjectId}: {Count} rows",
             SiteMnemonic, projectId, parsed.Data.Count);
 
         return parsed;
     }
 
-    public async Task<ConstructionSiteRaw?> GetSiteByIdAsync(int siteId, CancellationToken ct)
+    public Task<ConstructionSiteRaw?> GetSiteByIdAsync(int siteId, CancellationToken ct)
     {
-        var response = await GetSitesByProjectAsync(siteId, ct);
-        return response.Data.FirstOrDefault();
+        throw new NotSupportedException(
+            "GetSiteByIdAsync не поддерживается: используйте GetSiteByProjectAndIdAsync(projectId, siteId).");
+    }
+
+    public async Task<ConstructionSiteRaw?> GetSiteByProjectAndIdAsync(int projectId, int siteId, CancellationToken ct)
+    {
+        var response = await GetSitesByProjectAsync(projectId, ct);
+        return response.Data.FirstOrDefault(s => s.ID == siteId);
     }
 
     private void HandleAuthError(HttpResponseMessage response, CancellationToken ct)

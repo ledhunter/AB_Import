@@ -57,6 +57,7 @@ export default defineConfig(({ mode }) => {
         '/api/imports': backendProxy(),
         '/api/import-types': backendProxy(),
         '/api/projects': backendProxy(),
+        '/api/sites': backendProxy(),
         '/hubs': backendProxy({ ws: true }),
         '/health': backendProxy(),
         '/swagger': backendProxy(),
