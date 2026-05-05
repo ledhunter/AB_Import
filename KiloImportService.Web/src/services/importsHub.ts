@@ -2,7 +2,7 @@
  * Тонкая обёртка над SignalR HubConnection для real-time прогресса импорта.
  *
  * Соответствует серверному `ImportProgressHub` (`/hubs/imports`):
- *   - server → client: `StageStarted`, `StageCompleted`, `SessionStatus`, `StageProgress` (TODO)
+ *   - server → client: `StageStarted`, `StageCompleted`, `SessionStatus`, `StageProgress`
  *   - client → server: `JoinSession(sessionId)`, `LeaveSession(sessionId)`
  *
  * В dev запросы идут через Vite-proxy `/hubs/imports` (см. vite.config.ts, ws: true).

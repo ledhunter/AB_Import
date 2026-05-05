@@ -238,6 +238,12 @@ public class ProjectsCacheServiceTests
 
         public List<(string? search, int pageSize)> Calls { get; } = new();
 
+        public List<(int projectId, string dummy)> SitesByProjectCalls { get; } = new();
+
+        public List<(int siteId, string dummy)> SiteByIdCalls { get; } = new();
+
+        public List<(int projectId, int siteId, string dummy)> SiteByProjectAndIdCalls { get; } = new();
+
         public Task<ListViewResponse<ConstructionProjectRaw>> GetProjectsAsync(
             string? search, int pageSize, CancellationToken ct)
         {
@@ -251,17 +257,20 @@ public class ProjectsCacheServiceTests
 
         public Task<ListViewResponse<ConstructionSiteRaw>> GetSitesByProjectAsync(int projectId, CancellationToken ct)
         {
-            throw new NotImplementedException();
+            SitesByProjectCalls.Add((projectId, ""));
+            return Task.FromResult(new ListViewResponse<ConstructionSiteRaw> { Total = 0, Data = new() });
         }
 
         public Task<ConstructionSiteRaw?> GetSiteByIdAsync(int siteId, CancellationToken ct)
         {
-            throw new NotImplementedException();
+            SiteByIdCalls.Add((siteId, ""));
+            return Task.FromResult<ConstructionSiteRaw?>(null);
         }
 
         public Task<ConstructionSiteRaw?> GetSiteByProjectAndIdAsync(int projectId, int siteId, CancellationToken ct)
         {
-            throw new NotImplementedException();
+            SiteByProjectAndIdCalls.Add((projectId, siteId, ""));
+            return Task.FromResult<ConstructionSiteRaw?>(null);
         }
 
         public void Dispose() { }
