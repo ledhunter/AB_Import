@@ -4,6 +4,7 @@ using KiloImportService.Api.Data.Visary.Entities;
 using KiloImportService.Api.Domain.Importing;
 using Microsoft.EntityFrameworkCore;
 using Visary.Api.CRUD;
+using ConstructionSiteRaw = Visary.Api.Dto.ConstructionSiteRaw;
 
 namespace KiloImportService.Api.Domain.Mapping;
 

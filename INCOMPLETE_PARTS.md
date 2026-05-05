@@ -1,15 +1,15 @@
 # ⚠️ Незавершённые части проекта KiloImportService
 
-**Дата документа**: 2026-05-04  
+**Дата документа**: 2026-05-05  
 **Проект**: Сервис импорта файлов для Visary (Альфа Банк)  
-**Последнее обновление**: 2026-05-04 (реализованы тесты FakeListViewClient, удалены 3 дубликата Visary API клиентов, настроены frontend тесты, удалён устаревший документ)  
-**Документация**: См. `doc_project/47-visary-client-duplicates.md` для правил миграции с дубликатов
+**Последнее обновление**: 2026-05-05 (выполнено: удаление дубликатов DTO и исключений, обновление всех ссылок на Visary.Api.Client, документация согласно правилам .windsurf)  
+**Документация**: См. `doc_project/49-duplicate-removal.md` для деталей устранения дубликатов (секция "Правильная реализация" соответствует формату из `.windsurf/workflows/doc.md`)
 
 ---
 
 ## 📋 Сводка
 
-В проекте обнаружены следующие незавершённые части (дубликаты Visary API клиентов удалены 04.05.2026, тесты FakeListViewClient реализованы 04.05.2026):
+В проекте обнаружены следующие незавершённые части (все дубликаты Visary API клиентов и DTO удалены 05.05.2026, типы мигрированы в Visary.Api.Client):
 
 | Приоритет | Описание | Файл | Статус | Дата |
 |-----------|----------|------|--------|------|
@@ -18,7 +18,11 @@
 | 🟡 Средний | TODO в `importsHub.ts` устарел | `KiloImportService.Web/src/services/importsHub.ts:5` | ✅ Удалён | 04.05.2026 |
 | 🟢 Низкий | Дубликаты удалены — `VisaryListViewClient.cs` | `KiloImportService.Api/Domain/Visary/VisaryListViewClient.cs` | ✅ Удалён | 04.05.2026 |
 | 🟢 Низкий | Дубликаты удалены — `VisaryApiOptions.cs` | `KiloImportService.Api/Domain/Visary/VisaryApiOptions.cs` | ✅ Удалён | 04.05.2026 |
-| 🟢 Низкий | Дубликаты удалены — `VisarySitesCrudClient.cs` | `KiloImportService.Api\ KiloImportService.Api\Domain\Visary\VisarySitesCrudClient.cs` | ✅ Удалён | 04.05.2026 |
+| 🟢 Низкий | Дубликаты удалены — `VisarySitesCrudClient.cs` | `KiloImportService.Api\Domain\Visary\VisarySitesCrudClient.cs` | ✅ Удалён | 04.05.2026 |
+| 🟢 Низкий | Дубликаты удалены — `VisaryAuthException` | `KiloImportService.Api/Domain/Visary/VisaryAuthException.cs` | ✅ Удалён | 05.05.2026 |
+| 🟢 Низкий | Дубликаты удалены — `ListViewResponse<T>` | `KiloImportService.Api/Domain/Visary/ListViewResponse.cs` | ✅ Удалён | 05.05.2026 |
+| 🟢 Низкий | Дубликаты удалены — `ConstructionProjectRaw` | `KiloImportService.Api/Domain/Visary/ConstructionProjectRaw.cs` | ✅ Удалён | 05.05.2026 |
+| 🟢 Низкий | Дубликаты удалены — `ConstructionSiteRaw` | `KiloImportService.Api/Data/Visary/Entities/ConstructionSiteRaw.cs` | ✅ Удалён | 05.05.2026 |
 
 ---
 
@@ -100,6 +104,46 @@ public Task<ConstructionSiteRaw?> GetSiteByProjectAndIdAsync(int projectId, int 
 
 ---
 
+### 6. Дубликат `VisaryAuthException` (удалён 05.05.2026)
+
+**Файл**: `KiloImportService.Api/Domain/Visary/VisaryAuthException.cs:1-8`
+
+**Детали**: локальный класс полностью идентичен `Visary.Api.Exceptions.VisaryAuthException` из библиотеки
+
+**Статус**: ✅ Удалён — все ссылки обновлены на `Visary.Api.Exceptions.VisaryAuthException`
+
+---
+
+### 7. Дубликат `ListViewResponse<T>` (удалён 05.05.2026)
+
+**Файл**: `KiloImportService.Api/Domain/Visary/ListViewResponse.cs:1-9`
+
+**Детали**: локальный класс имеет отличия в именах свойств (`Rows`/`TotalRows` vs `Data`/`Total`)
+
+**Статус**: ✅ Удалён — все типы мигрированы на `Visary.Api.Dto.ListViewResponse<T>`
+
+---
+
+### 8. Дубликат `ConstructionProjectRaw` (удалён 05.05.2026)
+
+**Файл**: `KiloImportService.Api/Domain/Visary/ConstructionProjectRaw.cs:1-10`
+
+**Детали**: идентичен `Visary.Api.Dto.ConstructionProjectRaw`
+
+**Статус**: ✅ Удалён — все типы мигрированы на `Visary.Api.Dto.ConstructionProjectRaw`
+
+---
+
+### 9. Дубликат `ConstructionSiteRaw` (удалён 05.05.2026)
+
+**Файл**: `KiloImportService.Api/Data/Visary/Entities/ConstructionSiteRaw.cs:1-17`
+
+**Детали**: идентичен `Visary.Api.Dto.ConstructionSiteRaw`,此外 в `SitesSyncService.cs` был вложенный дубликат
+
+**Статус**: ✅ Удалён — все типы мигрированы на `Visary.Api.Dto.ConstructionSiteRaw`
+
+---
+
 ## 🟢 Незначительные замечания
 
 ---
@@ -109,7 +153,7 @@ public Task<ConstructionSiteRaw?> GetSiteByProjectAndIdAsync(int projectId, int 
 | Компонент | Тесты | Покрытие | Примечание |
 |-----------|-------|----------|------------|
 | Backend (xUnit) | 64/64 пройдено | ✅ 100% | 5 тестов пропущено (ClosedXML/SkiaSharp), остальные успешны |
-| Frontend (Vitest) | 59/59 пройдено | ✅ 100% | Все тесты успешно после настройки конфигурации |
+| Frontend (Vitest) | 59/59 пройдено | ✅ 100% | Все тесты успешно после настройки конфигурации и добавления тестов UI/utils |
 | `FakeListViewClient` | ✅ Реализовано | 100% | Все методы интерфейса `IListViewClient` реализованы и не выбрасывают `NotImplementedException` |
 
 ---
@@ -120,13 +164,17 @@ public Task<ConstructionSiteRaw?> GetSiteByProjectAndIdAsync(int projectId, int 
 1. ✅ **Исправить баг в `sitesSync.ts`** (24 строка) — простая правка
 2. ✅ **Удалить устаревший TODO** из `importsHub.ts:5`
 
-### Выполнено (04.05.2026)
+### Выполнено (05.05.2026)
 1. ✅ Исправлен баг в `sitesSync.ts:24` — время теперь вычисляется корректно
 2. ✅ Удалён устаревший TODO из `importsHub.ts:5`
 3. ✅ Реализованы тесты `FakeListViewClient` — методы `GetSitesByProjectAsync`, `GetSiteByIdAsync`, `GetSiteByProjectAndIdAsync`
 4. ✅ Удалены 3 дубликата Visary API клиентов
 5. ✅ Настроены frontend тесты (vitest config.json и tsconfig) — 59/59 пройдено
 6. ✅ Удалён устаревший документ `46-post-refactoring-gotchas.md`
+7. ✅ Добавлены новые тесты: UI-компоненты (ImportForm, ImportTypePicker, FileUpload), utils (fileFormat, importMappers, visaryCrud) - всего 59/59 frontend тестов
+8. ✅ Создан `DEVELOPER_GUIDE.md` с инструкциями по разработке
+9. ✅ Удалены дубликаты DTO и исключений (VisaryAuthException, ListViewResponse, ConstructionProjectRaw, ConstructionSiteRaw)
+10. ✅ Обновлены все файлы на использование `Visary.Api.Dto` типов
 
 ---
 
@@ -146,7 +194,12 @@ public Task<ConstructionSiteRaw?> GetSiteByProjectAndIdAsync(int projectId, int 
 
 ---
 
-**Версия документа**: 3.2  
+**Версия документа**: 6.0  
 **Автор**: Kilo  
-**Дата создания**: 2026-05-04  
-**Дата обновления**: 2026-05-04 (выполнено: рефакторинг, дубликаты, тесты FakeListViewClient, документация, frontend тесты, очистка устаревших файлов)
+**Дата создания**: 2026-05-05  
+**Дата обновления**: 2026-05-05 (выполнено: удаление дубликатов DTO и исключений, обновление всех ссылок на Visary.Api.Client)
+
+**Версия документа**: 4.3  
+**Автор**: Kilo  
+**Дата создания**: 2026-05-05  
+---
