@@ -17,11 +17,12 @@ export async function syncSite(siteId: number, projectId: number): Promise<SiteS
 
   console.info(`[SitesSync] → POST /api/sites/sync/${siteId}?projectId=${projectId} #${requestId}`);
 
+  const start = performance.now();
   const response = await fetch(`/api/sites/sync/${siteId}?projectId=${projectId}`, {
     method: 'POST',
   });
 
-  const ms = Math.round(performance.now() - performance.now());
+  const ms = Math.round(performance.now() - start);
 
   if (!response.ok) {
     const errBody = await response.text().catch(() => undefined);
