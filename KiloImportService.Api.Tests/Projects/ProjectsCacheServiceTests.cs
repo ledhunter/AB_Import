@@ -7,6 +7,8 @@ using Microsoft.Extensions.Options;
 using Visary.Api;
 using Visary.Api.Dto;
 using Visary.Api.ListView;
+using ConstructionProjectRaw = Visary.Api.Dto.ConstructionProjectRaw;
+using ConstructionSiteRaw = Visary.Api.Dto.ConstructionSiteRaw;
 
 namespace KiloImportService.Api.Tests.Projects;
 

@@ -1,6 +1,7 @@
 using KiloImportService.Api.Domain.Sites;
 using Microsoft.AspNetCore.Mvc;
 using Visary.Api.Exceptions;
+using VisaryAuthException = Visary.Api.Exceptions.VisaryAuthException;
 
 namespace KiloImportService.Api.Controllers;
 

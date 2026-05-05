@@ -12,9 +12,10 @@ using Serilog;
 using Microsoft.Extensions.Options;
 using Visary.Api;
 using Visary.Api.CRUD;
+using Visary.Api.Dto;
 using Visary.Api.Exceptions;
 using Visary.Api.ListView;
-using Visary.Api.Dto;
+
 
 // ─────────────────────────── Serilog (раннее логирование) ───────────────────────────
 Log.Logger = new LoggerConfiguration()

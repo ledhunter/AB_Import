@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using Visary.Api;
 using Visary.Api.Dto;
 using Visary.Api.ListView;
+using ConstructionProjectRaw = Visary.Api.Dto.ConstructionProjectRaw;
 
 namespace KiloImportService.Api.Domain.Projects;
 
