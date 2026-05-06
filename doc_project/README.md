@@ -41,12 +41,13 @@
 | [56-visary-dto-deserialization-pitfalls.md](./56-visary-dto-deserialization-pitfalls.md) | ⚠️ Ловушки десериализации: `Status`/`RoomCategory`/`MainSource` приходят разными типами → `JsonElement?`; `*Raw` vs `*Full` для listview vs crud |
 | [57-visary-api-testing.md](./57-visary-api-testing.md) | 🧪 Три уровня тестов Visary API: 39 контракт-тестов клиентов, 18 тестов контроллеров, 38 live smoke-тестов с автоматическим skip при истёкшем токене |
 | [52-project-dropdown-empty-query.md](./52-project-dropdown-empty-query.md) | 🎯 Dropdown «Проект»: пустой запрос возвращает первую страницу кэша (probe-then-sync не блокируется при недоступном Visary) |
-| [53-select-desktop-vs-responsive.md](./53-select-desktop-vs-responsive.md) | 🎨 `SelectDesktop` вместо `SelectResponsive`: всегда классический dropdown, не Bottom Sheet на узких экранах |
-| [54-finmodel-file-level-column-error.md](./54-finmodel-file-level-column-error.md) | 🛑 FinModel: file-level ошибка `column_not_found` со списком обнаруженных колонок вместо row-spam на 2782 строки |
-| [55-vertical-keyvalue-layout.md](./55-vertical-keyvalue-layout.md) | 🎨 Вертикальный key-value layout (`Inputs C/H+`) + управляющий лист `Control` для числа этапов — `FileLayoutHint.KeyValueVertical` |
-| [56-site-finishing-material-update-crud.md](./56-site-finishing-material-update-crud.md) | 🔌 Обновление типа отделки через PATCH `/crud/constructionsite/{id}?forceUpdate=false` (вместо PUT/listview → 405 / 500) |
-| [57-dynamic-finishing-material-dictionary.md](./57-dynamic-finishing-material-dictionary.md) | 🔌 Справочник «Тип отделки» из Visary (`listview/finishingmaterial`) вместо хардкода Title→ID — переиспользуемый метод в `IListViewClient` |
-| [58-merge-integration-with-shared-helpers.md](./58-merge-integration-with-shared-helpers.md) | 🔧 Merge feature-ветки с main: убираем дубликаты `private GetCrudAsync` / DTO в пользу `GetCrudByIdAsync<T>` + `Dto/Generated/`, единый namespace `VisaryMnemonics`, обновление доков |
+| [60-select-desktop-vs-responsive.md](./60-select-desktop-vs-responsive.md) | 🎨 `SelectDesktop` вместо `SelectResponsive`: всегда классический dropdown, не Bottom Sheet на узких экранах |
+| [61-finmodel-file-level-column-error.md](./61-finmodel-file-level-column-error.md) | 🛑 FinModel: file-level ошибка `column_not_found` со списком обнаруженных колонок вместо row-spam на 2782 строки |
+| [62-vertical-keyvalue-layout.md](./62-vertical-keyvalue-layout.md) | 🎨 Вертикальный key-value layout (`Inputs C/H+`) + управляющий лист `Control` для числа этапов — `FileLayoutHint.KeyValueVertical` |
+| [63-site-finishing-material-update-crud.md](./63-site-finishing-material-update-crud.md) | 🔌 Обновление типа отделки через PATCH `/crud/constructionsite/{id}?forceUpdate=false` (вместо PUT/listview → 405 / 500) |
+| [64-dynamic-finishing-material-dictionary.md](./64-dynamic-finishing-material-dictionary.md) | 🔌 Справочник «Тип отделки» из Visary (`listview/finishingmaterial`) вместо хардкода Title→ID — переиспользуемый метод в `IListViewClient` |
+| [65-merge-integration-with-shared-helpers.md](./65-merge-integration-with-shared-helpers.md) | 🔧 Merge feature-ветки с main: убираем дубликаты `private GetCrudAsync` / DTO в пользу `GetCrudByIdAsync<T>` + `Dto/Generated/`, единый namespace `VisaryMnemonics`, обновление доков |
+| [66-finmodel-estate-class.md](./66-finmodel-estate-class.md) | 🏘️ Финмодель: добавлен параметр «Класс жилья» (Visary `EstateClass`) — `UpdateSiteEstateClassAsync` + динамический справочник через `ListEstateClassesAsync`, обобщённые helpers `TryLoadDictionaryAsync` / `ResolveValue` |
 
 ## 🎯 Контекст проекта
 

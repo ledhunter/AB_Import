@@ -20,7 +20,7 @@
 Решение — раскладка `FileLayoutHint.KeyValueVertical` + ссылка `StageCountReference`,
 которые маппер декларативно объявляет в своём `LayoutHint`.
 
-> 🔁 См. также: `54-finmodel-file-level-column-error.md`, `23-finmodel-import.md`.
+> 🔁 См. также: `61-finmodel-file-level-column-error.md`, `23-finmodel-import.md`.
 
 ---
 

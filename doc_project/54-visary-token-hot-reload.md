@@ -1,164 +1,207 @@
-# 🔐 Visary Bearer-токен: hot-reload без рестарта
+# 🔐 Visary Bearer-токен: единый источник в корневом `.env`
 
 ## 📋 Описание
 
-**Статус**: ✅ Реализовано
-**Дата**: 2026-05-06
+**Статус**: ✅ Реализовано (v2 — консолидация)
+**Дата**: 2026-05-06 (v1 hot-reload), 2026-05-06 (v2 SSOT)
 
 В фазе активного тестирования токен Visary живёт ~1 час и обновляется по нескольку раз за день.
-Раньше токен был в `appsettings.json` — попадал в git и требовал перезапуска API.
+Раньше токен дублировался в **четырёх местах** (`.env`, `KiloImportService.Api/appsettings.Local.json`,
+`KiloImportService.Api/.env`, `KiloImportService.Web/.env.local`) — при обновлении легко было забыть
+один из них и получить 401 в случайной части стека.
 
-Текущая схема: токен хранится в **`appsettings.Local.json`** (в `.gitignore`),
-HTTP-клиенты Visary читают его через **`IOptionsMonitor<VisaryOptions>`** ⇒
-сохранили файл — **следующий запрос идёт с новым токеном без рестарта приложения**.
+Теперь токен живёт **только в корневом `.env`** (gitignored). Его читают:
+- **docker-compose** — нативно подхватывает `.env` из cwd
+- **Vite** (frontend) — через `envDir: '..'` в `vite.config.ts`
+- **Backend (.NET) локально** — через мини-загрузчик `DotEnvLoader` в `Program.cs`
+- **Live-тесты** — `VisaryLiveTestConfig.ReadDotEnv()`
 
 ---
 
 ## ✅ Правильная реализация
 
-### `Program.cs` — подключение Local-файла
+### Корневой `.env` (gitignored)
 
-```csharp
-var builder = WebApplication.CreateBuilder(args);
+```dotenv
+# Visary HTTP API — для backend (через docker и dotnet run)
+Visary__BaseUrl=https://isup-alfa-test.k8s.npc.ba
+Visary__BearerToken=eyJhbGci…
 
-// reloadOnChange:true критично для hot-reload токена.
-// optional:true — чтобы прод-окружение могло обходиться без файла.
-builder.Configuration.AddJsonFile(
-    "appsettings.Local.json", optional: true, reloadOnChange: true);
-
-builder.Services.AddVisaryClient(
-    builder.Configuration.GetSection(VisaryOptions.SectionName));
+# Vite ENV (frontend)
+VITE_VISARY_API_URL=https://isup-alfa-test.k8s.npc.ba
+VITE_VISARY_API_TOKEN=eyJhbGci…
 ```
 
-### `VisaryHttpBase<T>` — чтение текущего значения на каждый запрос
+> **Чек обновления токена** теперь — отредактировать **этот** файл и перезапустить
+> процессы (см. ниже). Других файлов с токеном в репо нет.
+
+### Vite — `envDir: '..'`
+
+```ts
+// KiloImportService.Web/vite.config.ts
+import path from 'node:path';
+const envDir = path.resolve(process.cwd(), '..');
+
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, envDir, '');
+  return {
+    envDir,                          // ← Vite будет искать .env здесь
+    server: { /* proxy ... */ },
+  };
+});
+```
+
+### Backend — `DotEnvLoader` + `AddEnvironmentVariables`
 
 ```csharp
-public abstract class VisaryHttpBase<T>
+// KiloImportService.Api/Program.cs (фрагмент)
+DotEnvLoader.LoadFromAncestors(Directory.GetCurrentDirectory()); // ↑ ищет .env вверх по дереву
+var builder = WebApplication.CreateBuilder(args);
+// AddEnvironmentVariables вызывается автоматически в CreateBuilder.
+// Visary__BearerToken (двойное подчёркивание) → конфиг-ключ "Visary:BearerToken".
+```
+
+```csharp
+// KiloImportService.Api/Configuration/DotEnvLoader.cs
+internal static class DotEnvLoader
 {
-    private readonly IOptionsMonitor<VisaryOptions> _optionsMonitor;
-
-    protected VisaryHttpBase(
-        HttpClient http,
-        IOptionsMonitor<VisaryOptions> optionsMonitor,  // 👈 не IOptions<T>
-        ILogger<T> log) { ... }
-
-    // CurrentValue читается на каждый NewRequest — токен всегда свежий.
-    protected VisaryOptions Options => _optionsMonitor.CurrentValue;
-
-    protected HttpRequestMessage NewRequest(HttpMethod method, string url)
+    public static void LoadFromAncestors(string startDir, int maxDepth = 6)
     {
-        EnsureConfig();
-        var req = new HttpRequestMessage(method, url);
-        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", Options.BearerToken);
-        return req;
+        // Ищет первый .env вверх от startDir и инжектит пары key=value в Environment.
+        // Не перезаписывает уже выставленные переменные (env > файл).
     }
 }
 ```
 
-### `appsettings.Local.json` (в `.gitignore`)
+В docker-режиме `compose` сам инжектит `Visary__*` в env контейнера — `DotEnvLoader` тогда
+не находит `.env` в файловой системе контейнера и тихо завершается (`maxDepth` исчерпан).
 
-```json
+### Live-тесты — читают тот же `.env`
+
+```csharp
+// KiloImportService.Api.Tests/VisaryLive/VisaryLiveTestConfig.cs
+private static (string? BaseUrl, string? Token) ReadDotEnv()
 {
-  "Visary": {
-    "BearerToken": "eyJhbGciOiJSUzI1NiIs..."
-  }
+    var path = FindRepoFile(".env");
+    // ... строчно парсит Visary__BaseUrl и Visary__BearerToken
 }
 ```
 
-### `appsettings.json` (в репозитории) — пустой токен
-
-```json
-{
-  "Visary": {
-    "BaseUrl": "https://isup-alfa-test.k8s.npc.ba",
-    "BearerToken": "",
-    "SyncPageSize": 200,
-    "DefaultPageSize": 50,
-    "LargePageSize": 500,
-    "RequestTimeout": "00:00:30"
-  }
-}
-```
+Источники для live-тестов в порядке приоритета:
+1. env var `VISARY_TEST_TOKEN` / `VISARY_TEST_BASEURL` (для CI)
+2. `.audit/.token` (для audit-скриптов)
+3. **корневой `.env`** (общий с docker/Vite/backend)
 
 ### ⚠️ Важно
 
-- **`reloadOnChange: true`** — без этого `IOptionsMonitor.CurrentValue` не обновится при правке файла.
-- **`IOptionsMonitor<T>`, не `IOptions<T>`** — `IOptions<T>` снимает значение один раз при создании singleton'а HTTP-клиента, изменения в файле игнорируются.
-- **`HttpClient` зарегистрирован через `AddHttpClient<I, T>()`** — он singleton, поэтому конструктор клиента вызывается один раз. Если читать токен в конструкторе — он замёрзнет навсегда.
-- **Не вызывайте `BuildServiceProvider()` внутри extension-методов** — это анти-паттерн. Используйте `services.AddSingleton<T>(sp => ...)` с lambda для отложенного резолва.
+- **Hot-reload токена больше нет.** В v1 было reloadOnChange + IOptionsMonitor — менял токен в файле,
+  следующий запрос летел уже с новым. В v2 ради SSOT отказались: env-переменные читаются один раз
+  при старте процесса (это ограничение `AddEnvironmentVariables`). Чтобы сменить токен:
+  - **Docker**: `docker compose up -d --force-recreate backend frontend`
+  - **Локальный `dotnet run`**: рестарт процесса
+  - **Локальный `vite dev`**: рестарт vite (Ctrl+C → `npm run dev`)
+- **Существующие env-переменные имеют приоритет.** `DotEnvLoader` НЕ перезатирает уже выставленные
+  переменные — это позволяет docker-compose `environment:` секции и shell-export'ам перебить файл.
+- **Чтение через `Visary__BearerToken` (двойное подчёркивание).** Стандартная .NET-конвенция
+  для вложенных конфиг-ключей: `Section__Key` ⇒ `Section:Key`.
+- **`.env` остаётся в `.gitignore`.** В репозиторий по-прежнему попадает только `.env.example`
+  с пустыми значениями.
 
 ---
 
-## ❌ Типичная ошибка №1 — `IOptions<T>` вместо `IOptionsMonitor<T>`
+## ❌ Типичные ошибки
 
-```csharp
-// НЕПРАВИЛЬНО: токен снимается один раз и кэшируется в _options.
-public sealed class CrudClient
-{
-    private readonly VisaryOptions _options;
-
-    public CrudClient(HttpClient http, IOptions<VisaryOptions> options, ...)
-    {
-        _options = options.Value;  // 👈 снимок на всю жизнь объекта
-    }
-
-    private HttpRequestMessage NewRequest(...) =>
-        new(...) { Headers = { Authorization = new("Bearer", _options.BearerToken) } };
-    // appsettings.Local.json обновлён, но _options.BearerToken тот же → 401.
-}
-```
-
-## ❌ Типичная ошибка №2 — токен в `appsettings.json`
+### 1. Положить токен в `appsettings.Local.json` снова
 
 ```json
-// НЕПРАВИЛЬНО: попадает в git, остаётся в истории навсегда.
-// Даже после удаления — токен скомпрометирован, его нужно отозвать в id-сервере.
-{
-  "Visary": { "BearerToken": "eyJhbGciOi..." }
-}
+// ❌ Файл удалён сознательно — это был четвёртый дубль.
+{ "Visary": { "BearerToken": "eyJhbGci..." } }
 ```
 
-## ❌ Типичная ошибка №3 — `BuildServiceProvider()` в extension
+Если положить файл обратно — backend локально подхватит через `IConfiguration` (порядок source'ов
+включает Json-файлы), но docker-compose и Vite его не увидят. Снова разойдутся источники.
+Обновление в `.env` всегда должно быть достаточным.
+
+### 2. Положить токен в `KiloImportService.Web/.env.local`
+
+```dotenv
+# ❌ Vite теперь читает корневой .env через envDir
+VITE_VISARY_API_TOKEN=eyJhbGci...
+```
+
+Файл удалён сознательно. Если `.env.local` всё-таки появится — Vite загрузит и его, и
+корневой `.env` (Vite мерджит по приоритету: `.env.[mode].local` > `.env.local` > `.env.[mode]` > `.env`).
+Ничего не сломается, но появится тот же дубль, который мы и убирали.
+
+### 3. Перезапустить только backend, забыв frontend
+
+```bash
+# ❌ Vite по-прежнему отдаёт старый VITE_VISARY_API_TOKEN.
+docker compose up -d --force-recreate backend
+```
+
+Vite инжектит токен в client-side bundle при старте контейнера. Без `--force-recreate frontend`
+браузер будет слать в Visary (через прокси) старый токен.
+
+```bash
+# ✅ Оба сразу
+docker compose up -d --force-recreate backend frontend
+```
+
+### 4. `IOptionsMonitor.CurrentValue` без рестарта
 
 ```csharp
-// НЕПРАВИЛЬНО: создаёт второй DI-контейнер, теряет singleton-семантику,
-// держит ссылки на disposable-сервисы — leak.
-public static IServiceCollection AddVisaryClient(this IServiceCollection services, ...)
-{
-    var sp = services.BuildServiceProvider();  // 👈 анти-паттерн
-    var monitor = sp.GetRequiredService<IOptionsMonitor<VisaryOptions>>();
-    // ...
-}
+// ❌ В v2 файл .env не watch'ится; CurrentValue возвращает значение, прочитанное при старте.
+var token = _options.CurrentValue.BearerToken;  // ← этот же токен на всю жизнь процесса
 ```
+
+Это поведение ок — мы сознательно отдали hot-reload в обмен на единый источник.
+`IOptionsMonitor` всё ещё используется в `VisaryHttpBase` (на случай возврата watch'а позже),
+но de-facto работает как `IOptions`.
 
 ---
 
 ## 📍 Применение в проекте
 
-| Файл | Что делает |
-|------|------------|
-| [KiloImportService.Api/Program.cs](../KiloImportService.Api/Program.cs) | `AddJsonFile("appsettings.Local.json", optional:true, reloadOnChange:true)` |
-| [KiloImportService.Api/appsettings.json](../KiloImportService.Api/appsettings.json) | Пустой `BearerToken`, видны все настройки структурно |
-| `KiloImportService.Api/appsettings.Local.json` | **В `.gitignore`** — реальный токен живёт здесь |
-| [.gitignore](../.gitignore) | `**/appsettings.Local.json` + `.audit/` |
-| [Visary.Api.Client/Common/VisaryHttpBase.cs](../Visary.Api.Client/Common/VisaryHttpBase.cs) | Принимает `IOptionsMonitor<VisaryOptions>`, читает `CurrentValue` на каждый запрос |
-| [Visary.Api.Client/VisaryClientExtensions.cs](../Visary.Api.Client/VisaryClientExtensions.cs) | `AddVisaryClient(IConfiguration)` для регистрации |
+| Файл | Роль |
+|------|------|
+| `.env` (gitignored) | **Single Source Of Truth** для токена |
+| [.env.example](../.env.example) | Шаблон с пустыми значениями (в git) |
+| [docker-compose.yml](../docker-compose.yml) | Маппит `${Visary__BearerToken:-}` и `${VITE_VISARY_API_TOKEN:-}` в env контейнеров |
+| [KiloImportService.Web/vite.config.ts](../KiloImportService.Web/vite.config.ts) | `envDir: '..'` — Vite читает корневой `.env` |
+| [KiloImportService.Api/Configuration/DotEnvLoader.cs](../KiloImportService.Api/Configuration/DotEnvLoader.cs) | Мини-парсер `.env`, ищет вверх по дереву |
+| [KiloImportService.Api/Program.cs](../KiloImportService.Api/Program.cs) | Вызывает `DotEnvLoader.LoadFromAncestors(...)` ДО `CreateBuilder` |
+| [Visary.Api.Client/Common/VisaryHttpBase.cs](../Visary.Api.Client/Common/VisaryHttpBase.cs) | Принимает `IOptionsMonitor<VisaryOptions>` (без изменений) |
+| [KiloImportService.Api.Tests/VisaryLive/VisaryLiveTestConfig.cs](../KiloImportService.Api.Tests/VisaryLive/VisaryLiveTestConfig.cs) | `ReadDotEnv()` — те же ключи `Visary__BaseUrl`/`Visary__BearerToken` |
+
+### Удалено в v2
+
+- `KiloImportService.Api/appsettings.Local.json`
+- `KiloImportService.Api/.env`
+- `KiloImportService.Web/.env.local`
 
 ---
 
 ## 🎯 Чек-лист обновления токена
 
-- [ ] Открыть DevTools в Visary UI → Network → скопировать `Authorization: Bearer ...`
-- [ ] Вставить в `KiloImportService.Api/appsettings.Local.json` поле `Visary.BearerToken`
-- [ ] Сохранить файл (Ctrl+S) — **рестарт API не нужен**
-- [ ] Следующий запрос автоматически идёт с новым токеном
+- [ ] DevTools в Visary UI → Network → скопировать `Authorization: Bearer ...` (или из id-сервера)
+- [ ] Открыть **корневой `.env`**, заменить `Visary__BearerToken=...` И `VITE_VISARY_API_TOKEN=...`
+      на новый JWT (одно и то же значение)
+- [ ] Перезапустить процессы:
+  - **Docker (типичный сценарий)**: `docker compose up -d --force-recreate backend frontend`
+  - **Локальный backend (`dotnet run`)**: Ctrl+C → `dotnet run`
+  - **Локальный фронт (`npm run dev`)**: Ctrl+C → `npm run dev`
+- [ ] Открыть UI, проверить что Visary-запросы идут с 200 (не 401)
 
-## 🔄 Альтернативные источники токена для тестов
+---
 
-Live-тесты ([57-visary-api-testing.md](./57-visary-api-testing.md)) ищут токен в порядке приоритета:
+## 🔄 Историческая справка (v1, оставлено для контекста)
 
-1. `VISARY_TEST_TOKEN` (env) — для CI
-2. `.audit/.token` (файл) — для audit-скриптов
-3. `KiloImportService.Api/appsettings.Local.json` (`Visary:BearerToken`) — общий с API
+В v1 (до 2026-05-06) был принят `appsettings.Local.json` с `reloadOnChange: true` и
+`IOptionsMonitor`. Замена токена в файле подхватывалась без рестарта — удобно для часовой
+ротации. Но это требовало 4 копий токена в разных файлах (compose читал `.env`, Vite — свой
+`.env.local`, backend — `appsettings.Local.json`, и при этом `.env` в `KiloImportService.Api/`
+оставался legacy-дублем).
 
-Если токен не найден или JWT `exp` истёк — live-тесты skip-аются с понятным сообщением.
+В v2 пожертвовали hot-reload'ом ради единого источника. На практике рестарт двух контейнеров
+занимает 5-10 секунд, а проблема «обновил в одном месте, забыл в трёх» исчезает.

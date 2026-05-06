@@ -13,7 +13,7 @@
 **использовать общие хелперы из main**, а не дублировать их.
 
 > 🔁 См. также: `50-visary-api-new-methods.md` (общая инфраструктура клиента),
-> `56-site-finishing-material-update-crud.md` (что именно было переписано).
+> `63-site-finishing-material-update-crud.md` (что именно было переписано).
 
 ---
 
