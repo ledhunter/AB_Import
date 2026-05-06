@@ -35,6 +35,9 @@
 | [27-checklists.md](./27-checklists.md) | ✅ Чек-листы: запуск цикла, добавление маппера, деплой |
 | [50-visary-api-new-methods.md](./50-visary-api-new-methods.md) | 🔌 Новые методы Visary API Client: 11 ListView + 12 CRUD методов для Room, Deal, ТЭП, ЗУ, ДДУ, Секция, Организация, PercentBet, Project |
 | [51-sites-sync-bugs-and-token-update.md](./51-sites-sync-bugs-and-token-update.md) | 🐛 Два бага синхронизации объектов: `new HttpClient()` в Docker + отсутствие `/api/sites` в Vite proxy; обновление Bearer token |
+| [52-project-dropdown-empty-query.md](./52-project-dropdown-empty-query.md) | 🎯 Dropdown «Проект»: пустой запрос возвращает первую страницу кэша (probe-then-sync не блокируется при недоступном Visary) |
+| [53-select-desktop-vs-responsive.md](./53-select-desktop-vs-responsive.md) | 🎨 `SelectDesktop` вместо `SelectResponsive`: всегда классический dropdown, не Bottom Sheet на узких экранах |
+| [54-finmodel-file-level-column-error.md](./54-finmodel-file-level-column-error.md) | 🛑 FinModel: file-level ошибка `column_not_found` со списком обнаруженных колонок вместо row-spam на 2782 строки |
 
 ## 🎯 Контекст проекта
 
