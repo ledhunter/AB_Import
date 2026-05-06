@@ -38,6 +38,9 @@
 | [52-project-dropdown-empty-query.md](./52-project-dropdown-empty-query.md) | 🎯 Dropdown «Проект»: пустой запрос возвращает первую страницу кэша (probe-then-sync не блокируется при недоступном Visary) |
 | [53-select-desktop-vs-responsive.md](./53-select-desktop-vs-responsive.md) | 🎨 `SelectDesktop` вместо `SelectResponsive`: всегда классический dropdown, не Bottom Sheet на узких экранах |
 | [54-finmodel-file-level-column-error.md](./54-finmodel-file-level-column-error.md) | 🛑 FinModel: file-level ошибка `column_not_found` со списком обнаруженных колонок вместо row-spam на 2782 строки |
+| [55-vertical-keyvalue-layout.md](./55-vertical-keyvalue-layout.md) | 🎨 Вертикальный key-value layout (`Inputs C/H+`) + управляющий лист `Control` для числа этапов — `FileLayoutHint.KeyValueVertical` |
+| [56-site-finishing-material-update-crud.md](./56-site-finishing-material-update-crud.md) | 🔌 Обновление типа отделки через PATCH `/crud/constructionsite/{id}?forceUpdate=false` (вместо PUT/listview → 405 / 500) |
+| [57-dynamic-finishing-material-dictionary.md](./57-dynamic-finishing-material-dictionary.md) | 🔌 Справочник «Тип отделки» из Visary (`listview/finishingmaterial`) вместо хардкода Title→ID — переиспользуемый метод в `IListViewClient` |
 
 ## 🎯 Контекст проекта
 

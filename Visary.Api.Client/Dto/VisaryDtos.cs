@@ -34,3 +34,17 @@ public sealed class ConstructionSiteRaw
     public DateTime? Version { get; set; }
     public int? FinishingMaterialId { get; set; }
 }
+
+/// <summary>
+/// Справочник «Тип отделки». В Visary возвращается как listview/finishingmaterial.
+/// Используется для динамического Title → ID lookup'а в импортах (не зашиваем
+/// идентификаторы в код — справочник может расширяться/меняться на стороне Visary).
+/// </summary>
+public sealed class FinishingMaterialRaw
+{
+    public int ID { get; set; }
+    public string? Title { get; set; }
+    public string? Code { get; set; }
+    public double? Ration { get; set; }
+    public int? Status { get; set; }
+}

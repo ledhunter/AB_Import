@@ -63,6 +63,14 @@ public interface IListViewClient : IDisposable
     Task<ListViewResponse<ShareAgreementRaw>> GetShareAgreementsByRoomAsync(
         int roomId, string? numberFilter = null, CancellationToken ct = default)
         => throw new NotImplementedException(nameof(GetShareAgreementsByRoomAsync));
+
+    /// <summary>
+    /// Справочник «Тип отделки» (finishingmaterial). Используется мапперами для
+    /// динамической резолюции Title → ID — не жёстким switch'ем, а живыми данными.
+    /// </summary>
+    Task<ListViewResponse<FinishingMaterialRaw>> GetFinishingMaterialsAsync(
+        CancellationToken ct = default)
+        => throw new NotImplementedException(nameof(GetFinishingMaterialsAsync));
 }
 
 public sealed class ListViewClient : VisaryHttpBase<ListViewClient>, IListViewClient
@@ -124,6 +132,9 @@ public sealed class ListViewClient : VisaryHttpBase<ListViewClient>, IListViewCl
          "OtherNonresArea", "ParkingArea", "AvgResArea", "AvgResAreaWithoutSummerRoom",
          "ResPercentage", "SectionID", "ClaimedCost", "BuildingMaterial",
          "CostPerUnit", "TotalCost", "Version"];
+
+    private static readonly string[] FinishingMaterialColumns =
+        ["ID", "Code", "CurrentUser", "Ration", "Title", "Status"];
 
     private static readonly string[] ShareAgreementColumns =
         ["ID", "Title", "Number", "Date", "ConstructionPermitNumber", "ConstructionPermitDate",
@@ -450,6 +461,27 @@ public sealed class ListViewClient : VisaryHttpBase<ListViewClient>, IListViewCl
         return await PostListViewAsync<ShareAgreementRaw>(
             $"{BaseUrl}/api/visary/listview/shareagreement/onetomany/Room?associationId={roomId}",
             body, $"shareagreement roomId={roomId}", ct);
+    }
+
+    // ─── FinishingMaterial (справочник «Тип отделки») ────────────────────────
+
+    public async Task<ListViewResponse<FinishingMaterialRaw>> GetFinishingMaterialsAsync(CancellationToken ct)
+    {
+        var body = new
+        {
+            Mnemonic = "finishingmaterial",
+            PageSkip = 0,
+            PageSize = 50,
+            Columns = FinishingMaterialColumns,
+            SearchPhrase = (string?)null,
+            Sorts = "null",
+            Hidden = false,
+            Summaries = Array.Empty<object>(),
+        };
+
+        _log.LogDebug("Visary → GET listview/finishingmaterial");
+        return await PostListViewAsync<FinishingMaterialRaw>(
+            $"{BaseUrl}/api/visary/listview/finishingmaterial", body, "finishingmaterial", ct);
     }
 
     // ─── Helpers ─────────────────────────────────────────────────────────────

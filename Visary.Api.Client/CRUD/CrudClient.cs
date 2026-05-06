@@ -73,12 +73,30 @@ public sealed class CrudClient : VisaryHttpBase<CrudClient>, ICrudClient
     public async Task<bool> UpdateSiteFinishingMaterialAsync(
         int siteId, int finishingMaterialId, CancellationToken ct)
     {
-        var siteData = await FetchSiteForUpdateAsync(siteId, ct);
-        if (siteData == null)
+        // 1. GET текущий site по CRUD endpoint, чтобы прочитать актуальный RowVersion
+        //    (Visary использует optimistic locking — без свежего RowVersion придёт 409).
+        //    Listview endpoint возвращает Version:DateTime, а CRUD возвращает RowVersion:long
+        //    в нужном PATCH-у формате — поэтому идём через /crud/, не /listview/.
+        var current = await GetCrudAsync<SiteCrudReadResponse>(
+            $"{BaseUrl}/api/visary/crud/constructionsite/{siteId}",
+            $"constructionsite/{siteId}", ct);
+        if (current is null)
             throw new KeyNotFoundException($"ConstructionSite с ID={siteId} не найден в Visary");
 
-        siteData.FinishingMaterialId = finishingMaterialId;
-        await LegacyUpdateSiteAsync(siteData, ct);
+        // 2. PATCH с RowVersion + FinishingMaterial как VisaryRef ({ ID }).
+        //    forceUpdate=false — сервер сравнивает наш RowVersion с актуальным
+        //    (optimistic locking). Под forceUpdate=true Visary внутри пытается
+        //    «дописать» поля в загруженный JObject и падает с
+        //    "Property RowVersion already exists" — поэтому false, как в PatchSiteAsync.
+        var body = new
+        {
+            ID = siteId,
+            current.RowVersion,
+            FinishingMaterial = new { ID = finishingMaterialId },
+        };
+        await PatchCrudAsync(
+            $"{BaseUrl}/api/visary/crud/constructionsite/{siteId}?forceUpdate=false",
+            body, $"constructionsite/{siteId}", ct);
 
         _log.LogInformation("CrudClient.UpdateSiteFinishingMaterialAsync: siteId={SiteId} success", siteId);
         return true;
@@ -254,66 +272,27 @@ public sealed class CrudClient : VisaryHttpBase<CrudClient>, ICrudClient
         _log.LogInformation("Visary ← 200 PATCH {Label}", logLabel);
     }
 
-    // ─── Legacy: UpdateSiteFinishingMaterialAsync internals ──────────────────
-
-    private async Task<SiteUpdateData?> FetchSiteForUpdateAsync(int siteId, CancellationToken ct)
+    private async Task<T?> GetCrudAsync<T>(string url, string logLabel, CancellationToken ct)
+        where T : class
     {
-        var body = new
-        {
-            Mnemonic = "constructionsite",
-            PageSkip = 0,
-            PageSize = 1,
-            Columns = new[] { "ID", "FinishingMaterialId", "Version" },
-            AssociatedID = siteId,
-        };
-
-        using var req = NewRequest(HttpMethod.Post,
-            $"{BaseUrl}/api/visary/listview/constructionsite");
-        req.Content = System.Net.Http.Json.JsonContent.Create(body, options: JsonOptions);
-
-        _log.LogDebug("Visary → GET constructionsite by ID={SiteId}", siteId);
+        using var req = NewRequest(HttpMethod.Get, url);
         using var response = await _http.SendAsync(req, ct);
         HandleAuthError(response, ct);
-        HandleError(response, ct);
-
-        var parsed = await response.Content
-            .ReadFromJsonAsync<ListViewResponse<SiteUpdateData>>(JsonOptions, ct)
-            ?? new ListViewResponse<SiteUpdateData>();
-
-        if (parsed.Data.Count == 0)
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
         {
-            _log.LogWarning("Visary ← 200 constructionsite siteId={SiteId}: no rows", siteId);
+            _log.LogWarning("Visary ← 404 GET {Label}", logLabel);
             return null;
         }
-
-        _log.LogInformation("Visary ← 200 constructionsite siteId={SiteId}: 1 row", siteId);
-        return parsed.Data[0];
-    }
-
-    private async Task LegacyUpdateSiteAsync(SiteUpdateData siteData, CancellationToken ct)
-    {
-        var body = new
-        {
-            Mnemonic = "constructionsite",
-            Data = new[] { siteData },
-        };
-
-        using var req = NewRequest(HttpMethod.Put,
-            $"{BaseUrl}/api/visary/listview/constructionsite");
-        req.Content = System.Net.Http.Json.JsonContent.Create(body, options: JsonOptions);
-
-        _log.LogDebug("Visary → PUT constructionsite ID={SiteId}", siteData.ID);
-        using var response = await _http.SendAsync(req, ct);
-        HandleAuthError(response, ct);
-        HandleConflict(response, ct, $"constructionsite/{siteData.ID}");
         HandleError(response, ct);
-        _log.LogInformation("Visary ← 200 PUT constructionsite ID={SiteId}", siteData.ID);
+        var result = await response.Content.ReadFromJsonAsync<T>(JsonOptions, ct);
+        _log.LogInformation("Visary ← 200 GET {Label}", logLabel);
+        return result;
     }
 
-    private sealed class SiteUpdateData
+    /// <summary>Минимальный срез ответа CRUD GET — нужен только RowVersion для PATCH.</summary>
+    private sealed class SiteCrudReadResponse
     {
         public int ID { get; set; }
-        public int? FinishingMaterialId { get; set; }
-        public DateTime? Version { get; set; }
+        public long RowVersion { get; set; }
     }
 }
