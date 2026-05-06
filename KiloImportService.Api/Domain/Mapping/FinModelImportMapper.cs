@@ -1,40 +1,61 @@
 using System.Text.Json;
 using KiloImportService.Api.Data.Visary;
-using KiloImportService.Api.Data.Visary.Entities;
 using KiloImportService.Api.Domain.Importing;
 using Microsoft.EntityFrameworkCore;
 using Visary.Api.CRUD;
-using ConstructionSiteRaw = Visary.Api.Dto.ConstructionSiteRaw;
+using Visary.Api.ListView;
 
 namespace KiloImportService.Api.Domain.Mapping;
 
 /// <summary>
-/// Маппер импорта типа "Финмодель" (finmodel).
+/// Маппер импорта типа «Финмодель» (finmodel).
 /// Обновление типа отделки объекта строительства через Visary CRUD API.
-/// 
+///
 /// Поддерживаемые параметры:
-/// - "Тип отделки" → обновление FinishingMaterialId через Visary API
-/// 
-/// Справочник "Тип отделки":
-/// - "Черновая" → ID=3
-/// - "Предчистовая" → ID=2
-/// - "Чистовая" → ID=1
+///   • «Тип отделки» → обновление FinishingMaterialId через Visary API.
+///
+/// Справочник «Тип отделки» подтягивается динамически из Visary
+/// (<see cref="IListViewClient.ListFinishingMaterialsAsync"/>) — раньше был хардкод
+/// (Черновая=3 / Предчистовая=2 / Чистовая=1), но идентификаторы могут меняться,
+/// и там могут появиться новые значения. Теперь Title → ID — case-insensitive
+/// lookup по живым данным справочника.
 /// </summary>
 public sealed class FinModelImportMapper : IImportMapper
 {
     public string ImportTypeCode => "finmodel";
 
+    /// <summary>
+    /// Шаблон «Финмодель» — вертикальный key-value layout:
+    ///   • лист «Inputs», колонка C — название параметра, колонки H+ — значения по этапам;
+    ///   • количество этапов (= количество колонок-значений для чтения) задаётся на
+    ///     листе «Control» в строке параметра «Выбрать количество этапов» (имя в столбце F,
+    ///     значение в столбце G).
+    /// Парсер выпускает по одному ParsedRow на каждый этап; маппер видит их как обычные строки.
+    /// </summary>
+    public FileLayoutHint LayoutHint { get; } = new KeyValueVertical(
+        SheetName: "Inputs",
+        KeyColumn: "C",
+        ValueStartColumn: "H",
+        StageCount: new StageCountReference(
+            SheetName: "Control",
+            KeyColumn: "F",
+            ValueColumn: "G",
+            ParameterName: "Выбрать количество этапов"));
+
     private static readonly string[] FinishingTypeAliases = ["Тип отделки", "FinishingType", "Finishing"];
 
     private readonly ILogger<FinModelImportMapper> _log;
     private readonly ICrudClient _visaryClient;
+    private readonly IListViewClient _listViewClient;
 
     public FinModelImportMapper(
         ILogger<FinModelImportMapper> log,
-        ICrudClient visaryClient)
+        ICrudClient visaryClient,
+        IListViewClient listViewClient)
     {
         _log = log;
         _visaryClient = visaryClient;
+        _listViewClient = listViewClient;
     }
 
     public async Task<ValidationResult> ValidateAsync(
@@ -65,6 +86,33 @@ public sealed class FinModelImportMapper : IImportMapper
         {
             fileErrors.Add(new RowError(null, "site_not_found",
                 $"Объект строительства с ID={context.VisarySiteId} не найден или скрыт."));
+            return new ValidationResult([], fileErrors);
+        }
+
+        // Тянем справочник «Тип отделки» из Visary один раз на сессию.
+        // Если Visary недоступен — это file-level ошибка (без справочника валидировать нечем).
+        Dictionary<string, (int Id, string Title)> finishingByTitle;
+        try
+        {
+            var fm = await _listViewClient.ListFinishingMaterialsAsync(ct);
+            finishingByTitle = fm.Data
+                .Where(m => !string.IsNullOrWhiteSpace(m.Title))
+                .ToDictionary(m => m.Title!.Trim(), m => (m.ID, m.Title!.Trim()),
+                    StringComparer.OrdinalIgnoreCase);
+            _log.LogInformation("FinModelImportMapper.ValidateAsync: finishingmaterial dictionary loaded ({Count} entries)", finishingByTitle.Count);
+        }
+        catch (Exception ex)
+        {
+            _log.LogError(ex, "FinModelImportMapper.ValidateAsync: failed to load finishingmaterial dictionary");
+            fileErrors.Add(new RowError(null, "dictionary_unavailable",
+                "Не удалось получить справочник «Тип отделки» из Visary: " + ex.Message));
+            return new ValidationResult([], fileErrors);
+        }
+
+        if (finishingByTitle.Count == 0)
+        {
+            fileErrors.Add(new RowError(null, "dictionary_empty",
+                "Справочник «Тип отделки» в Visary пуст — нечего сопоставлять."));
             return new ValidationResult([], fileErrors);
         }
 
@@ -104,6 +152,7 @@ public sealed class FinModelImportMapper : IImportMapper
             return new ValidationResult([], fileErrors);
         }
 
+        var allowedTitles = string.Join(", ", finishingByTitle.Values.Select(v => v.Title));
         var mappedRows = new List<MappedRow>(rows.Count);
 
         for (int i = 0; i < rows.Count; i++)
@@ -142,21 +191,19 @@ public sealed class FinModelImportMapper : IImportMapper
                 continue;
             }
 
-            // Проверяем, что значение соответствует справочнику
-            var finishingMaterialId = GetFinishingMaterialId(finishingTypeValue);
-            if (finishingMaterialId is null)
+            // Title → ID по живому справочнику Visary (case-insensitive).
+            if (!finishingByTitle.TryGetValue(finishingTypeValue, out var dictEntry))
             {
                 rowErrors.Add(new RowError(finishingTypeCol, "invalid_value",
-                    $"Неизвестный тип отделки: '{finishingTypeValue}'. Допустимые: Черновая, Предчистовая, Чистовая."));
+                    $"Неизвестный тип отделки: '{finishingTypeValue}'. Допустимые: {allowedTitles}."));
                 mappedRows.Add(new MappedRow(row.SourceRowNumber, false, JsonDocument.Parse("{}"), rowErrors));
                 continue;
             }
 
-            // Формируем mapped-значения
             var mappedJson = JsonSerializer.Serialize(new
             {
-                FinishingMaterialId = finishingMaterialId.Value,
-                FinishingMaterialTitle = finishingTypeValue
+                FinishingMaterialId = dictEntry.Id,
+                FinishingMaterialTitle = dictEntry.Title,
             });
 
             mappedRows.Add(new MappedRow(
@@ -196,17 +243,17 @@ public sealed class FinModelImportMapper : IImportMapper
         // Берём первую валидную строку (предполагается, что в файле одна строка с параметрами)
         var firstRow = validRows[0];
         var finishingMaterialId = firstRow.MappedValues.RootElement.GetProperty("FinishingMaterialId").GetInt32();
-        
+
         // Обновление через Visary CRUD API
         try
         {
             var success = await _visaryClient.UpdateSiteFinishingMaterialAsync(
                 context.VisarySiteId.Value, finishingMaterialId, ct);
-            
+
             _log.LogInformation(
                 "FinModelImportMapper.ApplyAsync: обновление FinishingMaterialId={FinishingMaterialId} для SiteId={SiteId} успешно",
                 finishingMaterialId, context.VisarySiteId.Value);
-            
+
             return new ApplyResult(1, errors);
         }
         catch (KeyNotFoundException ex)
@@ -223,20 +270,5 @@ public sealed class FinModelImportMapper : IImportMapper
                 $"Ошибка обновления в Visary: {ex.Message}"));
             return new ApplyResult(0, errors);
         }
-    }
-
-    /// <summary>
-    /// Справочник "Тип отделки" (FinishingMaterial).
-    /// Маппинг название → ID.
-    /// </summary>
-    private static int? GetFinishingMaterialId(string title)
-    {
-        return title.Trim() switch
-        {
-            "Черновая" => 3,
-            "Предчистовая" => 2,
-            "Чистовая" => 1,
-            _ => null
-        };
     }
 }

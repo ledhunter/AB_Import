@@ -58,6 +58,10 @@ public interface IListViewClient
         string? cadastralNumFilter = null, CancellationToken ct = default);
 
     // ─── Справочники (list для резолвинга «название → ID») ──────────────────
+    // Используются мапперами импорта: тянем справочник один раз на сессию,
+    // строим Title → ID словарь по живым данным (не хардкод switch'ем).
+    // Например, FinModelImportMapper использует ListFinishingMaterialsAsync
+    // для маппинга «Тип отделки» из Excel в FinishingMaterialId.
     Task<ListViewResponse<TownRaw>>                ListTownsAsync(string? titleFilter = null, CancellationToken ct = default);
     Task<ListViewResponse<RegionRaw>>              ListRegionsAsync(string? titleFilter = null, CancellationToken ct = default);
     Task<ListViewResponse<ProjectTypeRaw>>         ListProjectTypesAsync(CancellationToken ct = default);

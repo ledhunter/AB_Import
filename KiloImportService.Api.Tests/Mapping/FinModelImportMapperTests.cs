@@ -7,6 +7,8 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Visary.Api;
 using Visary.Api.CRUD;
+using Visary.Api.Dto;
+using Visary.Api.ListView;
 using Xunit;
 
 namespace KiloImportService.Api.Tests.Mapping;
@@ -21,10 +23,26 @@ public class FinModelImportMapperTests : IDisposable
         var mockCrudClient = new Mock<ICrudClient>();
         mockCrudClient.Setup(c => c.UpdateSiteFinishingMaterialAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
-        
+
+        // Возвращаем тот же набор, что показал бы боевой Visary listview/finishingmaterial.
+        var mockListViewClient = new Mock<IListViewClient>();
+        mockListViewClient
+            .Setup(c => c.ListFinishingMaterialsAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ListViewResponse<FinishingMaterialRaw>
+            {
+                Data = new List<FinishingMaterialRaw>
+                {
+                    new() { ID = 3, Title = "Черновая",     Code = "PF" },
+                    new() { ID = 2, Title = "Предчистовая", Code = "WB" },
+                    new() { ID = 1, Title = "Чистовая",     Code = "FF" },
+                },
+                Total = 3,
+            });
+
         _mapper = new FinModelImportMapper(
             NullLogger<FinModelImportMapper>.Instance,
-            mockCrudClient.Object
+            mockCrudClient.Object,
+            mockListViewClient.Object
         );
         
         // Создаём in-memory БД для тестов

@@ -17,6 +17,12 @@ public interface IImportMapper
     string ImportTypeCode { get; }
 
     /// <summary>
+    /// Раскладка файла, ожидаемая этим маппером. Пайплайн пробрасывает её в
+    /// <see cref="IFileParser.ParseAsync"/>. По умолчанию — табличная.
+    /// </summary>
+    FileLayoutHint LayoutHint => FileLayoutHint.Default;
+
+    /// <summary>
     /// Проверить распарсенные строки и подготовить mapped-значения.
     /// <paramref name="visaryDb"/> используется только для чтения справочников
     /// (RoomKind, проверка существования Site и т.п.) — НЕ для записи.

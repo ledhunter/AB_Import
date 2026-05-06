@@ -19,11 +19,18 @@ public abstract class ExcelDataReaderParserBase : IFileParser
 
     public abstract FileFormat Format { get; }
 
-    public Task<ParseResult> ParseAsync(Stream stream, CancellationToken ct = default)
+    public Task<ParseResult> ParseAsync(Stream stream, FileLayoutHint? layout = null, CancellationToken ct = default)
     {
         var headers = new List<string>();
         var rows = new List<ParsedRow>();
         var errors = new List<ParseError>();
+
+        if (layout is KeyValueVertical)
+        {
+            errors.Add(new ParseError(null,
+                $"Раскладка KeyValueVertical не поддерживается для {Format}. Используйте XLSX-шаблон."));
+            return Task.FromResult(new ParseResult(headers, rows, errors));
+        }
 
         try
         {

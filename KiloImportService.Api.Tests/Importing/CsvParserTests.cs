@@ -94,6 +94,6 @@ public class CsvParserTests
         using var cts = new CancellationTokenSource();
         cts.Cancel();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
-            () => _parser.ParseAsync(Csv(csv), cts.Token));
+            () => _parser.ParseAsync(Csv(csv), ct: cts.Token));
     }
 }

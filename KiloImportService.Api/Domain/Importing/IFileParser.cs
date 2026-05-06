@@ -12,9 +12,11 @@ public interface IFileParser
 
     /// <summary>
     /// Прочитать поток и вернуть распарсенные строки.
+    /// <paramref name="layout"/> — подсказка о раскладке файла (по умолчанию <see cref="Tabular"/>);
+    /// парсеры, не поддерживающие нетабличный layout, должны вернуть file-level ошибку, а не бросать.
     /// Реализации не должны бросать исключения по доменным ошибкам — все проблемы
     /// возвращаются в <see cref="ParseResult.Errors"/>. Бросать допустимо только
     /// при катастрофических сбоях (повреждённый файл, неподдерживаемый формат).
     /// </summary>
-    Task<ParseResult> ParseAsync(Stream stream, CancellationToken ct = default);
+    Task<ParseResult> ParseAsync(Stream stream, FileLayoutHint? layout = null, CancellationToken ct = default);
 }

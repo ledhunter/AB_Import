@@ -50,3 +50,6 @@ public sealed class ConstructionSiteRaw
     public DateTime? Version { get; set; }
     public int? FinishingMaterialId { get; set; }
 }
+
+// FinishingMaterialRaw перенесён в Dto/Generated/FinishingMaterialRaw.cs
+// (auto-generated из visary_api.fields snapshot, появился в main).
