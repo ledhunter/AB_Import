@@ -199,7 +199,7 @@ Helper `TryLoadDictionaryAsync<T>(humanName, loader, idSelector, titleSelector, 
 | `BuildColumnNotFoundError` | там же (private) | Параметризованный билд file-level ошибки про отсутствующую колонку |
 | `ApplyAsync` | там же | Два последовательных вызова: `UpdateSiteFinishingMaterialAsync` + `UpdateSiteEstateClassAsync` |
 | Тесты | [FinModelImportMapperTests.cs](../KiloImportService.Api.Tests/Mapping/FinModelImportMapperTests.cs) | 26 тестов: маппинг по обоим параметрам, алиасы, пустые/невалидные значения, отсутствующие колонки, недоступный справочник, end-to-end Apply |
-| `appsettings.Local.json` | `KiloImportService.Api/` (gitignored) | Свежий Bearer-токен Visary (см. [54](./54-visary-token-hot-reload.md)) |
+| Корневой `.env` (gitignored) | SSOT для Bearer-токена Visary (читают docker-compose, Vite, backend, live-тесты) — см. [54](./54-visary-token-hot-reload.md) |
 
 ### Что **не** трогали (потому что уже было)
 

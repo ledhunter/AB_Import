@@ -188,15 +188,18 @@ public sealed class CrudClient : VisaryHttpBase<CrudClient>, ICrudClient
 
     // ─── ConstructionSiteIndicatorValue (ТЭП) ────────────────────────────────
 
-    public async Task<bool> PatchIndicatorValueAsync(
+    public Task<bool> PatchIndicatorValueAsync(
         int valueId, IndicatorValuePatchRequest request, CancellationToken ct)
     {
+        // Optimistic locking: caller обязан прислать актуальный RowVersion (получить через
+        // GetIndicatorValueByIdAsync). forceUpdate=false — сервер сравнит RowVersion и
+        // вернёт 409, если запись изменилась. См. doc_project/63 (тот же паттерн для Site).
+        ApplyEntityId(request, valueId, r => r.ID, (r, v) => r.ID = v, nameof(valueId));
         _log.LogDebug("Visary → PATCH {Mnemonic} id={Id}", VisaryMnemonics.SiteIndicatorValue, valueId);
-        await PatchCrudAsync(
-            $"{BaseUrl}/api/visary/crud/{VisaryMnemonics.SiteIndicatorValue}/{valueId}?forceUpdate=true",
-            request, $"{VisaryMnemonics.SiteIndicatorValue}/{valueId}", ct);
-        _log.LogInformation("CrudClient.PatchIndicatorValueAsync: valueId={ValueId} success", valueId);
-        return true;
+        return PatchAndReportAsync(
+            $"{BaseUrl}/api/visary/crud/{VisaryMnemonics.SiteIndicatorValue}/{valueId}?forceUpdate=false",
+            request, $"{VisaryMnemonics.SiteIndicatorValue}/{valueId}", valueId, ct,
+            $"CrudClient.PatchIndicatorValueAsync: valueId={{Id}} success");
     }
 
     // ─── CadastralArea (ЗУ) ──────────────────────────────────────────────────

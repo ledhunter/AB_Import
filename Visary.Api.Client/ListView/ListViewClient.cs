@@ -241,7 +241,10 @@ public sealed class ListViewClient : VisaryHttpBase<ListViewClient>, IListViewCl
             PageSkip = 0,
             PageSize = Options.LargePageSize,
             Columns = IndicatorColumns,
-            Filter = titleFilter != null ? FilterByString("Title", titleFilter) : null,
+            // contains, не "=", потому что Title показателя в Visary может содержать
+            // хвостовые пробелы ("Площадь застройки ") — UI Visary тоже использует contains.
+            // Точное соответствие делаем уже в коде через Trim()+OrdinalIgnoreCase.
+            Filter = titleFilter != null ? FilterByStringContains("Title", titleFilter) : null,
             SearchPhrase = (string?)null,
             Sorts = SortsNullSentinel,
             Hidden = false,
@@ -571,6 +574,12 @@ public sealed class ListViewClient : VisaryHttpBase<ListViewClient>, IListViewCl
     // что закрывает любую возможность инъекции через входное значение фильтра.
     private static string FilterByString(string field, string value)
         => JsonSerializer.Serialize(new object[] { field, "=", value });
+
+    // Visary contains-фильтр: матчит подстроку. Нужен, например, для Title с
+    // хвостовыми пробелами в БД (Visary внутри Trim'ит — UI использует contains
+    // именно поэтому). Точное "=" в таких случаях не находит запись.
+    private static string FilterByStringContains(string field, string value)
+        => JsonSerializer.Serialize(new object[] { field, "contains", value });
 
     private static string FilterByInt(string field, int value)
         => JsonSerializer.Serialize(new object[] { field, "=", value });

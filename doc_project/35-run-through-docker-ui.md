@@ -142,7 +142,7 @@ WHERE "Id" = <твой_siteId>;
 
 **Проверка**:
 1. Проверь DevTools → Network → `/api/projects/search`
-2. Проверь токен в `.env.local`
+2. Проверь токен в **корневом `.env`** (SSOT — см. [54](./54-visary-token-hot-reload.md))
 3. Проверь логи Backend на ошибки 401/403
 
 ### Проблема: Токен истёк
@@ -150,8 +150,8 @@ WHERE "Id" = <твой_siteId>;
 **Симптом**: 401 Unauthorized в логах backend
 
 **Решение**:
-1. Обнови токен в `KiloImportService.Web/.env.local`
-2. Перезапусти frontend: `npm run dev`
+1. Обнови `Visary__BearerToken` и `VITE_VISARY_API_TOKEN` в **корневом `.env`**
+2. Перезапусти процессы: `docker compose up -d --force-recreate backend frontend` (или `npm run dev` локально)
 
 ---
 

@@ -216,12 +216,13 @@ WHERE "Id" = <твой_siteId>;
 - Visary API недоступен
 
 **Решение**:
-1. Проверь `.env.local` в папке `KiloImportService.Web`:
+1. Проверь **корневой `.env`** репозитория (SSOT — см. [54](./54-visary-token-hot-reload.md)):
    ```
+   Visary__BearerToken=eyJhbGci...
    VITE_VISARY_API_TOKEN=eyJhbGci...
    ```
 2. Обнови токен (см. `28-faq.md`)
-3. Перезапусти dev-сервер: `npm run dev`
+3. Перезапусти процессы: `docker compose up -d --force-recreate backend frontend` (или Ctrl+C → `npm run dev` локально)
 
 ### Ошибка 4: FinModelImportMapper не находит объект
 
