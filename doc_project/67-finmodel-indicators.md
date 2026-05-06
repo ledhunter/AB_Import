@@ -6,7 +6,15 @@
 **Дата**: 2026-05-06
 
 В шаблон «Финмодель» добавлен **третий тип параметров** — показатели (ТЭПы) объекта строительства.
-Первый показатель: **«Площадь застройки»**, обновляется значение со **стадией «Экспертиза»** (`Stage = 50`).
+Каждый показатель обновляется по одной и той же схеме: `siteId → indicator по Title → value
+с конкретной Stage → PATCH`. Текущие подключённые показатели:
+
+| Параметр в Excel | Title в Visary | Stage | Доказательство декларативности |
+|---|---|---|---|
+| «Площадь застройки» | `"Площадь застройки "` (хвостовой пробел) | **50** Экспертиза | первая реализация |
+| «Плотность застройки» | `"Плотность застройки"` | **50** Экспертиза | добавлен **одной строкой** в `Indicators[]` |
+
+Любой следующий показатель — ещё одна строка в массиве, без правок flow.
 
 В отличие от FK-параметров (Тип отделки, Класс жилья — см. [66](./66-finmodel-estate-class.md)),
 показатель — это не поле Site, а отдельная сущность `ConstructionSiteIndicator`, привязанная к
@@ -26,7 +34,9 @@
 
 ```
 1. listview/constructionsiteindicator/onetomany/ConstructionSite?associationId={siteId}
-   с фильтром ["Title","=","Площадь застройки"]
+   с фильтром ["Title","contains","Площадь застройки"]
+   (contains — потому что Title в Visary бывает с хвостовыми пробелами,
+    точное совпадение делается уже в коде через Trim()+OrdinalIgnoreCase)
    → получаем ConstructionSiteIndicator.ID = 114306
 
 2. listview/constructionsiteindicatorvalue/onetomany/ConstructionSiteIndicator?associationId=114306
@@ -277,12 +287,14 @@ foreach (var (param, value) in indicators)
 | `IndicatorValuePatchRequest` | [Visary.Api.Client/Dto/VisaryCrudRequests.cs](../Visary.Api.Client/Dto/VisaryCrudRequests.cs) | Поля `ID`, `RowVersion` |
 | `PatchIndicatorValueAsync` | [Visary.Api.Client/CRUD/CrudClient.cs](../Visary.Api.Client/CRUD/CrudClient.cs) | `forceUpdate=true` → `false`; добавлен `ApplyEntityId`/`PatchAndReportAsync` (как у Site) |
 | `IndicatorParameter` (record) | [Domain/Mapping/FinModelImportMapper.cs](../KiloImportService.Api/Domain/Mapping/FinModelImportMapper.cs) | Декларативное описание показателя для импорта |
-| `Indicators[]` | там же | Список indicator-параметров (расширяется одной строкой) |
+| `Indicators[]` | там же | Декларативный список — сейчас 2 показателя («Площадь застройки», «Плотность застройки»), расширяется одной строкой |
 | `ProjectStageExpertise = 50` | там же | Константа стадии «Экспертиза» |
 | `ApplyIndicatorAsync` | там же | Полный flow: indicator → value по Stage → GET для RowVersion → PATCH |
 | `TryParseFlexibleDouble` | там же | Парсер числа из Excel (invariant + ru-RU + пробелы тысяч) |
 | `ResolveDoubleValue` / `ReadCellTrimmed` | там же | Generic helpers для row-level валидации |
-| Тесты | [FinModelImportMapperTests.cs](../KiloImportService.Api.Tests/Mapping/FinModelImportMapperTests.cs) | +5 тестов: парсинг разных форматов double, алиасы, отсутствующая колонка, end-to-end Apply, indicator_not_found |
+| `FilterByStringContains` | [Visary.Api.Client/ListView/ListViewClient.cs](../Visary.Api.Client/ListView/ListViewClient.cs) | Helper для filter `["field","contains",value]`. Применён в `GetIndicatorsBySiteAsync` |
+| Тесты | [FinModelImportMapperTests.cs](../KiloImportService.Api.Tests/Mapping/FinModelImportMapperTests.cs) | 11 indicator-тестов: парсинг разных форматов double, алиасы для каждого параметра, отсутствие колонки, end-to-end Apply (оба показателя), `indicator_not_found`, регрессия на хвостовой пробел в Title |
+| Контракт-тест | [ListViewClientContractTests.cs](../KiloImportService.Api.Tests/VisaryClients/ListViewClientContractTests.cs) | `GetIndicatorsBySiteAsync_uses_contains_filter_for_title` фиксирует, что filter — `contains`, не `=` |
 
 ### Что **переиспользовано без дублирования**
 
@@ -297,13 +309,24 @@ foreach (var (param, value) in indicators)
 ## 🎯 Чек-лист (при добавлении нового показателя в Финмодель)
 
 - [ ] Знать **точный Title** показателя в Visary (открыть UI → Показатели → найти запись).
+      Допускается хвостовой пробел — backend сам нормализует через `Trim()`.
 - [ ] Знать **Stage** (число) из `Domain.Model.Enums.ProjectStage`. Если стадия новая —
       добавить константу рядом с `ProjectStageExpertise` (один источник).
 - [ ] Добавить **одну строку** в `Indicators[]`:
       `new("Имя в логах", ["Алиас в Excel", "EnAlias"], "Title в Visary", StageNumber)`.
 - [ ] Убедиться, что в шаблоне Excel колонка есть и имя совпадает с одним из алиасов.
-- [ ] Тест: успех (parses + PATCH'ит правильное значение), отсутствие колонки (file-level),
-      отсутствие показателя/стадии у конкретного сайта (apply-level error, не падение).
+- [ ] **Тесты — обязательная часть**:
+  - Расширить `Row()` helper: добавить новую колонку с дефолтным значением.
+  - Расширить моки в конструкторе тест-класса: новый Setup для `GetIndicatorsBySiteAsync(...,
+    "Новый Title", ...)` → indicator-id, новый Setup для `GetIndicatorValuesByIndicatorAsync(
+    indicator-id, ...)` → значения с нужным Stage, новый Setup для `GetIndicatorValueByIdAsync(
+    value-id, ...)` → RowVersion.
+  - Если в тестах есть row-фабрики, собирающие `ParsedRow` напрямую (не через `Row()`) —
+    добавить новую колонку и в них тоже (иначе file-level `column_not_found`).
+  - Покрыть: успех (parses + PATCH с правильным значением), отсутствие колонки (file-level),
+    отсутствие показателя/стадии у сайта (apply-level error, FK-обновления при этом не страдают).
+- [ ] **Расширить Apply-end-to-end тест** (`ApplyAsync_ValidRow_CallsAllUpdates`) — добавить
+      `Verify` на новый indicator/value/PATCH, чтобы регрессия была видна сразу.
 
 ---
 

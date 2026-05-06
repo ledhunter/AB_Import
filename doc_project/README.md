@@ -48,7 +48,7 @@
 | [64-dynamic-finishing-material-dictionary.md](./64-dynamic-finishing-material-dictionary.md) | 🔌 Справочник «Тип отделки» из Visary (`listview/finishingmaterial`) вместо хардкода Title→ID — переиспользуемый метод в `IListViewClient` |
 | [65-merge-integration-with-shared-helpers.md](./65-merge-integration-with-shared-helpers.md) | 🔧 Merge feature-ветки с main: убираем дубликаты `private GetCrudAsync` / DTO в пользу `GetCrudByIdAsync<T>` + `Dto/Generated/`, единый namespace `VisaryMnemonics`, обновление доков |
 | [66-finmodel-estate-class.md](./66-finmodel-estate-class.md) | 🏘️ Финмодель: добавлен параметр «Класс жилья» (Visary `EstateClass`) — `UpdateSiteEstateClassAsync` + динамический справочник через `ListEstateClassesAsync`, обобщённые helpers `TryLoadDictionaryAsync` / `ResolveValue` |
-| [67-finmodel-indicators.md](./67-finmodel-indicators.md) | 📊 Финмодель: добавлен 3-й тип параметров — показатели (`ConstructionSiteIndicator` + Value по стадии). Первый: «Площадь застройки» / Stage=50 «Экспертиза». Декларативный `Indicators[]`, обобщённый `ApplyIndicatorAsync`, `TryParseFlexibleDouble` |
+| [67-finmodel-indicators.md](./67-finmodel-indicators.md) | 📊 Финмодель: добавлен 3-й тип параметров — показатели (`ConstructionSiteIndicator` + Value по стадии). Подключены: «Площадь застройки», «Плотность застройки» (Stage=50 «Экспертиза»). Декларативный `Indicators[]` (расширяется одной строкой), обобщённый `ApplyIndicatorAsync`, `FilterByStringContains` + `Trim()` для Title с хвостовыми пробелами, `TryParseFlexibleDouble` |
 
 ## 🎯 Контекст проекта
 
