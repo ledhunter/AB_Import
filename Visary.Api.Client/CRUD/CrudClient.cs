@@ -12,6 +12,9 @@ public interface ICrudClient
     Task<bool> UpdateSiteFinishingMaterialAsync(
         int siteId, int finishingMaterialId, CancellationToken ct = default);
 
+    Task<bool> UpdateSiteEstateClassAsync(
+        int siteId, int estateClassId, CancellationToken ct = default);
+
     Task<bool> PatchSiteAsync(
         int siteId, SitePatchRequest request, CancellationToken ct = default);
 
@@ -115,6 +118,31 @@ public sealed class CrudClient : VisaryHttpBase<CrudClient>, ICrudClient
             body, $"{VisaryMnemonics.Site}/{siteId}", ct);
 
         _log.LogInformation("CrudClient.UpdateSiteFinishingMaterialAsync: siteId={SiteId} success", siteId);
+        return true;
+    }
+
+    public async Task<bool> UpdateSiteEstateClassAsync(
+        int siteId, int estateClassId, CancellationToken ct)
+    {
+        // Аналогично UpdateSiteFinishingMaterialAsync: GET текущий site (для RowVersion)
+        // → PATCH /crud/{site}/{id}?forceUpdate=false с FK как VisaryRef ({ ID }).
+        // См. doc_project/63-site-finishing-material-update-crud.md.
+        var current = await GetCrudByIdAsync<ConstructionSiteFull>(
+            VisaryMnemonics.Site, siteId, ct);
+        if (current is null)
+            throw new KeyNotFoundException($"ConstructionSite с ID={siteId} не найден в Visary");
+
+        var body = new
+        {
+            ID = siteId,
+            current.RowVersion,
+            EstateClass = new { ID = estateClassId },
+        };
+        await PatchCrudAsync(
+            $"{BaseUrl}/api/visary/crud/{VisaryMnemonics.Site}/{siteId}?forceUpdate=false",
+            body, $"{VisaryMnemonics.Site}/{siteId}", ct);
+
+        _log.LogInformation("CrudClient.UpdateSiteEstateClassAsync: siteId={SiteId} success", siteId);
         return true;
     }
 

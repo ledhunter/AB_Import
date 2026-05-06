@@ -47,6 +47,7 @@
 | [63-site-finishing-material-update-crud.md](./63-site-finishing-material-update-crud.md) | 🔌 Обновление типа отделки через PATCH `/crud/constructionsite/{id}?forceUpdate=false` (вместо PUT/listview → 405 / 500) |
 | [64-dynamic-finishing-material-dictionary.md](./64-dynamic-finishing-material-dictionary.md) | 🔌 Справочник «Тип отделки» из Visary (`listview/finishingmaterial`) вместо хардкода Title→ID — переиспользуемый метод в `IListViewClient` |
 | [65-merge-integration-with-shared-helpers.md](./65-merge-integration-with-shared-helpers.md) | 🔧 Merge feature-ветки с main: убираем дубликаты `private GetCrudAsync` / DTO в пользу `GetCrudByIdAsync<T>` + `Dto/Generated/`, единый namespace `VisaryMnemonics`, обновление доков |
+| [66-finmodel-estate-class.md](./66-finmodel-estate-class.md) | 🏘️ Финмодель: добавлен параметр «Класс жилья» (Visary `EstateClass`) — `UpdateSiteEstateClassAsync` + динамический справочник через `ListEstateClassesAsync`, обобщённые helpers `TryLoadDictionaryAsync` / `ResolveValue` |
 
 ## 🎯 Контекст проекта
 
