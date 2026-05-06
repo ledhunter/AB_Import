@@ -27,7 +27,7 @@ public class FinModelImportMapperTests : IDisposable
         // Возвращаем тот же набор, что показал бы боевой Visary listview/finishingmaterial.
         var mockListViewClient = new Mock<IListViewClient>();
         mockListViewClient
-            .Setup(c => c.GetFinishingMaterialsAsync(It.IsAny<CancellationToken>()))
+            .Setup(c => c.ListFinishingMaterialsAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(new ListViewResponse<FinishingMaterialRaw>
             {
                 Data = new List<FinishingMaterialRaw>

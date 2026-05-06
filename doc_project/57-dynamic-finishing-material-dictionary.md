@@ -25,7 +25,7 @@ return title switch {
 - Сообщение об ошибке `Допустимые: Черновая, Предчистовая, Чистовая` врёт
   пользователю, как только справочник в Visary обновился.
 
-Теперь маппер тянет справочник из `IListViewClient.GetFinishingMaterialsAsync`
+Теперь маппер тянет справочник из `IListViewClient.ListFinishingMaterialsAsync`
 один раз на сессию и резолвит `Title → ID` по живым данным.
 
 > 🔁 См. также: `50-visary-api-new-methods.md` (общий паттерн методов клиента),
@@ -56,9 +56,9 @@ public sealed class FinishingMaterialRaw
 public interface IListViewClient : IDisposable
 {
     // ...
-    Task<ListViewResponse<FinishingMaterialRaw>> GetFinishingMaterialsAsync(
+    Task<ListViewResponse<FinishingMaterialRaw>> ListFinishingMaterialsAsync(
         CancellationToken ct = default)
-        => throw new NotImplementedException(nameof(GetFinishingMaterialsAsync));
+        => throw new NotImplementedException(nameof(ListFinishingMaterialsAsync));
 }
 
 public sealed class ListViewClient : VisaryHttpBase<ListViewClient>, IListViewClient
@@ -66,7 +66,7 @@ public sealed class ListViewClient : VisaryHttpBase<ListViewClient>, IListViewCl
     private static readonly string[] FinishingMaterialColumns =
         ["ID", "Code", "CurrentUser", "Ration", "Title", "Status"];
 
-    public async Task<ListViewResponse<FinishingMaterialRaw>> GetFinishingMaterialsAsync(CancellationToken ct)
+    public async Task<ListViewResponse<FinishingMaterialRaw>> ListFinishingMaterialsAsync(CancellationToken ct)
     {
         var body = new
         {
@@ -107,7 +107,7 @@ public sealed class FinModelImportMapper : IImportMapper
         Dictionary<string, (int Id, string Title)> finishingByTitle;
         try
         {
-            var fm = await _listViewClient.GetFinishingMaterialsAsync(ct);
+            var fm = await _listViewClient.ListFinishingMaterialsAsync(ct);
             finishingByTitle = fm.Data
                 .Where(m => !string.IsNullOrWhiteSpace(m.Title))
                 .ToDictionary(
@@ -198,7 +198,7 @@ private async Task<Dictionary<...>> FetchAsync(CancellationToken ct)
 // ❌ N+1 HTTP-вызовов
 for (int i = 0; i < rows.Count; i++)
 {
-    var fm = await _listViewClient.GetFinishingMaterialsAsync(ct); // на каждую!
+    var fm = await _listViewClient.ListFinishingMaterialsAsync(ct); // на каждую!
     // ...
 }
 ```
@@ -212,10 +212,10 @@ for (int i = 0; i < rows.Count; i++)
 | Компонент | Файл | Что добавлено |
 |-----------|------|---------------|
 | DTO | [Visary.Api.Client/Dto/VisaryDtos.cs](../Visary.Api.Client/Dto/VisaryDtos.cs) | `FinishingMaterialRaw` |
-| Интерфейс клиента | [Visary.Api.Client/ListView/ListViewClient.cs](../Visary.Api.Client/ListView/ListViewClient.cs) | `IListViewClient.GetFinishingMaterialsAsync()` (DIM) |
+| Интерфейс клиента | [Visary.Api.Client/ListView/ListViewClient.cs](../Visary.Api.Client/ListView/ListViewClient.cs) | `IListViewClient.ListFinishingMaterialsAsync()` (DIM) |
 | Реализация клиента | там же | Метод + `FinishingMaterialColumns` через `PostListViewAsync` |
 | Потребитель | [Domain/Mapping/FinModelImportMapper.cs](../KiloImportService.Api/Domain/Mapping/FinModelImportMapper.cs) | Инжект `IListViewClient`, dictionary-lookup, удалён `GetFinishingMaterialId` |
-| Тест-мок | [KiloImportService.Api.Tests/Mapping/FinModelImportMapperTests.cs](../KiloImportService.Api.Tests/Mapping/FinModelImportMapperTests.cs) | `Mock<IListViewClient>.Setup(GetFinishingMaterialsAsync).ReturnsAsync(...)` |
+| Тест-мок | [KiloImportService.Api.Tests/Mapping/FinModelImportMapperTests.cs](../KiloImportService.Api.Tests/Mapping/FinModelImportMapperTests.cs) | `Mock<IListViewClient>.Setup(ListFinishingMaterialsAsync).ReturnsAsync(...)` |
 
 ---
 

@@ -15,7 +15,7 @@ namespace KiloImportService.Api.Domain.Mapping;
 ///   • «Тип отделки» → обновление FinishingMaterialId через Visary API.
 ///
 /// Справочник «Тип отделки» подтягивается динамически из Visary
-/// (<see cref="IListViewClient.GetFinishingMaterialsAsync"/>) — раньше был хардкод
+/// (<see cref="IListViewClient.ListFinishingMaterialsAsync"/>) — раньше был хардкод
 /// (Черновая=3 / Предчистовая=2 / Чистовая=1), но идентификаторы могут меняться,
 /// и там могут появиться новые значения. Теперь Title → ID — case-insensitive
 /// lookup по живым данным справочника.
@@ -94,7 +94,7 @@ public sealed class FinModelImportMapper : IImportMapper
         Dictionary<string, (int Id, string Title)> finishingByTitle;
         try
         {
-            var fm = await _listViewClient.GetFinishingMaterialsAsync(ct);
+            var fm = await _listViewClient.ListFinishingMaterialsAsync(ct);
             finishingByTitle = fm.Data
                 .Where(m => !string.IsNullOrWhiteSpace(m.Title))
                 .ToDictionary(m => m.Title!.Trim(), m => (m.ID, m.Title!.Trim()),
