@@ -53,6 +53,11 @@ public sealed class ProjectCreateRequest
 
 public sealed class IndicatorValuePatchRequest
 {
+    // Включено в body для optimistic locking — `forceUpdate=false` требует, чтобы клиент
+    // прислал актуальный RowVersion. Берётся из `GetIndicatorValueByIdAsync(...)`.
+    public int ID { get; set; }
+    public long RowVersion { get; set; }
+
     public double? Value { get; set; }
     public double? PlanValue { get; set; }
     public double? ForecastValue { get; set; }

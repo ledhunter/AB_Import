@@ -135,20 +135,24 @@ System.IO.IOException: Failed to bind to address http://localhost:5000
 3. Открой DevTools → Application → Local Storage → найди токен
 4. Скопируй токен (после `jwt=`)
 
-### Шаг 2: Обнови `.env.local`
-
-В папке `KiloImportService.Web` создай/обнови `.env.local`:
+### Шаг 2: Обнови **корневой `.env`** (SSOT — см. [54](./54-visary-token-hot-reload.md))
 
 ```env
+Visary__BaseUrl=https://isup-alfa-test.k8s.npc.ba
+Visary__BearerToken=<НОВЫЙ_ТОКЕН_БЕЗ_ПРЕФИКСА_Bearer>
 VITE_VISARY_API_URL=https://isup-alfa-test.k8s.npc.ba
-VITE_VISARY_API_TOKEN=<НОВЫЙ_ТОКЕН_БЕЗ_ПРЕФИКСА_Bearer>
+VITE_VISARY_API_TOKEN=<тот_же_JWT>
 ```
 
-⚠️ **Важно**: Токен **без** префикса `"Bearer "`
+⚠️ **Важно**: Токен **без** префикса `"Bearer "`. Файл `KiloImportService.Web/.env.local` больше не используется (удалён в v2 консолидации).
 
-### Шаг 3: Перезапусти dev-сервер
+### Шаг 3: Перезапусти процессы
 
 ```bash
+# Docker (типичный путь):
+docker compose up -d --force-recreate backend frontend
+
+# Локально без Docker:
 cd "C:\Users\ancye\Downloads\vs code\Alfa\KiloImportService.Web"
 npm run dev
 ```

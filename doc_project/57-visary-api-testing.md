@@ -147,14 +147,15 @@ public async Task List_unknown_dictionary_returns_404_with_available_names()
 Источники в порядке приоритета:
 1. **env**: `VISARY_TEST_TOKEN`, `VISARY_TEST_BASEURL` — для CI с секретами
 2. **`.audit/.token`** — для audit-скриптов
-3. **`appsettings.Local.json`** — общий с API
+3. **корневой `.env`** — общий с docker-compose, Vite и backend (см. [54-visary-token-hot-reload.md](./54-visary-token-hot-reload.md))
 
 ```csharp
 public static (string? BaseUrl, string? Token) Resolve()
 {
+    var (dotEnvBase, dotEnvToken) = ReadDotEnv(); // парсит Visary__BaseUrl / Visary__BearerToken
     return (
-        BaseUrl: envBaseUrl ?? jsonBase ?? DefaultBaseUrl,
-        Token:   envToken   ?? fileToken ?? jsonToken
+        BaseUrl: envBaseUrl ?? dotEnvBase ?? DefaultBaseUrl,
+        Token:   envToken   ?? fileToken  ?? dotEnvToken
     );
 }
 ```
@@ -215,7 +216,7 @@ internal static class VisaryLiveTestIds
 
 - **`[Trait("Category", "live")]`** — фильтр для CI/локального запуска.
 - **`Skip.If(...)` (а не `Skippable.If`)** — класс называется `Skip`, без `able`.
-- **Не пушать пароли/токены в `appsettings.Local.json` в репо** — он в `.gitignore`, но проверьте `git status` перед коммитом.
+- **Не пушать пароли/токены в корневой `.env` в репо** — он в `.gitignore`, но проверьте `git status` перед коммитом. (`appsettings.Local.json` удалён в v2 — см. [54](./54-visary-token-hot-reload.md).)
 
 ---
 

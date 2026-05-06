@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using KiloImportService.Api.Data.Visary;
 using KiloImportService.Api.Domain.Importing;
@@ -13,14 +14,13 @@ namespace KiloImportService.Api.Domain.Mapping;
 /// Обновление параметров объекта строительства через Visary CRUD API.
 ///
 /// Поддерживаемые параметры:
-///   • «Тип отделки»  → FinishingMaterial (FinishingMaterialId)
-///   • «Класс жилья»  → EstateClass        (EstateClassId, в Visary называется «Класс недвижимости»)
+///   • «Тип отделки»       → FinishingMaterial   (FK на Site)
+///   • «Класс жилья»       → EstateClass         (FK на Site, в Visary «Класс недвижимости»)
+///   • «Площадь застройки» → ConstructionSiteIndicator + ConstructionSiteIndicatorValue
+///                            с конкретной стадией (Stage = 50 «Экспертиза»)
 ///
-/// Справочники подтягиваются динамически из Visary
-/// (<see cref="IListViewClient.ListFinishingMaterialsAsync"/>,
-///  <see cref="IListViewClient.ListEstateClassesAsync"/>) — Title → ID lookup
-/// case-insensitive по живым данным справочника. Хардкод-фолбэков нет: если справочник
-/// недоступен — file-level error, чтобы не записать неправильные ID.
+/// Справочники подтягиваются динамически из Visary (Title → ID lookup case-insensitive).
+/// Хардкод-фолбэков нет: если справочник недоступен — file-level error.
 /// </summary>
 public sealed class FinModelImportMapper : IImportMapper
 {
@@ -31,7 +31,6 @@ public sealed class FinModelImportMapper : IImportMapper
     ///   • лист «Inputs», колонка C — название параметра, колонки H+ — значения по этапам;
     ///   • количество этапов задаётся на листе «Control» в строке параметра
     ///     «Выбрать количество этапов» (имя в столбце F, значение в столбце G).
-    /// Парсер выпускает по одному ParsedRow на каждый этап; маппер видит их как обычные строки.
     /// </summary>
     public FileLayoutHint LayoutHint { get; } = new KeyValueVertical(
         SheetName: "Inputs",
@@ -49,6 +48,28 @@ public sealed class FinModelImportMapper : IImportMapper
     // «Класс жилья» в шаблоне = «Класс недвижимости» (EstateClass) на стороне Visary.
     private static readonly string[] EstateClassAliases =
         ["Класс жилья", "EstateClass", "Класс недвижимости"];
+
+    // Domain.Model.Enums.ProjectStage: 50 = Expertise (Экспертиза).
+    // Источник: FinModel/Альфа Банк. Управление проектами.drawio.xml — диаграмма enum'а.
+    private const int ProjectStageExpertise = 50;
+    private const string ExpertiseHumanName = "Экспертиза";
+
+    // Декларативный список indicator-параметров. Добавление нового показателя =
+    // одна строка в массиве (не нужно трогать flow). Title должен совпадать с тем,
+    // как Visary хранит показатель (см. listview/constructionsiteindicator).
+    private static readonly IndicatorParameter[] Indicators =
+    [
+        new(
+            HumanName:     "Площадь застройки",
+            Aliases:       ["Площадь застройки", "BuildingArea"],
+            VisaryTitle:   "Площадь застройки",
+            Stage:         ProjectStageExpertise),
+        new(
+            HumanName:     "Плотность застройки",
+            Aliases:       ["Плотность застройки", "BuildingDensity"],
+            VisaryTitle:   "Плотность застройки",
+            Stage:         ProjectStageExpertise),
+    ];
 
     private readonly ILogger<FinModelImportMapper> _log;
     private readonly ICrudClient _visaryClient;
@@ -92,9 +113,7 @@ public sealed class FinModelImportMapper : IImportMapper
             return new ValidationResult([], fileErrors);
         }
 
-        // Тянем оба справочника один раз на сессию. Без них валидировать нечем →
-        // file-level dictionary_unavailable. Хардкод-фолбэки запрещены — иначе
-        // запишем неправильные ID при недоступности Visary.
+        // Тянем оба справочника один раз на сессию.
         var finishingByTitle = await TryLoadDictionaryAsync(
             "Тип отделки",
             ct => _listViewClient.ListFinishingMaterialsAsync(ct),
@@ -111,8 +130,7 @@ public sealed class FinModelImportMapper : IImportMapper
         if (estateByTitle is null)
             return new ValidationResult([], fileErrors);
 
-        // Pre-flight: ищем целевые колонки один раз на уровне всего файла.
-        // Sparse-строки: агрегируем ключи всех строк через case-insensitive Distinct.
+        // Pre-flight колонок.
         var allColumns = rows
             .SelectMany(r => r.Cells.Keys)
             .Where(k => !string.IsNullOrWhiteSpace(k))
@@ -121,25 +139,41 @@ public sealed class FinModelImportMapper : IImportMapper
 
         var fileFinishingCol = FindColumn(allColumns, FinishingTypeAliases);
         var fileEstateCol    = FindColumn(allColumns, EstateClassAliases);
+        var indicatorCols    = Indicators
+            .Select(p => (Param: p, Col: FindColumn(allColumns, p.Aliases)))
+            .ToArray();
 
-        if (fileFinishingCol is null && fileEstateCol is null)
+        // Если НИ ОДНОЙ целевой колонки нет — пользователь явно загрузил не тот шаблон.
+        var anyFound = fileFinishingCol is not null
+                       || fileEstateCol is not null
+                       || indicatorCols.Any(x => x.Col is not null);
+
+        if (!anyFound)
         {
-            // Ни одной целевой колонки — пользователь явно загрузил не тот шаблон.
-            // Отдаём ОДНУ file-level ошибку со списком обнаруженных колонок.
-            fileErrors.Add(BuildColumnNotFoundError(allColumns,
-                FinishingTypeAliases.Concat(EstateClassAliases).ToArray(),
-                "Не найдены колонки 'Тип отделки' и 'Класс жилья'"));
-            _log.LogWarning("FinModelImportMapper.ValidateAsync: target columns not found. Detected: {Detected}",
+            var allAliases = FinishingTypeAliases
+                .Concat(EstateClassAliases)
+                .Concat(Indicators.SelectMany(p => p.Aliases))
+                .ToArray();
+            fileErrors.Add(BuildColumnNotFoundError(allColumns, allAliases,
+                "Не найдены целевые колонки шаблона 'Финмодель'"));
+            _log.LogWarning("FinModelImportMapper.ValidateAsync: no target columns found. Detected: {Detected}",
                 string.Join(", ", allColumns));
             return new ValidationResult([], fileErrors);
         }
 
+        // Какая-то колонка нашлась, но не все — отдельная file-level ошибка на каждую.
         if (fileFinishingCol is null)
             fileErrors.Add(BuildColumnNotFoundError(allColumns, FinishingTypeAliases,
                 "Не найдена колонка 'Тип отделки'"));
         if (fileEstateCol is null)
             fileErrors.Add(BuildColumnNotFoundError(allColumns, EstateClassAliases,
                 "Не найдена колонка 'Класс жилья'"));
+        foreach (var (param, col) in indicatorCols)
+        {
+            if (col is null)
+                fileErrors.Add(BuildColumnNotFoundError(allColumns, param.Aliases,
+                    $"Не найдена колонка '{param.HumanName}'"));
+        }
         if (fileErrors.Count > 0)
             return new ValidationResult([], fileErrors);
 
@@ -157,13 +191,20 @@ public sealed class FinModelImportMapper : IImportMapper
             if (i % 500 == 0 || i == rows.Count - 1)
                 _log.LogInformation("FinModelImportMapper.ValidateAsync: processing row {Current}/{Total}", i + 1, rows.Count);
 
-            var finishingEntry = ResolveValue(
+            var finishingEntry = ResolveDictionaryValue(
                 row, fileFinishingCol!, FinishingTypeAliases, finishingByTitle,
                 "Тип отделки", allowedFinishing, rowErrors);
 
-            var estateEntry = ResolveValue(
+            var estateEntry = ResolveDictionaryValue(
                 row, fileEstateCol!, EstateClassAliases, estateByTitle,
                 "Класс жилья", allowedEstate, rowErrors);
+
+            var indicatorValues = new Dictionary<string, double>();
+            foreach (var (param, col) in indicatorCols)
+            {
+                var v = ResolveDoubleValue(row, col!, param.Aliases, param.HumanName, rowErrors);
+                if (v.HasValue) indicatorValues[param.HumanName] = v.Value;
+            }
 
             if (rowErrors.Count > 0)
             {
@@ -177,6 +218,7 @@ public sealed class FinModelImportMapper : IImportMapper
                 FinishingMaterialTitle = finishingEntry.Value.Title,
                 EstateClassId          = estateEntry!.Value.Id,
                 EstateClassTitle       = estateEntry.Value.Title,
+                Indicators             = indicatorValues,
             });
 
             mappedRows.Add(new MappedRow(
@@ -210,8 +252,6 @@ public sealed class FinModelImportMapper : IImportMapper
             return new ApplyResult(0, errors);
         }
 
-        // Все валидные строки несут одни и те же значения параметров (KeyValueVertical:
-        // строки = этапы, параметры одинаковы). Берём первую и применяем оба обновления.
         var firstRow = validRows[0];
         var root = firstRow.MappedValues.RootElement;
         var siteId = context.VisarySiteId.Value;
@@ -223,11 +263,38 @@ public sealed class FinModelImportMapper : IImportMapper
             await _visaryClient.UpdateSiteFinishingMaterialAsync(siteId, finishingMaterialId, ct);
             await _visaryClient.UpdateSiteEstateClassAsync(siteId, estateClassId, ct);
 
-            _log.LogInformation(
-                "FinModelImportMapper.ApplyAsync: SiteId={SiteId} FinishingMaterialId={FinishingMaterialId} EstateClassId={EstateClassId} success",
-                siteId, finishingMaterialId, estateClassId);
+            // Indicator-параметры: для каждого находим показатель → конкретное значение
+            // нужной стадии → PATCH. Каждый параметр обрабатывается независимо;
+            // один сбой не отменяет уже применённые обновления (не транзакционно).
+            if (root.TryGetProperty("Indicators", out var indicatorsJson))
+            {
+                foreach (var (param, value) in EnumerateIndicators(indicatorsJson))
+                {
+                    try
+                    {
+                        await ApplyIndicatorAsync(siteId, param, value, ct);
+                    }
+                    catch (KeyNotFoundException ex)
+                    {
+                        _log.LogError(ex,
+                            "Indicator '{Param}' not found for siteId={SiteId}", param.HumanName, siteId);
+                        errors.Add(new RowError(null, "indicator_not_found", ex.Message));
+                    }
+                    catch (Exception ex)
+                    {
+                        _log.LogError(ex,
+                            "Indicator '{Param}' update failed for siteId={SiteId}", param.HumanName, siteId);
+                        errors.Add(new RowError(null, "indicator_update_error",
+                            $"Ошибка обновления показателя '{param.HumanName}': {ex.Message}"));
+                    }
+                }
+            }
 
-            return new ApplyResult(1, errors);
+            _log.LogInformation(
+                "FinModelImportMapper.ApplyAsync: SiteId={SiteId} FinishingMaterialId={Fm} EstateClassId={Ec} indicators={Indicators}",
+                siteId, finishingMaterialId, estateClassId, Indicators.Length);
+
+            return new ApplyResult(errors.Count == 0 ? 1 : 0, errors);
         }
         catch (KeyNotFoundException ex)
         {
@@ -245,7 +312,61 @@ public sealed class FinModelImportMapper : IImportMapper
         }
     }
 
-    // ─── Helpers ─────────────────────────────────────────────────────────────
+    // ─── Indicator flow ──────────────────────────────────────────────────────
+
+    private async Task ApplyIndicatorAsync(int siteId, IndicatorParameter param, double value, CancellationToken ct)
+    {
+        // 1. Найти показатель (ConstructionSiteIndicator) на сайте.
+        //    GetIndicatorsBySiteAsync использует Filter ["Title","contains",X] — на сервере
+        //    отбираются записи, содержащие подстроку. Это нужно потому, что Title в Visary
+        //    может содержать хвостовые пробелы ("Площадь застройки "). Точное совпадение
+        //    делаем уже здесь — Trim()+OrdinalIgnoreCase, чтобы не словить «Общая площадь застройки».
+        var indicators = await _listViewClient.GetIndicatorsBySiteAsync(siteId, param.VisaryTitle, ct);
+        var needle = param.VisaryTitle.Trim();
+        var indicator = indicators.Data.FirstOrDefault(i =>
+            string.Equals(i.Title?.Trim(), needle, StringComparison.OrdinalIgnoreCase));
+        if (indicator is null)
+            throw new KeyNotFoundException(
+                $"Показатель '{param.VisaryTitle}' не найден у объекта siteId={siteId}.");
+
+        // 2. Среди значений показателя найти запись с нужной Stage (Экспертиза = 50).
+        var values = await _listViewClient.GetIndicatorValuesByIndicatorAsync(indicator.ID, ct);
+        var target = values.Data.FirstOrDefault(v => v.Stage == param.Stage);
+        if (target is null)
+            throw new KeyNotFoundException(
+                $"У показателя '{param.VisaryTitle}' (id={indicator.ID}) нет значения со стадией {param.Stage} ({ExpertiseHumanName}).");
+
+        // 3. GET /crud/.../{id} — нужен актуальный RowVersion (long). В listview Version — DateTime,
+        //    она для PATCH не подходит. Тот же паттерн, что в UpdateSiteFinishingMaterialAsync (doc 63).
+        var current = await _visaryClient.GetIndicatorValueByIdAsync(target.ID, ct);
+
+        // 4. PATCH — обновляем только Value, RowVersion для optimistic locking.
+        await _visaryClient.PatchIndicatorValueAsync(target.ID, new IndicatorValuePatchRequest
+        {
+            ID         = target.ID,
+            RowVersion = current.RowVersion,
+            Value      = value,
+        }, ct);
+
+        _log.LogInformation(
+            "Indicator '{Param}' (indicatorId={IndicatorId}, valueId={ValueId}, Stage={Stage}) updated to {Value}",
+            param.HumanName, indicator.ID, target.ID, param.Stage, value);
+    }
+
+    private static IEnumerable<(IndicatorParameter Param, double Value)> EnumerateIndicators(JsonElement indicatorsJson)
+    {
+        if (indicatorsJson.ValueKind != JsonValueKind.Object) yield break;
+        foreach (var param in Indicators)
+        {
+            if (indicatorsJson.TryGetProperty(param.HumanName, out var v)
+                && v.ValueKind == JsonValueKind.Number)
+            {
+                yield return (param, v.GetDouble());
+            }
+        }
+    }
+
+    // ─── Generic helpers ─────────────────────────────────────────────────────
 
     private async Task<Dictionary<string, (int Id, string Title)>?> TryLoadDictionaryAsync<T>(
         string humanName,
@@ -303,7 +424,7 @@ public sealed class FinModelImportMapper : IImportMapper
             "Убедитесь, что вы загружаете шаблон импорта 'Финмодель'.");
     }
 
-    private static (int Id, string Title)? ResolveValue(
+    private static (int Id, string Title)? ResolveDictionaryValue(
         ParsedRow row,
         string fileColumn,
         string[] aliases,
@@ -312,7 +433,51 @@ public sealed class FinModelImportMapper : IImportMapper
         string allowedTitles,
         List<RowError> rowErrors)
     {
-        // Per-row fallback на случай sparse-ячеек: ключа может не быть в Cells этой строки.
+        var value = ReadCellTrimmed(row, fileColumn, aliases, humanName, rowErrors);
+        if (value is null) return null;
+
+        if (!dict.TryGetValue(value, out var entry))
+        {
+            rowErrors.Add(new RowError(fileColumn, "invalid_value",
+                $"Неизвестное значение '{humanName}': '{value}'. Допустимые: {allowedTitles}."));
+            return null;
+        }
+        return entry;
+    }
+
+    private static double? ResolveDoubleValue(
+        ParsedRow row,
+        string fileColumn,
+        string[] aliases,
+        string humanName,
+        List<RowError> rowErrors)
+    {
+        var value = ReadCellTrimmed(row, fileColumn, aliases, humanName, rowErrors);
+        if (value is null) return null;
+
+        if (!TryParseFlexibleDouble(value, out var d))
+        {
+            rowErrors.Add(new RowError(fileColumn, "invalid_value",
+                $"Значение '{humanName}' не является числом: '{value}'."));
+            return null;
+        }
+        return d;
+    }
+
+    // Excel может отдать ячейку как "12345.67", "12345,67" или "12 345,67" — пробуем оба.
+    private static bool TryParseFlexibleDouble(string raw, out double result)
+    {
+        var cleaned = raw.Replace(" ", "").Replace(" ", "");
+        if (double.TryParse(cleaned, NumberStyles.Float, CultureInfo.InvariantCulture, out result))
+            return true;
+        return double.TryParse(cleaned.Replace(',', '.'), NumberStyles.Float,
+            CultureInfo.InvariantCulture, out result);
+    }
+
+    // Возвращает trimmed-значение или null (тогда уже добавлена value_empty в rowErrors).
+    private static string? ReadCellTrimmed(
+        ParsedRow row, string fileColumn, string[] aliases, string humanName, List<RowError> rowErrors)
+    {
         var col = row.Cells.ContainsKey(fileColumn)
             ? fileColumn
             : row.Cells.Keys.FirstOrDefault(k =>
@@ -332,14 +497,17 @@ public sealed class FinModelImportMapper : IImportMapper
                 $"Значение '{humanName}' пустое."));
             return null;
         }
-
-        if (!dict.TryGetValue(value, out var entry))
-        {
-            rowErrors.Add(new RowError(col, "invalid_value",
-                $"Неизвестное значение '{humanName}': '{value}'. Допустимые: {allowedTitles}."));
-            return null;
-        }
-
-        return entry;
+        return value;
     }
+
+    /// <summary>Декларативное описание indicator-параметра импорта.</summary>
+    /// <param name="HumanName">Человекочитаемое имя для логов и ошибок.</param>
+    /// <param name="Aliases">Возможные имена колонки в Excel.</param>
+    /// <param name="VisaryTitle">Точный Title показателя в Visary (для filter ["Title","=",X]).</param>
+    /// <param name="Stage">int-значение Domain.Model.Enums.ProjectStage (50 = Экспертиза).</param>
+    private sealed record IndicatorParameter(
+        string HumanName,
+        string[] Aliases,
+        string VisaryTitle,
+        int Stage);
 }

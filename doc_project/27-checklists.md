@@ -14,10 +14,12 @@
 
 - [ ] Docker Desktop запущен
 - [ ] PostgreSQL контейнеры (`kilo-import-pg-service`, `kilo-import-pg-visary`) статус **Running**
-- [ ] В `KiloImportService.Web/.env.local` задан токен Visary:
+- [ ] В **корневом `.env`** репозитория (gitignored, SSOT — см. [54](./54-visary-token-hot-reload.md)) задан токен Visary:
   ```env
+  Visary__BaseUrl=https://isup-alfa-test.k8s.npc.ba
+  Visary__BearerToken=<JWT_без_префикса>
   VITE_VISARY_API_URL=https://isup-alfa-test.k8s.npc.ba
-  VITE_VISARY_API_TOKEN=<JWT_без_префикса>
+  VITE_VISARY_API_TOKEN=<тот_же_JWT>
   ```
 
 ### 1. Запуск Backend

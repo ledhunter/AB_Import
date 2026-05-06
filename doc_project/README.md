@@ -36,7 +36,7 @@
 | [50-visary-api-new-methods.md](./50-visary-api-new-methods.md) | 🔌 Новые методы Visary API Client: 11 ListView + 12 CRUD методов для Room, Deal, ТЭП, ЗУ, ДДУ, Секция, Организация, PercentBet, Project |
 | [51-sites-sync-bugs-and-token-update.md](./51-sites-sync-bugs-and-token-update.md) | 🐛 Два бага синхронизации объектов: `new HttpClient()` в Docker + отсутствие `/api/sites` в Vite proxy; обновление Bearer token |
 | [53-visary-api-schema-audit.md](./53-visary-api-schema-audit.md) | 🔍 Snapshot 19 сущностей Visary API в Postgres (`visary_api.fields`), сравнение с DTO, 442 поля; скрипт `audit-visary-api.ps1` |
-| [54-visary-token-hot-reload.md](./54-visary-token-hot-reload.md) | 🔐 Bearer-токен в `appsettings.Local.json` (gitignore) + `IOptionsMonitor<VisaryOptions>` ⇒ замена токена без рестарта |
+| [54-visary-token-hot-reload.md](./54-visary-token-hot-reload.md) | 🔐 Bearer-токен Visary — единый источник в корневом `.env` (gitignored): docker-compose, Vite (`envDir: '..'`), backend (`DotEnvLoader`), live-тесты. Hot-reload отдан ради SSOT |
 | [55-visary-proxy-controllers.md](./55-visary-proxy-controllers.md) | 🔌 `/api/visary/*` контроллеры: registry-pattern для 8 справочников, явные actions для 11 основных сущностей; добавление нового справочника = 1 строка |
 | [56-visary-dto-deserialization-pitfalls.md](./56-visary-dto-deserialization-pitfalls.md) | ⚠️ Ловушки десериализации: `Status`/`RoomCategory`/`MainSource` приходят разными типами → `JsonElement?`; `*Raw` vs `*Full` для listview vs crud |
 | [57-visary-api-testing.md](./57-visary-api-testing.md) | 🧪 Три уровня тестов Visary API: 39 контракт-тестов клиентов, 18 тестов контроллеров, 38 live smoke-тестов с автоматическим skip при истёкшем токене |
@@ -48,6 +48,7 @@
 | [64-dynamic-finishing-material-dictionary.md](./64-dynamic-finishing-material-dictionary.md) | 🔌 Справочник «Тип отделки» из Visary (`listview/finishingmaterial`) вместо хардкода Title→ID — переиспользуемый метод в `IListViewClient` |
 | [65-merge-integration-with-shared-helpers.md](./65-merge-integration-with-shared-helpers.md) | 🔧 Merge feature-ветки с main: убираем дубликаты `private GetCrudAsync` / DTO в пользу `GetCrudByIdAsync<T>` + `Dto/Generated/`, единый namespace `VisaryMnemonics`, обновление доков |
 | [66-finmodel-estate-class.md](./66-finmodel-estate-class.md) | 🏘️ Финмодель: добавлен параметр «Класс жилья» (Visary `EstateClass`) — `UpdateSiteEstateClassAsync` + динамический справочник через `ListEstateClassesAsync`, обобщённые helpers `TryLoadDictionaryAsync` / `ResolveValue` |
+| [67-finmodel-indicators.md](./67-finmodel-indicators.md) | 📊 Финмодель: добавлен 3-й тип параметров — показатели (`ConstructionSiteIndicator` + Value по стадии). Подключены: «Площадь застройки», «Плотность застройки» (Stage=50 «Экспертиза»). Декларативный `Indicators[]` (расширяется одной строкой), обобщённый `ApplyIndicatorAsync`, `FilterByStringContains` + `Trim()` для Title с хвостовыми пробелами, `TryParseFlexibleDouble` |
 
 ## 🎯 Контекст проекта
 

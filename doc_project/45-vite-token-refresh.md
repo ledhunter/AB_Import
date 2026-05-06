@@ -1,5 +1,23 @@
 # 🔑 Обновление токена Visary и кэш Vite
 
+> ## ⚠️ Документ устарел (superseded by [54](./54-visary-token-hot-reload.md))
+>
+> С 2026-05-06 Bearer-токен Visary живёт **только в корневом `.env`** репозитория
+> (Single Source Of Truth). Файла `KiloImportService.Web/.env.local` больше нет —
+> Vite читает корневой `.env` через `envDir: '..'` в `vite.config.ts`.
+>
+> **Актуальная процедура** обновления токена:
+> 1. Открой корневой `.env`, замени `VITE_VISARY_API_TOKEN=...` (и `Visary__BearerToken=...`)
+> 2. `docker compose up -d --force-recreate backend frontend`
+>    (или Ctrl+C → `npm run dev` для локального dev-сервера)
+>
+> Текст ниже сохранён как **исторический контекст** v1 — описывает старую схему
+> с `.env.local` и Vite-кэшем. Грабли с `node_modules/.vite` всё ещё актуальны
+> при локальном запуске; всё остальное про расположение файла — нет.
+> См. [54-visary-token-hot-reload.md](./54-visary-token-hot-reload.md).
+
+---
+
 ## 📋 Описание
 
 Токен Visary (`VITE_VISARY_API_TOKEN`) живёт **~1 час** (см. `exp` в JWT). Когда он истекает, все запросы к Visary API возвращают `401 Unauthorized` с текстом:

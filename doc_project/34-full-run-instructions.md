@@ -163,7 +163,7 @@ Npgsql.PostgresException (0x80004005): Connection refused
 
 **Симптом**: 401 Unauthorized в логах backend
 
-**Решение**: Обнови токен в `KiloImportService.Web/.env.local`
+**Решение**: Обнови `Visary__BearerToken` и `VITE_VISARY_API_TOKEN` в **корневом `.env`** (SSOT — см. [54](./54-visary-token-hot-reload.md)) и перезапусти процессы (`docker compose up -d --force-recreate backend frontend`).
 
 ---
 
