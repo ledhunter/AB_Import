@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Select } from '@alfalab/core-components/select';
+import { SelectDesktop as Select } from '@alfalab/core-components/select/desktop';
 import { Typography } from '@alfalab/core-components/typography';
 import { useBackendProjects } from '../../hooks/useBackendProjects';
 import { useSites } from '../../hooks/useSites';

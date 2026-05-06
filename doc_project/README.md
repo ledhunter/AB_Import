@@ -40,6 +40,9 @@
 | [55-visary-proxy-controllers.md](./55-visary-proxy-controllers.md) | 🔌 `/api/visary/*` контроллеры: registry-pattern для 8 справочников, явные actions для 11 основных сущностей; добавление нового справочника = 1 строка |
 | [56-visary-dto-deserialization-pitfalls.md](./56-visary-dto-deserialization-pitfalls.md) | ⚠️ Ловушки десериализации: `Status`/`RoomCategory`/`MainSource` приходят разными типами → `JsonElement?`; `*Raw` vs `*Full` для listview vs crud |
 | [57-visary-api-testing.md](./57-visary-api-testing.md) | 🧪 Три уровня тестов Visary API: 39 контракт-тестов клиентов, 18 тестов контроллеров, 38 live smoke-тестов с автоматическим skip при истёкшем токене |
+| [52-project-dropdown-empty-query.md](./52-project-dropdown-empty-query.md) | 🎯 Dropdown «Проект»: пустой запрос возвращает первую страницу кэша (probe-then-sync не блокируется при недоступном Visary) |
+| [53-select-desktop-vs-responsive.md](./53-select-desktop-vs-responsive.md) | 🎨 `SelectDesktop` вместо `SelectResponsive`: всегда классический dropdown, не Bottom Sheet на узких экранах |
+| [54-finmodel-file-level-column-error.md](./54-finmodel-file-level-column-error.md) | 🛑 FinModel: file-level ошибка `column_not_found` со списком обнаруженных колонок вместо row-spam на 2782 строки |
 
 ## 🎯 Контекст проекта
 

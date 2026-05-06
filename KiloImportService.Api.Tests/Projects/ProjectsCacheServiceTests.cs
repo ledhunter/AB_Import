@@ -117,7 +117,7 @@ public class ProjectsCacheServiceTests
     }
 
     [Fact]
-    public async Task SearchAsync_EmptyQuery_ReturnsEmptyListWithoutVisary()
+    public async Task SearchAsync_EmptyQuery_ReturnsCachedListSortedByTitle()
     {
         var (db, visary, svc) = Build();
         db.CachedProjects.AddRange(
@@ -128,8 +128,10 @@ public class ProjectsCacheServiceTests
         var result = await svc.SearchAsync(string.Empty, limit: 10, CancellationToken.None);
 
         Assert.False(result.FromFallback);
-        Assert.Empty(result.Items); // Пустой запрос → пустой список
-        Assert.Empty(visary.Calls);
+        Assert.Equal(2, result.Items.Count);
+        Assert.Equal("Альфа", result.Items[0].Title);
+        Assert.Equal("Бета", result.Items[1].Title);
+        Assert.Empty(visary.Calls); // Visary не дёргаем — кэша достаточно
     }
 
     [Fact]

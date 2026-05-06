@@ -68,6 +68,42 @@ public sealed class FinModelImportMapper : IImportMapper
             return new ValidationResult([], fileErrors);
         }
 
+        // Pre-flight: ищем целевую колонку один раз на уровне всего файла.
+        // Учитываем sparse-строки (Excel может пропускать пустые ячейки): агрегируем
+        // ключи всех строк через case-insensitive Distinct.
+        var allColumns = rows
+            .SelectMany(r => r.Cells.Keys)
+            .Where(k => !string.IsNullOrWhiteSpace(k))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var fileFinishingTypeCol = allColumns.FirstOrDefault(k =>
+            FinishingTypeAliases.Any(a => a.Equals(k, StringComparison.OrdinalIgnoreCase)));
+
+        if (fileFinishingTypeCol is null)
+        {
+            // Без целевой колонки делать нечего — отдаём ОДНУ file-level ошибку
+            // со списком обнаруженных колонок, чтобы пользователь сразу понял,
+            // что загрузил не тот шаблон.
+            var detectedList = allColumns.Count == 0
+                ? "(колонки не найдены)"
+                : string.Join(", ", allColumns.Take(20).Select(c => $"'{c}'"))
+                  + (allColumns.Count > 20 ? $" и ещё {allColumns.Count - 20}…" : string.Empty);
+
+            fileErrors.Add(new RowError(
+                string.Join(" / ", FinishingTypeAliases),
+                "column_not_found",
+                $"Не найдена колонка 'Тип отделки' (допустимые алиасы: {string.Join(", ", FinishingTypeAliases)}). " +
+                $"В файле обнаружены колонки: {detectedList}. " +
+                "Убедитесь, что вы загружаете шаблон импорта 'Финмодель'."));
+
+            _log.LogWarning(
+                "FinModelImportMapper.ValidateAsync: column 'Тип отделки' not found in file. Detected columns: {Detected}",
+                string.Join(", ", allColumns));
+
+            return new ValidationResult([], fileErrors);
+        }
+
         var mappedRows = new List<MappedRow>(rows.Count);
 
         for (int i = 0; i < rows.Count; i++)
@@ -81,15 +117,18 @@ public sealed class FinModelImportMapper : IImportMapper
                 _log.LogInformation("FinModelImportMapper.ValidateAsync: processing row {Current}/{Total}", i + 1, rows.Count);
             }
 
-            // Ищем колонку "Тип отделки"
-            var finishingTypeCol = row.Cells.Keys.FirstOrDefault(k =>
-                FinishingTypeAliases.Any(a => a.Equals(k, StringComparison.OrdinalIgnoreCase))
-            );
+            // На уровне строки используем тот же ключ, что и на уровне файла,
+            // но с fallback'ом на per-row lookup для sparse-строк (где ячейка может
+            // отсутствовать в Cells).
+            var finishingTypeCol = row.Cells.ContainsKey(fileFinishingTypeCol)
+                ? fileFinishingTypeCol
+                : row.Cells.Keys.FirstOrDefault(k =>
+                    FinishingTypeAliases.Any(a => a.Equals(k, StringComparison.OrdinalIgnoreCase)));
 
             if (finishingTypeCol is null)
             {
-                rowErrors.Add(new RowError(string.Join(" / ", FinishingTypeAliases), "column_not_found",
-                    "Не найдена колонка 'Тип отделки'."));
+                rowErrors.Add(new RowError(fileFinishingTypeCol, "value_empty",
+                    "Значение 'Тип отделки' пустое."));
                 mappedRows.Add(new MappedRow(row.SourceRowNumber, false, JsonDocument.Parse("{}"), rowErrors));
                 continue;
             }
