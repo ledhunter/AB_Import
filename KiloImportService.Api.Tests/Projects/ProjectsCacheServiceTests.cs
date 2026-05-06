@@ -275,6 +275,52 @@ public class ProjectsCacheServiceTests
             return Task.FromResult<ConstructionSiteRaw?>(null);
         }
 
-        public void Dispose() { }
+        // Заглушки для методов, не используемых в этом тестовом классе. Падают громко
+        // именно в тестах — если кто-то начнёт их использовать, сразу станет видно.
+        public Task<ListViewResponse<ConstructionProjectRaw>> GetProjectByIdAsync(int projectId, CancellationToken ct)
+            => throw new NotImplementedException();
+
+        public Task<ListViewResponse<ConstructionSiteIndicatorRaw>> GetIndicatorsBySiteAsync(
+            int siteId, string? titleFilter, CancellationToken ct)
+            => throw new NotImplementedException();
+
+        public Task<ListViewResponse<ConstructionSiteIndicatorValueRaw>> GetIndicatorValuesByIndicatorAsync(
+            int indicatorId, CancellationToken ct)
+            => throw new NotImplementedException();
+
+        public Task<ListViewResponse<DealRaw>> GetDealsByProjectAsync(int projectId, string? lmIdFilter, CancellationToken ct)
+            => throw new NotImplementedException();
+
+        public Task<ListViewResponse<DealRaw>> GetDealsAsync(string? lmIdFilter, CancellationToken ct)
+            => throw new NotImplementedException();
+
+        public Task<ListViewResponse<OrganizationRaw>> GetOrganizationsByClientIdAsync(string clientId, CancellationToken ct)
+            => throw new NotImplementedException();
+
+        public Task<ListViewResponse<RoomRaw>> GetRoomsBySiteAsync(int siteId, string? uniqueNumberFilter, CancellationToken ct)
+            => throw new NotImplementedException();
+
+        public Task<ListViewResponse<RoomRaw>> GetRoomsBySectionAsync(int sectionId, string? uniqueNumberFilter, CancellationToken ct)
+            => throw new NotImplementedException();
+
+        public Task<ListViewResponse<PercentBetRaw>> GetPercentBetsAsync(string? lmIdFilter, int? dealId, CancellationToken ct)
+            => throw new NotImplementedException();
+
+        public Task<ListViewResponse<ConstructionSectionRaw>> GetSectionsBySiteAsync(int siteId, string? titleFilter, CancellationToken ct)
+            => throw new NotImplementedException();
+
+        public Task<ListViewResponse<ShareAgreementRaw>> GetShareAgreementsByRoomAsync(int roomId, string? numberFilter, CancellationToken ct)
+            => throw new NotImplementedException();
+
+        public Task<ListViewResponse<CadastralAreaFull>>      ListCadastralAreasAsync(string? cadastralNumFilter, CancellationToken ct) => throw new NotImplementedException();
+
+        public Task<ListViewResponse<TownRaw>>                ListTownsAsync(string? titleFilter, CancellationToken ct) => throw new NotImplementedException();
+        public Task<ListViewResponse<RegionRaw>>              ListRegionsAsync(string? titleFilter, CancellationToken ct) => throw new NotImplementedException();
+        public Task<ListViewResponse<ProjectTypeRaw>>         ListProjectTypesAsync(CancellationToken ct) => throw new NotImplementedException();
+        public Task<ListViewResponse<InflationCalcMethodRaw>> ListInflationCalcMethodsAsync(CancellationToken ct) => throw new NotImplementedException();
+        public Task<ListViewResponse<EstateClassRaw>>         ListEstateClassesAsync(CancellationToken ct) => throw new NotImplementedException();
+        public Task<ListViewResponse<BuildingMaterialRaw>>    ListBuildingMaterialsAsync(CancellationToken ct) => throw new NotImplementedException();
+        public Task<ListViewResponse<FinishingMaterialRaw>>   ListFinishingMaterialsAsync(CancellationToken ct) => throw new NotImplementedException();
+        public Task<ListViewResponse<RoomKindRaw>>            ListRoomKindsAsync(CancellationToken ct) => throw new NotImplementedException();
     }
 }

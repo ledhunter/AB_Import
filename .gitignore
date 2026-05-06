@@ -18,6 +18,7 @@ build/
 .env.local
 **/.env.local
 **/appsettings.Local.json
+.audit/
 
 # ────────── IDE ──────────
 .vs/

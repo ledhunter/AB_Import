@@ -7,6 +7,7 @@ using KiloImportService.Api.Domain.Pipeline;
 using KiloImportService.Api.Domain.Projects;
 using KiloImportService.Api.Domain.Sites;
 using KiloImportService.Api.Hubs;
+using KiloImportService.Api.Visary;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
 using Microsoft.Extensions.Options;
@@ -28,6 +29,11 @@ try
 {
     var builder = WebApplication.CreateBuilder(args);
     builder.Host.UseSerilog();
+
+    // Локальный override для секретов (BearerToken и т.п.) — файл в .gitignore.
+    // reloadOnChange:true + IOptionsMonitor в Visary-клиентах ⇒ замена токена
+    // в файле подхватывается следующим HTTP-запросом без рестарта приложения.
+    builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true);
 
     // ─── EF Core: 2 контекста на 2 PostgreSQL ───
     builder.Services.AddDbContext<ImportServiceDbContext>(opt =>
@@ -55,14 +61,35 @@ try
      builder.Services.AddSingleton<IImportSessionCancellation, ImportSessionCancellation>();
 
     // ─── Visary HTTP API клиент + кэш проектов ───
+    builder.Services.AddVisaryClient(builder.Configuration.GetSection(VisaryOptions.SectionName));
+
+    // ─── Visary справочники: прокси-эндпоинты /api/visary/{name} и /{name}/{id} ───
+    // Расширение: чтобы добавить новый справочник — одна строка ниже.
     builder.Services
-        .AddVisaryClient(opt =>
-        {
-            opt.BaseUrl = builder.Configuration["Visary:BaseUrl"] ?? string.Empty;
-            opt.BearerToken = builder.Configuration["Visary:BearerToken"] ?? string.Empty;
-            opt.RequestTimeout = TimeSpan.FromSeconds(30);
-        })
-        .Configure<VisaryOptions>(builder.Configuration.GetSection(VisaryOptions.SectionName));
+        .AddVisaryDictionary<TownRaw>("towns",
+            (lv, q, ct) => lv.ListTownsAsync(q, ct),
+            (cr, id, ct) => cr.GetTownByIdAsync(id, ct))
+        .AddVisaryDictionary<RegionRaw>("regions",
+            (lv, q, ct) => lv.ListRegionsAsync(q, ct),
+            (cr, id, ct) => cr.GetRegionByIdAsync(id, ct))
+        .AddVisaryDictionary<ProjectTypeRaw>("projecttypes",
+            (lv, _, ct) => lv.ListProjectTypesAsync(ct),
+            (cr, id, ct) => cr.GetProjectTypeByIdAsync(id, ct))
+        .AddVisaryDictionary<InflationCalcMethodRaw>("inflationcalcmethods",
+            (lv, _, ct) => lv.ListInflationCalcMethodsAsync(ct),
+            (cr, id, ct) => cr.GetInflationCalcMethodByIdAsync(id, ct))
+        .AddVisaryDictionary<EstateClassRaw>("estateclasses",
+            (lv, _, ct) => lv.ListEstateClassesAsync(ct),
+            (cr, id, ct) => cr.GetEstateClassByIdAsync(id, ct))
+        .AddVisaryDictionary<BuildingMaterialRaw>("buildingmaterials",
+            (lv, _, ct) => lv.ListBuildingMaterialsAsync(ct),
+            (cr, id, ct) => cr.GetBuildingMaterialByIdAsync(id, ct))
+        .AddVisaryDictionary<FinishingMaterialRaw>("finishingmaterials",
+            (lv, _, ct) => lv.ListFinishingMaterialsAsync(ct),
+            (cr, id, ct) => cr.GetFinishingMaterialByIdAsync(id, ct))
+        .AddVisaryDictionary<RoomKindRaw>("roomkinds",
+            (lv, _, ct) => lv.ListRoomKindsAsync(ct),
+            (cr, id, ct) => cr.GetRoomKindByIdAsync(id, ct));
     
     // ProjectsCacheService теперь использует IListViewClient (см. AddVisaryClient выше),
     // а не сырой HttpClient. Регистрируем как обычный scoped-сервис.
