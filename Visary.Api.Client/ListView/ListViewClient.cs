@@ -1,19 +1,19 @@
 using System.Net.Http.Json;
-using Microsoft.Extensions.Options;
+using System.Text.Json;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Visary.Api.Common;
 using Visary.Api.Dto;
 
 namespace Visary.Api.ListView;
 
-public interface IListViewClient : IDisposable
+public interface IListViewClient
 {
     Task<ListViewResponse<ConstructionProjectRaw>> GetProjectsAsync(
         string? search = null, int pageSize = 200, CancellationToken ct = default);
 
     Task<ListViewResponse<ConstructionProjectRaw>> GetProjectByIdAsync(
-        int projectId, CancellationToken ct = default)
-        => throw new NotImplementedException(nameof(GetProjectByIdAsync));
+        int projectId, CancellationToken ct = default);
 
     Task<ListViewResponse<ConstructionSiteRaw>> GetSitesByProjectAsync(
         int projectId, CancellationToken ct = default);
@@ -25,44 +25,47 @@ public interface IListViewClient : IDisposable
         int projectId, int siteId, CancellationToken ct = default);
 
     Task<ListViewResponse<ConstructionSiteIndicatorRaw>> GetIndicatorsBySiteAsync(
-        int siteId, string? titleFilter = null, CancellationToken ct = default)
-        => throw new NotImplementedException(nameof(GetIndicatorsBySiteAsync));
+        int siteId, string? titleFilter = null, CancellationToken ct = default);
 
     Task<ListViewResponse<ConstructionSiteIndicatorValueRaw>> GetIndicatorValuesByIndicatorAsync(
-        int indicatorId, CancellationToken ct = default)
-        => throw new NotImplementedException(nameof(GetIndicatorValuesByIndicatorAsync));
+        int indicatorId, CancellationToken ct = default);
 
     Task<ListViewResponse<DealRaw>> GetDealsByProjectAsync(
-        int projectId, string? lmIdFilter = null, CancellationToken ct = default)
-        => throw new NotImplementedException(nameof(GetDealsByProjectAsync));
+        int projectId, string? lmIdFilter = null, CancellationToken ct = default);
 
     Task<ListViewResponse<DealRaw>> GetDealsAsync(
-        string? lmIdFilter = null, CancellationToken ct = default)
-        => throw new NotImplementedException(nameof(GetDealsAsync));
+        string? lmIdFilter = null, CancellationToken ct = default);
 
     Task<ListViewResponse<OrganizationRaw>> GetOrganizationsByClientIdAsync(
-        string clientId, CancellationToken ct = default)
-        => throw new NotImplementedException(nameof(GetOrganizationsByClientIdAsync));
+        string clientId, CancellationToken ct = default);
 
     Task<ListViewResponse<RoomRaw>> GetRoomsBySiteAsync(
-        int siteId, string? uniqueNumberFilter = null, CancellationToken ct = default)
-        => throw new NotImplementedException(nameof(GetRoomsBySiteAsync));
+        int siteId, string? uniqueNumberFilter = null, CancellationToken ct = default);
 
     Task<ListViewResponse<RoomRaw>> GetRoomsBySectionAsync(
-        int sectionId, string? uniqueNumberFilter = null, CancellationToken ct = default)
-        => throw new NotImplementedException(nameof(GetRoomsBySectionAsync));
+        int sectionId, string? uniqueNumberFilter = null, CancellationToken ct = default);
 
     Task<ListViewResponse<PercentBetRaw>> GetPercentBetsAsync(
-        string? lmIdFilter = null, int? dealId = null, CancellationToken ct = default)
-        => throw new NotImplementedException(nameof(GetPercentBetsAsync));
+        string? lmIdFilter = null, int? dealId = null, CancellationToken ct = default);
 
     Task<ListViewResponse<ConstructionSectionRaw>> GetSectionsBySiteAsync(
-        int siteId, string? titleFilter = null, CancellationToken ct = default)
-        => throw new NotImplementedException(nameof(GetSectionsBySiteAsync));
+        int siteId, string? titleFilter = null, CancellationToken ct = default);
 
     Task<ListViewResponse<ShareAgreementRaw>> GetShareAgreementsByRoomAsync(
-        int roomId, string? numberFilter = null, CancellationToken ct = default)
-        => throw new NotImplementedException(nameof(GetShareAgreementsByRoomAsync));
+        int roomId, string? numberFilter = null, CancellationToken ct = default);
+
+    Task<ListViewResponse<CadastralAreaFull>> ListCadastralAreasAsync(
+        string? cadastralNumFilter = null, CancellationToken ct = default);
+
+    // ─── Справочники (list для резолвинга «название → ID») ──────────────────
+    Task<ListViewResponse<TownRaw>>                ListTownsAsync(string? titleFilter = null, CancellationToken ct = default);
+    Task<ListViewResponse<RegionRaw>>              ListRegionsAsync(string? titleFilter = null, CancellationToken ct = default);
+    Task<ListViewResponse<ProjectTypeRaw>>         ListProjectTypesAsync(CancellationToken ct = default);
+    Task<ListViewResponse<InflationCalcMethodRaw>> ListInflationCalcMethodsAsync(CancellationToken ct = default);
+    Task<ListViewResponse<EstateClassRaw>>         ListEstateClassesAsync(CancellationToken ct = default);
+    Task<ListViewResponse<BuildingMaterialRaw>>    ListBuildingMaterialsAsync(CancellationToken ct = default);
+    Task<ListViewResponse<FinishingMaterialRaw>>   ListFinishingMaterialsAsync(CancellationToken ct = default);
+    Task<ListViewResponse<RoomKindRaw>>            ListRoomKindsAsync(CancellationToken ct = default);
 }
 
 public sealed class ListViewClient : VisaryHttpBase<ListViewClient>, IListViewClient
@@ -71,9 +74,10 @@ public sealed class ListViewClient : VisaryHttpBase<ListViewClient>, IListViewCl
         ["ID", "Title", "IdentifierKK", "IdentifierZPLM", "Hidden"];
 
     private static readonly string[] ProjectFullColumns =
-        ["ID", "Title", "Program", "Author", "ProjectManager", "Executor", "Sponsor",
-         "Stage", "Type", "Phase", "Region", "Town", "Date", "Developer", "DeveloperPIN",
-         "DeveloperGroup", "IdentifierKK", "IdentifierZPLM", "ConstructionProjectNumber",
+        ["ID", "Title", "Author", "ProjectManager", "Executor", "Sponsor",
+         "Stage", "Type", "Region", "Town", "Date",
+         "Developer", "DeveloperPIN", "DeveloperGroup",
+         "IdentifierKK", "IdentifierZPLM", "ConstructionProjectNumber",
          "Description", "FinancingStart", "Version", "Hidden"];
 
     private static readonly string[] SiteColumns =
@@ -125,6 +129,10 @@ public sealed class ListViewClient : VisaryHttpBase<ListViewClient>, IListViewCl
          "ResPercentage", "SectionID", "ClaimedCost", "BuildingMaterial",
          "CostPerUnit", "TotalCost", "Version"];
 
+    // Минимальный набор колонок для справочников: достаточно для резолвинга «название → ID».
+    // Если нужен полный DTO — берите через ICrudClient.GetXxxByIdAsync.
+    private static readonly string[] DictionaryColumns = ["ID", "Title", "Hidden"];
+
     private static readonly string[] ShareAgreementColumns =
         ["ID", "Title", "Number", "Date", "ConstructionPermitNumber", "ConstructionPermitDate",
          "ProjectNumber", "ProjectTitle", "DeveloperPIN", "DeveloperINN",
@@ -136,71 +144,75 @@ public sealed class ListViewClient : VisaryHttpBase<ListViewClient>, IListViewCl
          "IsRegisteredProvided", "HouseNumberPermit", "Site", "Project",
          "StageNumber", "Room", "ValidityStatus", "RoomKindRef"];
 
+    // Visary API ожидает строку "null" в Sorts (не JSON-null) — проверено на стенде.
+    // Если поставить null или опустить — сервер возвращает 400.
+    private const string SortsNullSentinel = "null";
+
     public ListViewClient(
         HttpClient http,
-        IOptions<VisaryOptions> options,
+        IOptionsMonitor<VisaryOptions> options,
         ILogger<ListViewClient> log)
         : base(http, options, log) { }
 
     // ─── Projects ────────────────────────────────────────────────────────────
 
-    public async Task<ListViewResponse<ConstructionProjectRaw>> GetProjectsAsync(
+    public Task<ListViewResponse<ConstructionProjectRaw>> GetProjectsAsync(
         string? search, int pageSize, CancellationToken ct)
     {
         var body = new
         {
-            Mnemonic = "constructionproject",
+            Mnemonic = VisaryMnemonics.Project,
             PageSkip = 0,
             PageSize = pageSize,
             Columns = ProjectColumns,
             SearchString = search ?? string.Empty,
         };
 
-        _log.LogDebug("Visary → GET listview/constructionproject search='{Search}'", search);
-        return await PostListViewAsync<ConstructionProjectRaw>(
-            $"{BaseUrl}/api/visary/listview/constructionproject", body, "constructionproject", ct);
+        _log.LogDebug("Visary → GET listview/{Mnemonic} search='{Search}'", VisaryMnemonics.Project, search);
+        return PostListViewAsync<ConstructionProjectRaw>(
+            $"{BaseUrl}/api/visary/listview/{VisaryMnemonics.Project}", body, VisaryMnemonics.Project, ct);
     }
 
-    public async Task<ListViewResponse<ConstructionProjectRaw>> GetProjectByIdAsync(
-        int projectId, CancellationToken ct)
+    public Task<ListViewResponse<ConstructionProjectRaw>> GetProjectByIdAsync(int projectId, CancellationToken ct)
     {
         var body = new
         {
-            Mnemonic = "constructionproject",
+            Mnemonic = VisaryMnemonics.Project,
             PageSkip = 0,
             PageSize = 1,
             Columns = ProjectFullColumns,
             Filter = FilterByInt("ID", projectId),
             SearchPhrase = (string?)null,
-            Sorts = "null",
+            Sorts = SortsNullSentinel,
             Hidden = false,
             Summaries = Array.Empty<object>(),
         };
 
-        _log.LogDebug("Visary → GET listview/constructionproject by id={Id}", projectId);
-        return await PostListViewAsync<ConstructionProjectRaw>(
-            $"{BaseUrl}/api/visary/listview/constructionproject", body, $"constructionproject id={projectId}", ct);
+        _log.LogDebug("Visary → GET listview/{Mnemonic} by id={Id}", VisaryMnemonics.Project, projectId);
+        return PostListViewAsync<ConstructionProjectRaw>(
+            $"{BaseUrl}/api/visary/listview/{VisaryMnemonics.Project}",
+            body, $"{VisaryMnemonics.Project} id={projectId}", ct);
     }
 
     // ─── Sites ───────────────────────────────────────────────────────────────
 
-    public async Task<ListViewResponse<ConstructionSiteRaw>> GetSitesByProjectAsync(
-        int projectId, CancellationToken ct)
+    public Task<ListViewResponse<ConstructionSiteRaw>> GetSitesByProjectAsync(int projectId, CancellationToken ct)
     {
         var body = new
         {
-            Mnemonic = "constructionsite",
+            Mnemonic = VisaryMnemonics.Site,
             PageSkip = 0,
-            PageSize = 500,
+            PageSize = Options.LargePageSize,
             Columns = SiteColumns,
             SearchPhrase = (string?)null,
             Summaries = Array.Empty<object>(),
         };
 
-        _log.LogDebug("Visary → GET listview/constructionsite/onetomany/Project projectId={ProjectId}", projectId);
-        return await PostListViewAsync<ConstructionSiteRaw>(
-            $"{BaseUrl}/api/visary/listview/constructionsite/onetomany/Project?associationId={projectId}",
-            body, $"constructionsite/onetomany/Project id={projectId}", ct);
+        _log.LogDebug("Visary → GET listview/{Mnemonic}/onetomany/Project projectId={ProjectId}",
+            VisaryMnemonics.Site, projectId);
+        return PostListViewAsync<ConstructionSiteRaw>(
+            $"{BaseUrl}/api/visary/listview/{VisaryMnemonics.Site}/onetomany/Project?associationId={projectId}",
+            body, $"{VisaryMnemonics.Site}/onetomany/Project id={projectId}", ct);
     }
 
     public Task<ConstructionSiteRaw?> GetSiteByIdAsync(int siteId, CancellationToken ct)
@@ -216,166 +228,170 @@ public sealed class ListViewClient : VisaryHttpBase<ListViewClient>, IListViewCl
 
     // ─── Indicators (ТЭПы) ───────────────────────────────────────────────────
 
-    public async Task<ListViewResponse<ConstructionSiteIndicatorRaw>> GetIndicatorsBySiteAsync(
+    public Task<ListViewResponse<ConstructionSiteIndicatorRaw>> GetIndicatorsBySiteAsync(
         int siteId, string? titleFilter, CancellationToken ct)
     {
         var body = new
         {
-            Mnemonic = "constructionsiteindicator",
+            Mnemonic = VisaryMnemonics.SiteIndicator,
             PageSkip = 0,
-            PageSize = 500,
+            PageSize = Options.LargePageSize,
             Columns = IndicatorColumns,
-            Filter = titleFilter != null ? FilterByString("Title", titleFilter) : (string?)null,
+            Filter = titleFilter != null ? FilterByString("Title", titleFilter) : null,
             SearchPhrase = (string?)null,
-            Sorts = "null",
+            Sorts = SortsNullSentinel,
             Hidden = false,
             Summaries = Array.Empty<object>(),
         };
 
-        _log.LogDebug("Visary → GET constructionsiteindicator/onetomany/ConstructionSite siteId={SiteId}", siteId);
-        return await PostListViewAsync<ConstructionSiteIndicatorRaw>(
-            $"{BaseUrl}/api/visary/listview/constructionsiteindicator/onetomany/ConstructionSite?associationId={siteId}",
-            body, $"constructionsiteindicator siteId={siteId}", ct);
+        _log.LogDebug("Visary → GET {Mnemonic}/onetomany/ConstructionSite siteId={SiteId}",
+            VisaryMnemonics.SiteIndicator, siteId);
+        return PostListViewAsync<ConstructionSiteIndicatorRaw>(
+            $"{BaseUrl}/api/visary/listview/{VisaryMnemonics.SiteIndicator}/onetomany/ConstructionSite?associationId={siteId}",
+            body, $"{VisaryMnemonics.SiteIndicator} siteId={siteId}", ct);
     }
 
-    public async Task<ListViewResponse<ConstructionSiteIndicatorValueRaw>> GetIndicatorValuesByIndicatorAsync(
+    public Task<ListViewResponse<ConstructionSiteIndicatorValueRaw>> GetIndicatorValuesByIndicatorAsync(
         int indicatorId, CancellationToken ct)
     {
         var body = new
         {
-            Mnemonic = "constructionsiteindicatorvalue",
+            Mnemonic = VisaryMnemonics.SiteIndicatorValue,
             PageSkip = 0,
-            PageSize = 500,
+            PageSize = Options.LargePageSize,
             Columns = IndicatorValueColumns,
             SearchPhrase = (string?)null,
-            Sorts = "null",
+            Sorts = SortsNullSentinel,
             Hidden = false,
             Summaries = Array.Empty<object>(),
         };
 
-        _log.LogDebug("Visary → GET constructionsiteindicatorvalue/onetomany/ConstructionSiteIndicator indicatorId={Id}", indicatorId);
-        return await PostListViewAsync<ConstructionSiteIndicatorValueRaw>(
-            $"{BaseUrl}/api/visary/listview/constructionsiteindicatorvalue/onetomany/ConstructionSiteIndicator?associationId={indicatorId}",
-            body, $"constructionsiteindicatorvalue indicatorId={indicatorId}", ct);
+        _log.LogDebug("Visary → GET {Mnemonic}/onetomany/ConstructionSiteIndicator indicatorId={Id}",
+            VisaryMnemonics.SiteIndicatorValue, indicatorId);
+        return PostListViewAsync<ConstructionSiteIndicatorValueRaw>(
+            $"{BaseUrl}/api/visary/listview/{VisaryMnemonics.SiteIndicatorValue}/onetomany/ConstructionSiteIndicator?associationId={indicatorId}",
+            body, $"{VisaryMnemonics.SiteIndicatorValue} indicatorId={indicatorId}", ct);
     }
 
     // ─── Deals ───────────────────────────────────────────────────────────────
 
-    public async Task<ListViewResponse<DealRaw>> GetDealsByProjectAsync(
+    public Task<ListViewResponse<DealRaw>> GetDealsByProjectAsync(
         int projectId, string? lmIdFilter, CancellationToken ct)
     {
         var body = new
         {
-            Mnemonic = "deal",
+            Mnemonic = VisaryMnemonics.Deal,
             PageSkip = 0,
-            PageSize = 500,
+            PageSize = Options.LargePageSize,
             Columns = DealColumns,
-            Filter = lmIdFilter != null ? FilterByString("LmID", lmIdFilter) : (string?)null,
+            Filter = lmIdFilter != null ? FilterByString("LmID", lmIdFilter) : null,
             SearchPhrase = (string?)null,
-            Sorts = "null",
+            Sorts = SortsNullSentinel,
             Hidden = false,
             Summaries = Array.Empty<object>(),
         };
 
-        _log.LogDebug("Visary → GET deal/onetomany/ConstructionProject projectId={ProjectId}", projectId);
-        return await PostListViewAsync<DealRaw>(
-            $"{BaseUrl}/api/visary/listview/deal/onetomany/ConstructionProject?associationId={projectId}",
-            body, $"deal/onetomany/ConstructionProject id={projectId}", ct);
+        _log.LogDebug("Visary → GET {Mnemonic}/onetomany/ConstructionProject projectId={ProjectId}",
+            VisaryMnemonics.Deal, projectId);
+        return PostListViewAsync<DealRaw>(
+            $"{BaseUrl}/api/visary/listview/{VisaryMnemonics.Deal}/onetomany/ConstructionProject?associationId={projectId}",
+            body, $"{VisaryMnemonics.Deal}/onetomany/ConstructionProject id={projectId}", ct);
     }
 
-    public async Task<ListViewResponse<DealRaw>> GetDealsAsync(
-        string? lmIdFilter, CancellationToken ct)
+    public Task<ListViewResponse<DealRaw>> GetDealsAsync(string? lmIdFilter, CancellationToken ct)
     {
         var body = new
         {
-            Mnemonic = "deal",
+            Mnemonic = VisaryMnemonics.Deal,
             PageSkip = 0,
-            PageSize = 50,
+            PageSize = Options.DefaultPageSize,
             Columns = DealColumns,
-            Filter = lmIdFilter != null ? FilterByString("LmID", lmIdFilter) : (string?)null,
+            Filter = lmIdFilter != null ? FilterByString("LmID", lmIdFilter) : null,
             SearchPhrase = (string?)null,
-            Sorts = "null",
+            Sorts = SortsNullSentinel,
             Hidden = false,
             Summaries = Array.Empty<object>(),
         };
 
-        _log.LogDebug("Visary → GET deal lmId='{LmId}'", lmIdFilter);
-        return await PostListViewAsync<DealRaw>(
-            $"{BaseUrl}/api/visary/listview/deal", body, "deal", ct);
+        _log.LogDebug("Visary → GET {Mnemonic} lmId='{LmId}'", VisaryMnemonics.Deal, lmIdFilter);
+        return PostListViewAsync<DealRaw>(
+            $"{BaseUrl}/api/visary/listview/{VisaryMnemonics.Deal}", body, VisaryMnemonics.Deal, ct);
     }
 
     // ─── Organizations ───────────────────────────────────────────────────────
 
-    public async Task<ListViewResponse<OrganizationRaw>> GetOrganizationsByClientIdAsync(
+    public Task<ListViewResponse<OrganizationRaw>> GetOrganizationsByClientIdAsync(
         string clientId, CancellationToken ct)
     {
         var body = new
         {
-            Mnemonic = "organization",
+            Mnemonic = VisaryMnemonics.Organization,
             PageSkip = 0,
-            PageSize = 50,
+            PageSize = Options.DefaultPageSize,
             Columns = OrganizationColumns,
             Filter = FilterByString("ClientID", clientId),
             SearchPhrase = (string?)null,
-            Sorts = "null",
+            Sorts = SortsNullSentinel,
             Hidden = false,
             Summaries = Array.Empty<object>(),
         };
 
-        _log.LogDebug("Visary → GET organization clientId='{ClientId}'", clientId);
-        return await PostListViewAsync<OrganizationRaw>(
-            $"{BaseUrl}/api/visary/listview/organization", body, $"organization clientId={clientId}", ct);
+        _log.LogDebug("Visary → GET {Mnemonic} clientId='{ClientId}'", VisaryMnemonics.Organization, clientId);
+        return PostListViewAsync<OrganizationRaw>(
+            $"{BaseUrl}/api/visary/listview/{VisaryMnemonics.Organization}",
+            body, $"{VisaryMnemonics.Organization} clientId={clientId}", ct);
     }
 
     // ─── Rooms ───────────────────────────────────────────────────────────────
 
-    public async Task<ListViewResponse<RoomRaw>> GetRoomsBySiteAsync(
+    public Task<ListViewResponse<RoomRaw>> GetRoomsBySiteAsync(
         int siteId, string? uniqueNumberFilter, CancellationToken ct)
     {
         var body = new
         {
-            Mnemonic = "room",
+            Mnemonic = VisaryMnemonics.Room,
             PageSkip = 0,
-            PageSize = 500,
+            PageSize = Options.LargePageSize,
             Columns = RoomColumns,
-            Filter = uniqueNumberFilter != null ? FilterByString("UniqueNumber", uniqueNumberFilter) : (string?)null,
+            Filter = uniqueNumberFilter != null ? FilterByString("UniqueNumber", uniqueNumberFilter) : null,
             SearchPhrase = (string?)null,
-            Sorts = "null",
+            Sorts = SortsNullSentinel,
             Hidden = false,
             Summaries = Array.Empty<object>(),
         };
 
-        _log.LogDebug("Visary → GET room/onetomany/Site siteId={SiteId}", siteId);
-        return await PostListViewAsync<RoomRaw>(
-            $"{BaseUrl}/api/visary/listview/room/onetomany/Site?associationId={siteId}",
-            body, $"room/onetomany/Site siteId={siteId}", ct);
+        _log.LogDebug("Visary → GET {Mnemonic}/onetomany/Site siteId={SiteId}", VisaryMnemonics.Room, siteId);
+        return PostListViewAsync<RoomRaw>(
+            $"{BaseUrl}/api/visary/listview/{VisaryMnemonics.Room}/onetomany/Site?associationId={siteId}",
+            body, $"{VisaryMnemonics.Room}/onetomany/Site siteId={siteId}", ct);
     }
 
-    public async Task<ListViewResponse<RoomRaw>> GetRoomsBySectionAsync(
+    public Task<ListViewResponse<RoomRaw>> GetRoomsBySectionAsync(
         int sectionId, string? uniqueNumberFilter, CancellationToken ct)
     {
         var body = new
         {
-            Mnemonic = "room",
+            Mnemonic = VisaryMnemonics.Room,
             PageSkip = 0,
-            PageSize = 500,
+            PageSize = Options.LargePageSize,
             Columns = RoomColumns,
-            Filter = uniqueNumberFilter != null ? FilterByString("UniqueNumber", uniqueNumberFilter) : (string?)null,
+            Filter = uniqueNumberFilter != null ? FilterByString("UniqueNumber", uniqueNumberFilter) : null,
             SearchPhrase = (string?)null,
-            Sorts = "null",
+            Sorts = SortsNullSentinel,
             Hidden = false,
             Summaries = Array.Empty<object>(),
         };
 
-        _log.LogDebug("Visary → GET room/onetomany/Section sectionId={SectionId}", sectionId);
-        return await PostListViewAsync<RoomRaw>(
-            $"{BaseUrl}/api/visary/listview/room/onetomany/Section?associationId={sectionId}",
-            body, $"room/onetomany/Section sectionId={sectionId}", ct);
+        _log.LogDebug("Visary → GET {Mnemonic}/onetomany/Section sectionId={SectionId}",
+            VisaryMnemonics.Room, sectionId);
+        return PostListViewAsync<RoomRaw>(
+            $"{BaseUrl}/api/visary/listview/{VisaryMnemonics.Room}/onetomany/Section?associationId={sectionId}",
+            body, $"{VisaryMnemonics.Room}/onetomany/Section sectionId={sectionId}", ct);
     }
 
     // ─── PercentBet ──────────────────────────────────────────────────────────
 
-    public async Task<ListViewResponse<PercentBetRaw>> GetPercentBetsAsync(
+    public Task<ListViewResponse<PercentBetRaw>> GetPercentBetsAsync(
         string? lmIdFilter, int? dealId, CancellationToken ct)
     {
         string? filter = null;
@@ -388,68 +404,141 @@ public sealed class ListViewClient : VisaryHttpBase<ListViewClient>, IListViewCl
 
         var body = new
         {
-            Mnemonic = "percentbet",
+            Mnemonic = VisaryMnemonics.PercentBet,
             PageSkip = 0,
-            PageSize = 50,
+            PageSize = Options.DefaultPageSize,
             Columns = PercentBetColumns,
             Filter = filter,
             SearchPhrase = (string?)null,
-            Sorts = "null",
+            Sorts = SortsNullSentinel,
             Hidden = false,
             Summaries = Array.Empty<object>(),
         };
 
-        _log.LogDebug("Visary → GET percentbet lmId='{LmId}' dealId={DealId}", lmIdFilter, dealId);
-        return await PostListViewAsync<PercentBetRaw>(
-            $"{BaseUrl}/api/visary/listview/percentbet", body, "percentbet", ct);
+        _log.LogDebug("Visary → GET {Mnemonic} lmId='{LmId}' dealId={DealId}",
+            VisaryMnemonics.PercentBet, lmIdFilter, dealId);
+        return PostListViewAsync<PercentBetRaw>(
+            $"{BaseUrl}/api/visary/listview/{VisaryMnemonics.PercentBet}",
+            body, VisaryMnemonics.PercentBet, ct);
     }
 
     // ─── Sections ────────────────────────────────────────────────────────────
 
-    public async Task<ListViewResponse<ConstructionSectionRaw>> GetSectionsBySiteAsync(
+    public Task<ListViewResponse<ConstructionSectionRaw>> GetSectionsBySiteAsync(
         int siteId, string? titleFilter, CancellationToken ct)
     {
         var body = new
         {
-            Mnemonic = "constructionsection",
+            Mnemonic = VisaryMnemonics.Section,
             PageSkip = 0,
-            PageSize = 500,
+            PageSize = Options.LargePageSize,
             Columns = SectionColumns,
-            Filter = titleFilter != null ? FilterByString("Title", titleFilter) : (string?)null,
+            Filter = titleFilter != null ? FilterByString("Title", titleFilter) : null,
             SearchPhrase = (string?)null,
-            Sorts = "null",
+            Sorts = SortsNullSentinel,
             Hidden = false,
             Summaries = Array.Empty<object>(),
         };
 
-        _log.LogDebug("Visary → GET constructionsection/onetomany/ConstructionSite siteId={SiteId}", siteId);
-        return await PostListViewAsync<ConstructionSectionRaw>(
-            $"{BaseUrl}/api/visary/listview/constructionsection/onetomany/ConstructionSite?associationId={siteId}",
-            body, $"constructionsection siteId={siteId}", ct);
+        _log.LogDebug("Visary → GET {Mnemonic}/onetomany/ConstructionSite siteId={SiteId}",
+            VisaryMnemonics.Section, siteId);
+        return PostListViewAsync<ConstructionSectionRaw>(
+            $"{BaseUrl}/api/visary/listview/{VisaryMnemonics.Section}/onetomany/ConstructionSite?associationId={siteId}",
+            body, $"{VisaryMnemonics.Section} siteId={siteId}", ct);
     }
 
     // ─── ShareAgreements ─────────────────────────────────────────────────────
 
-    public async Task<ListViewResponse<ShareAgreementRaw>> GetShareAgreementsByRoomAsync(
+    public Task<ListViewResponse<ShareAgreementRaw>> GetShareAgreementsByRoomAsync(
         int roomId, string? numberFilter, CancellationToken ct)
     {
         var body = new
         {
-            Mnemonic = "shareagreement",
+            Mnemonic = VisaryMnemonics.ShareAgreement,
             PageSkip = 0,
-            PageSize = 50,
+            PageSize = Options.DefaultPageSize,
             Columns = ShareAgreementColumns,
-            Filter = numberFilter != null ? FilterByString("Number", numberFilter) : (string?)null,
+            Filter = numberFilter != null ? FilterByString("Number", numberFilter) : null,
             SearchPhrase = (string?)null,
-            Sorts = "null",
+            Sorts = SortsNullSentinel,
             Hidden = false,
             Summaries = Array.Empty<object>(),
         };
 
-        _log.LogDebug("Visary → GET shareagreement/onetomany/Room roomId={RoomId}", roomId);
-        return await PostListViewAsync<ShareAgreementRaw>(
-            $"{BaseUrl}/api/visary/listview/shareagreement/onetomany/Room?associationId={roomId}",
-            body, $"shareagreement roomId={roomId}", ct);
+        _log.LogDebug("Visary → GET {Mnemonic}/onetomany/Room roomId={RoomId}",
+            VisaryMnemonics.ShareAgreement, roomId);
+        return PostListViewAsync<ShareAgreementRaw>(
+            $"{BaseUrl}/api/visary/listview/{VisaryMnemonics.ShareAgreement}/onetomany/Room?associationId={roomId}",
+            body, $"{VisaryMnemonics.ShareAgreement} roomId={roomId}", ct);
+    }
+
+    // ─── CadastralAreas list ─────────────────────────────────────────────────
+
+    public Task<ListViewResponse<CadastralAreaFull>> ListCadastralAreasAsync(
+        string? cadastralNumFilter, CancellationToken ct)
+    {
+        var body = new
+        {
+            Mnemonic = VisaryMnemonics.CadastralArea,
+            PageSkip = 0,
+            PageSize = Options.LargePageSize,
+            Columns = new[] { "ID", "CadastralNum", "Area", "EGRNNumber" },
+            Filter = cadastralNumFilter != null ? FilterByString("CadastralNum", cadastralNumFilter) : null,
+            SearchPhrase = (string?)null,
+            Sorts = SortsNullSentinel,
+            Hidden = false,
+            Summaries = Array.Empty<object>(),
+        };
+        _log.LogDebug("Visary → GET listview/{Mnemonic}", VisaryMnemonics.CadastralArea);
+        return PostListViewAsync<CadastralAreaFull>(
+            $"{BaseUrl}/api/visary/listview/{VisaryMnemonics.CadastralArea}",
+            body, VisaryMnemonics.CadastralArea, ct);
+    }
+
+    // ─── Справочники ─────────────────────────────────────────────────────────
+
+    public Task<ListViewResponse<TownRaw>> ListTownsAsync(string? titleFilter, CancellationToken ct)
+        => ListDictionaryAsync<TownRaw>(VisaryMnemonics.Town, titleFilter, ct);
+
+    public Task<ListViewResponse<RegionRaw>> ListRegionsAsync(string? titleFilter, CancellationToken ct)
+        => ListDictionaryAsync<RegionRaw>(VisaryMnemonics.Region, titleFilter, ct);
+
+    public Task<ListViewResponse<ProjectTypeRaw>> ListProjectTypesAsync(CancellationToken ct)
+        => ListDictionaryAsync<ProjectTypeRaw>(VisaryMnemonics.ProjectType, null, ct);
+
+    public Task<ListViewResponse<InflationCalcMethodRaw>> ListInflationCalcMethodsAsync(CancellationToken ct)
+        => ListDictionaryAsync<InflationCalcMethodRaw>(VisaryMnemonics.InflationCalcMethod, null, ct);
+
+    public Task<ListViewResponse<EstateClassRaw>> ListEstateClassesAsync(CancellationToken ct)
+        => ListDictionaryAsync<EstateClassRaw>(VisaryMnemonics.EstateClass, null, ct);
+
+    public Task<ListViewResponse<BuildingMaterialRaw>> ListBuildingMaterialsAsync(CancellationToken ct)
+        => ListDictionaryAsync<BuildingMaterialRaw>(VisaryMnemonics.BuildingMaterial, null, ct);
+
+    public Task<ListViewResponse<FinishingMaterialRaw>> ListFinishingMaterialsAsync(CancellationToken ct)
+        => ListDictionaryAsync<FinishingMaterialRaw>(VisaryMnemonics.FinishingMaterial, null, ct);
+
+    public Task<ListViewResponse<RoomKindRaw>> ListRoomKindsAsync(CancellationToken ct)
+        => ListDictionaryAsync<RoomKindRaw>(VisaryMnemonics.RoomKind, null, ct);
+
+    private Task<ListViewResponse<TEntity>> ListDictionaryAsync<TEntity>(
+        string mnemonic, string? titleFilter, CancellationToken ct)
+    {
+        var body = new
+        {
+            Mnemonic = mnemonic,
+            PageSkip = 0,
+            PageSize = Options.LargePageSize,
+            Columns = DictionaryColumns,
+            Filter = titleFilter != null ? FilterByString("Title", titleFilter) : null,
+            SearchPhrase = (string?)null,
+            Sorts = SortsNullSentinel,
+            Hidden = false,
+            Summaries = Array.Empty<object>(),
+        };
+        _log.LogDebug("Visary → GET listview/{Mnemonic} (dictionary)", mnemonic);
+        return PostListViewAsync<TEntity>(
+            $"{BaseUrl}/api/visary/listview/{mnemonic}", body, mnemonic, ct);
     }
 
     // ─── Helpers ─────────────────────────────────────────────────────────────
@@ -458,11 +547,11 @@ public sealed class ListViewClient : VisaryHttpBase<ListViewClient>, IListViewCl
         string url, object body, string logLabel, CancellationToken ct)
     {
         using var req = NewRequest(HttpMethod.Post, url);
-        req.Content = System.Net.Http.Json.JsonContent.Create(body, options: JsonOptions);
+        req.Content = JsonContent.Create(body, options: JsonOptions);
 
         using var response = await _http.SendAsync(req, ct);
-        HandleAuthError(response, ct);
-        HandleError(response, ct);
+        await HandleAuthErrorAsync(response, ct);
+        await HandleErrorAsync(response, ct);
 
         var parsed = await response.Content
             .ReadFromJsonAsync<ListViewResponse<TEntity>>(JsonOptions, ct)
@@ -473,15 +562,20 @@ public sealed class ListViewClient : VisaryHttpBase<ListViewClient>, IListViewCl
         return parsed;
     }
 
+    // Visary listview ожидает Filter как JSON-массив, упакованный в строку.
+    // Сериализуем через JsonSerializer — он сам экранирует кавычки/обратные слэши/Unicode,
+    // что закрывает любую возможность инъекции через входное значение фильтра.
     private static string FilterByString(string field, string value)
-        => $"[\"{field}\",\"=\",\"{value}\"]";
+        => JsonSerializer.Serialize(new object[] { field, "=", value });
 
     private static string FilterByInt(string field, int value)
-        => $"[\"{field}\",\"=\",{value}]";
+        => JsonSerializer.Serialize(new object[] { field, "=", value });
 
     private static string FilterByRefId(string field, int id)
-        => $"[\"{field}\",\"=\",\"ID:{id}\"]";
+        => JsonSerializer.Serialize(new object[] { field, "=", $"ID:{id}" });
 
-    private static string FilterAnd(string f1, string f2)
-        => $"[{f1},\"and\",{f2}]";
+    // Visary ожидает, что вложенные фильтры — это уже-сериализованные JSON-массивы,
+    // которые надо встроить «как есть» в внешний массив. Поэтому склейка через строку,
+    // но сами f1/f2 строятся безопасно через JsonSerializer выше.
+    private static string FilterAnd(string f1, string f2) => $"[{f1},\"and\",{f2}]";
 }

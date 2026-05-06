@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace Visary.Api.Dto;
 
 public sealed class ConstructionSiteIndicatorRaw
@@ -18,7 +20,9 @@ public sealed class ConstructionSiteIndicatorRaw
     public double? LastPlanValue { get; set; }
     public double? LastForecastValue { get; set; }
     public double? LastValue { get; set; }
-    public string? MainSource { get; set; }
+    // Visary возвращает MainSource то как строку (источник=ручной ввод), то как число
+    // (FK на источник из справочника). Принимаем сырой JsonElement и оставляем разбор caller-у.
+    public JsonElement? MainSource { get; set; }
     public DateTime? Version { get; set; }
 }
 
@@ -58,7 +62,9 @@ public sealed class OrganizationRaw
 {
     public int ID { get; set; }
     public string? Title { get; set; }
-    public string? Status { get; set; }
+    // Visary возвращает Status как числовой код (см. OrganizationFull). Принимаем сырой
+    // JsonElement, чтобы не падать, если поле когда-то начнёт приходить строкой.
+    public JsonElement? Status { get; set; }
     public string? INN { get; set; }
     public string? ClientID { get; set; }
     public string? Address { get; set; }
@@ -96,7 +102,9 @@ public sealed class RoomRaw
     public VisaryRef? ParkingPlaceType { get; set; }
     public string? CadastralNumber { get; set; }
     public bool? IsWithdrawn { get; set; }
-    public VisaryRef? RoomCategory { get; set; }
+    // В listview RoomCategory приходит скаляром (int), а в crud-ответе — VisaryRef.
+    // Принимаем оба варианта через JsonElement; при необходимости разобрать на стороне caller-а.
+    public JsonElement? RoomCategory { get; set; }
     public VisaryRef? ActiveShareAgreement { get; set; }
     public VisaryRef? CandidateShareAgreement { get; set; }
     public VisaryRef? ActiveEscrowAccount { get; set; }

@@ -16,6 +16,22 @@ public sealed class ConstructionProjectRaw
     public string? Title { get; set; }
     public string? IdentifierKK { get; set; }
     public string? IdentifierZPLM { get; set; }
+    public string? ConstructionProjectNumber { get; set; }
+    public string? Description { get; set; }
+    public string? Date { get; set; }
+    public string? FinancingStart { get; set; }
+    public string? DeveloperPIN { get; set; }
+    public VisaryRef? Author { get; set; }
+    public VisaryRef? ProjectManager { get; set; }
+    public VisaryRef? Executor { get; set; }
+    public VisaryRef? Sponsor { get; set; }
+    public VisaryRef? Stage { get; set; }
+    public VisaryRef? Type { get; set; }
+    public VisaryRef? Region { get; set; }
+    public VisaryRef? Town { get; set; }
+    public VisaryRef? Developer { get; set; }
+    public VisaryRef? DeveloperGroup { get; set; }
+    public DateTime? Version { get; set; }
     public bool? Hidden { get; set; }
 }
 
