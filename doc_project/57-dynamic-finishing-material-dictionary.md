@@ -35,53 +35,64 @@ return title switch {
 
 ## ✅ Правильная реализация
 
-### 1. DTO в общей папке `Visary.Api.Client/Dto/`
+### 1. DTO в `Visary.Api.Client/Dto/Generated/`
 
 ```csharp
-// Visary.Api.Client/Dto/VisaryDtos.cs
+// Visary.Api.Client/Dto/Generated/FinishingMaterialRaw.cs (auto-generated)
 public sealed class FinishingMaterialRaw
 {
     public int ID { get; set; }
     public string? Title { get; set; }
     public string? Code { get; set; }
+    public JsonElement? CurrentUser { get; set; }
     public double? Ration { get; set; }
+    public long RowVersion { get; set; }
     public int? Status { get; set; }
+    public DateTime? Version { get; set; }
 }
 ```
 
-### 2. Метод в общем `IListViewClient` (DIM)
+DTO **сгенерирован** скриптом `scripts/generate-visary-dtos.ps1` из snapshot реальных полей Visary — лежит в `Dto/Generated/`. Руками не правим.
+
+### 2. Метод в общем `IListViewClient`
 
 ```csharp
 // Visary.Api.Client/ListView/ListViewClient.cs
-public interface IListViewClient : IDisposable
+public interface IListViewClient
 {
+    // ─── Справочники (list для резолвинга «название → ID») ──────────────────
+    Task<ListViewResponse<TownRaw>>                ListTownsAsync(string? titleFilter = null, CancellationToken ct = default);
+    Task<ListViewResponse<RegionRaw>>              ListRegionsAsync(string? titleFilter = null, CancellationToken ct = default);
     // ...
-    Task<ListViewResponse<FinishingMaterialRaw>> ListFinishingMaterialsAsync(
-        CancellationToken ct = default)
-        => throw new NotImplementedException(nameof(ListFinishingMaterialsAsync));
+    Task<ListViewResponse<FinishingMaterialRaw>>   ListFinishingMaterialsAsync(CancellationToken ct = default);
+    // и т.д.
 }
 
 public sealed class ListViewClient : VisaryHttpBase<ListViewClient>, IListViewClient
 {
-    private static readonly string[] FinishingMaterialColumns =
-        ["ID", "Code", "CurrentUser", "Ration", "Title", "Status"];
+    // Минимальный набор колонок для справочников: достаточно для резолва Title → ID.
+    private static readonly string[] DictionaryColumns = ["ID", "Title", "Hidden"];
 
-    public async Task<ListViewResponse<FinishingMaterialRaw>> ListFinishingMaterialsAsync(CancellationToken ct)
+    // Реализация — одной строкой через общий ListDictionaryAsync helper.
+    public Task<ListViewResponse<FinishingMaterialRaw>> ListFinishingMaterialsAsync(CancellationToken ct)
+        => ListDictionaryAsync<FinishingMaterialRaw>(VisaryMnemonics.FinishingMaterial, null, ct);
+
+    // Тот же помощник переиспользуется всеми справочниками: Towns, Regions,
+    // ProjectTypes, EstateClasses, BuildingMaterials, RoomKinds, FinishingMaterials.
+    private Task<ListViewResponse<TEntity>> ListDictionaryAsync<TEntity>(
+        string mnemonic, string? titleFilter, CancellationToken ct)
     {
         var body = new
         {
-            Mnemonic = "finishingmaterial",
+            Mnemonic = mnemonic,
             PageSkip = 0,
-            PageSize = 50,
-            Columns = FinishingMaterialColumns,
-            SearchPhrase = (string?)null,
-            Sorts = "null",
-            Hidden = false,
-            Summaries = Array.Empty<object>(),
+            PageSize = 500,
+            Columns = DictionaryColumns,
+            Filter = titleFilter is null ? null : FilterByString("Title", titleFilter),
+            // ... стандартные поля listview-запроса
         };
-
-        return await PostListViewAsync<FinishingMaterialRaw>(
-            $"{BaseUrl}/api/visary/listview/finishingmaterial", body, "finishingmaterial", ct);
+        return PostListViewAsync<TEntity>(
+            $"{BaseUrl}/api/visary/listview/{mnemonic}", body, mnemonic, ct);
     }
 }
 ```
@@ -211,9 +222,10 @@ for (int i = 0; i < rows.Count; i++)
 
 | Компонент | Файл | Что добавлено |
 |-----------|------|---------------|
-| DTO | [Visary.Api.Client/Dto/VisaryDtos.cs](../Visary.Api.Client/Dto/VisaryDtos.cs) | `FinishingMaterialRaw` |
-| Интерфейс клиента | [Visary.Api.Client/ListView/ListViewClient.cs](../Visary.Api.Client/ListView/ListViewClient.cs) | `IListViewClient.ListFinishingMaterialsAsync()` (DIM) |
-| Реализация клиента | там же | Метод + `FinishingMaterialColumns` через `PostListViewAsync` |
+| DTO (auto-generated) | [Visary.Api.Client/Dto/Generated/FinishingMaterialRaw.cs](../Visary.Api.Client/Dto/Generated/FinishingMaterialRaw.cs) | `FinishingMaterialRaw` сгенерирован из snapshot полей Visary |
+| Интерфейс клиента | [Visary.Api.Client/ListView/ListViewClient.cs](../Visary.Api.Client/ListView/ListViewClient.cs) | `IListViewClient.ListFinishingMaterialsAsync()` в семействе `List*Async` для всех справочников |
+| Реализация клиента | там же | One-liner через общий `ListDictionaryAsync<T>(VisaryMnemonics.FinishingMaterial, …)` helper |
+| Helper | там же (`private`) | `ListDictionaryAsync<TEntity>` переиспользуется всеми 8 `List*Async`-методами справочников |
 | Потребитель | [Domain/Mapping/FinModelImportMapper.cs](../KiloImportService.Api/Domain/Mapping/FinModelImportMapper.cs) | Инжект `IListViewClient`, dictionary-lookup, удалён `GetFinishingMaterialId` |
 | Тест-мок | [KiloImportService.Api.Tests/Mapping/FinModelImportMapperTests.cs](../KiloImportService.Api.Tests/Mapping/FinModelImportMapperTests.cs) | `Mock<IListViewClient>.Setup(ListFinishingMaterialsAsync).ReturnsAsync(...)` |
 
@@ -221,14 +233,13 @@ for (int i = 0; i < rows.Count; i++)
 
 ## 🎯 Чек-лист (при добавлении нового справочника Visary в маппер)
 
-- [ ] DTO для записи справочника лежит в `Visary.Api.Client/Dto/VisaryDtos.cs` (или `VisaryEntities.cs`).
-- [ ] Метод в `IListViewClient` объявлен через **DIM** (default-throw), реализация в `ListViewClient` через общий `PostListViewAsync<T>`.
-- [ ] Колонки запроса — отдельный `private static readonly string[]` рядом с другими `*Columns`.
+- [ ] DTO для записи справочника есть в `Visary.Api.Client/Dto/Generated/` (auto-generated). Если нет — пробросить через `scripts/generate-visary-dtos.ps1`.
+- [ ] Метод в `IListViewClient` добавлен в семейство `List*Async`, реализация — **one-liner через `ListDictionaryAsync<T>(VisaryMnemonics.X, …)`**. Не пиши собственный body/Columns — это всё делает helper.
 - [ ] Маппер **инжектит** `IListViewClient`, не создаёт `HttpClient` сам.
 - [ ] Справочник тянется **один раз** на `ValidateAsync` (или, если на сессию, кэшируется явно с учётом TTL).
 - [ ] При недоступности справочника — **file-level error**, не silent fallback.
 - [ ] Сообщения об ошибках валидации показывают **живой список** допустимых значений, не статичную строку.
-- [ ] Тесты мокают `Mock<IListViewClient>.Setup(GetXAsync).ReturnsAsync(test_dictionary)`.
+- [ ] Тесты мокают `Mock<IListViewClient>.Setup(ListXAsync).ReturnsAsync(test_dictionary)`.
 
 ---
 
@@ -237,7 +248,7 @@ for (int i = 0; i < rows.Count; i++)
 | Тип данных | Где лежат | Как читаем |
 |---|---|---|
 | **Справочник** (типы отделки, единицы измерения, регионы) | Visary listview | По `Title` через `IListViewClient.GetXAsync()` — динамически, кэш на сессию |
-| **Конкретная запись** (Site, Project) | Visary CRUD | По `ID` через `IListViewClient.GetXByIdAsync()` или `GetCrudAsync<T>` |
+| **Конкретная запись** (Site, Project) | Visary CRUD | По `ID` через `ICrudClient.GetXByIdAsync()` или общий `GetCrudByIdAsync<T>` из `VisaryHttpBase` |
 | **Статус локального процесса** (текущая сессия импорта) | service-db | EF Core напрямую |
 
 Никогда **не путать**: «справочник» в Visary не зашиваем в код, ID конкретной записи можно держать в env только для разовых fixture'ов.

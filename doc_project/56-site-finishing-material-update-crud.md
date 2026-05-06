@@ -35,9 +35,10 @@ public async Task<bool> UpdateSiteFinishingMaterialAsync(
 {
     // 1. GET → RowVersion (optimistic locking).
     //    Listview возвращает Version:DateTime, а CRUD — RowVersion:long в нужном формате.
-    var current = await GetCrudAsync<SiteCrudReadResponse>(
-        $"{BaseUrl}/api/visary/crud/constructionsite/{siteId}",
-        $"constructionsite/{siteId}", ct);
+    //    Используем переиспользуемый GetCrudByIdAsync<T> из VisaryHttpBase
+    //    (тот же, что и для всех остальных Get*ByIdAsync-методов клиента).
+    var current = await GetCrudByIdAsync<ConstructionSiteFull>(
+        VisaryMnemonics.Site, siteId, ct);
     if (current is null)
         throw new KeyNotFoundException($"ConstructionSite с ID={siteId} не найден в Visary");
 
@@ -49,30 +50,14 @@ public async Task<bool> UpdateSiteFinishingMaterialAsync(
         FinishingMaterial = new { ID = finishingMaterialId },
     };
     await PatchCrudAsync(
-        $"{BaseUrl}/api/visary/crud/constructionsite/{siteId}?forceUpdate=false",
-        body, $"constructionsite/{siteId}", ct);
+        $"{BaseUrl}/api/visary/crud/{VisaryMnemonics.Site}/{siteId}?forceUpdate=false",
+        body, $"{VisaryMnemonics.Site}/{siteId}", ct);
 
     return true;
 }
-
-private async Task<T?> GetCrudAsync<T>(string url, string logLabel, CancellationToken ct)
-    where T : class
-{
-    using var req = NewRequest(HttpMethod.Get, url);
-    using var response = await _http.SendAsync(req, ct);
-    HandleAuthError(response, ct);
-    if (response.StatusCode == HttpStatusCode.NotFound) return null;
-    HandleError(response, ct);
-    return await response.Content.ReadFromJsonAsync<T>(JsonOptions, ct);
-}
-
-/// <summary>Минимальный срез ответа CRUD GET — нужен только RowVersion для PATCH.</summary>
-private sealed class SiteCrudReadResponse
-{
-    public int ID { get; set; }
-    public long RowVersion { get; set; }
-}
 ```
+
+**Никакого собственного `GetCrudAsync<T>` или приватного `SiteCrudReadResponse` DTO не нужно** — `GetCrudByIdAsync<T>` живёт в [`Visary.Api.Client/Common/VisaryHttpBase.cs`](../Visary.Api.Client/Common/VisaryHttpBase.cs) и используется во **всех** GET-by-id методах клиента (`GetSiteByIdFullAsync`, `GetProjectByIdFullAsync`, `GetFinishingMaterialByIdAsync`, …). У `ConstructionSiteFull` уже есть `RowVersion: long` — auto-generated DTO в `Dto/Generated/ConstructionSiteFull.cs`.
 
 ### ⚠️ Важно
 
@@ -131,17 +116,19 @@ var body = new { ID = siteId, RowVersion = siteData.Version.Value.Ticks, ... };
 
 | Компонент | Файл | Что делает |
 |-----------|------|-----------|
-| `UpdateSiteFinishingMaterialAsync` | [Visary.Api.Client/CRUD/CrudClient.cs:73-100](../Visary.Api.Client/CRUD/CrudClient.cs#L73-L100) | GET RowVersion → PATCH с `FinishingMaterial.ID` |
-| `GetCrudAsync<T>` helper | [Visary.Api.Client/CRUD/CrudClient.cs:273-288](../Visary.Api.Client/CRUD/CrudClient.cs#L273-L288) | Generic GET с обработкой 401/404 |
-| `SiteCrudReadResponse` (private) | там же | Минимальный DTO `{ID, RowVersion}` |
-| `PatchSiteAsync` (для других полей) | [Visary.Api.Client/CRUD/CrudClient.cs:87-97](../Visary.Api.Client/CRUD/CrudClient.cs#L87-L97) | Тот же паттерн через `SitePatchRequest` |
+| `UpdateSiteFinishingMaterialAsync` | [Visary.Api.Client/CRUD/CrudClient.cs](../Visary.Api.Client/CRUD/CrudClient.cs) | GET RowVersion → PATCH с `FinishingMaterial.ID` |
+| `GetCrudByIdAsync<T>` helper | [Visary.Api.Client/Common/VisaryHttpBase.cs](../Visary.Api.Client/Common/VisaryHttpBase.cs) | Общий generic GET для всех `/crud/{mnemonic}/{id}` |
+| `ConstructionSiteFull` (auto-generated) | [Visary.Api.Client/Dto/Generated/ConstructionSiteFull.cs](../Visary.Api.Client/Dto/Generated/ConstructionSiteFull.cs) | `int ID`, `long RowVersion`, плюс остальные поля (нам нужны только эти два) |
+| `VisaryMnemonics.Site` | [Visary.Api.Client/Common/VisaryMnemonics.cs](../Visary.Api.Client/Common/VisaryMnemonics.cs) | Константа `"constructionsite"` |
+| `PatchSiteAsync` (для других полей) | там же в `CrudClient.cs` | Тот же паттерн через `SitePatchRequest` |
 | Потребитель | [Domain/Mapping/FinModelImportMapper.ApplyAsync](../KiloImportService.Api/Domain/Mapping/FinModelImportMapper.cs) | Вызывает `_visaryClient.UpdateSiteFinishingMaterialAsync(siteId, materialId, ct)` |
 
 ### Удалено
 
 - `LegacyUpdateSiteAsync` (PUT/listview) — мёртв.
-- `FetchSiteForUpdateAsync` (POST/listview для чтения Version) — заменён на `GetCrudAsync<SiteCrudReadResponse>`.
+- `FetchSiteForUpdateAsync` (POST/listview для чтения Version) — заменён на общий `GetCrudByIdAsync<ConstructionSiteFull>`.
 - `private class SiteUpdateData { ID, FinishingMaterialId, Version:DateTime }` — больше не нужен.
+- `private class SiteCrudReadResponse { ID, RowVersion }` (была в первой версии фикса до merge) — заменена `ConstructionSiteFull`.
 
 ---
 
