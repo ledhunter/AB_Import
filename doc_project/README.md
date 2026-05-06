@@ -33,19 +33,8 @@
 | [25-ui-project-options-display.md](./25-ui-project-options-display.md) | 📋 Отображение проектов в Select без лишних символов: убран `code`, одни и те же файлы можно загружать несколько раз |
 | [26-troubleshooting.md](./26-troubleshooting.md) | 🛠️ Решение проблем: запуск backend, проверка БД, отладка импорта "Финмодель" |
 | [27-checklists.md](./27-checklists.md) | ✅ Чек-листы: запуск цикла, добавление маппера, деплой |
-| [28-faq.md](./28-faq.md) | ❓ Частые вопросы: пустой Select, бэком не отвечает, обновление токена |
-| [plan-listview-library.md](./plan-listview-library.md) | 🏗️ План рефакторинга ListView в переиспользуемую библиотеку (с чек-листом и логом прогресса) |
-| [37-sites-sync.md](./37-sites-sync.md) | 🗃️ Синхронизация объектов строительства: SitesSyncService + VisarySitesCrudClient |
-| [38-visary-client-refactoring.md](./38-visary-client-refactoring.md) | 🧰 План рефакторинга Visary API клиентов в переиспользуемую библиотеку |
-| [39-visary-api-refactoring.md](./39-visary-api-refactoring.md) | 🧰 Рефакторинг Visary API клиентов в библиотеку `Visary.Api.Client` (64/64 backend, 28/28 frontend tests) |
-| [40-visary-api-refactoring-completed.md](./40-visary-api-refactoring-completed.md) | 🧰 Рефакторинг завершён: Visary.Api.Client, все тесты проходят, frontend работает без изменений |
-| [41-missing-dtos.md](./41-missing-dtos.md) | 🧰 Восстановленные DTO типы (ListViewResponse<T>, ConstructionProjectRaw, ConstructionSiteRaw, VisaryOptions) |
-| [42-global-using-alias.md](./42-global-using-alias.md) | 🧰 Паттерн глобальных using alias для разрешения конфликтов имён (VisaryOptions) |
-| [43-sites-filter-fix.md](./43-sites-filter-fix.md) | 🔧 Исправление фильтрации объектов строительства по проекту (associationId в query, SearchPhrase, Summaries) |
-| [44-listview-body-contract.md](./44-listview-body-contract.md) | 📡 Актуальный контракт тела Visary ListView: `SearchPhrase`, `Summaries`, разница `/listview` vs `/onetomany`, типичные ошибки |
-| [45-vite-token-refresh.md](./45-vite-token-refresh.md) | 🔑 Обновление токена Visary и кэш Vite: пошаговая процедура, curl-проверка, очистка `node_modules/.vite` |
-| [47-visary-client-duplicates.md](./47-visary-client-duplicates.md) | 🧰 Миграция с дубликатов клиентов Visary API в библиотеку: паттерн удаления старых классов, чек-лист |
-| [../../INCOMPLETE_PARTS.md](../../INCOMPLETE_PARTS.md) | ⚠️ Технический долг проекта: баги, незавершённые тесты, дубликаты кода |
+| [50-visary-api-new-methods.md](./50-visary-api-new-methods.md) | 🔌 Новые методы Visary API Client: 11 ListView + 12 CRUD методов для Room, Deal, ТЭП, ЗУ, ДДУ, Секция, Организация, PercentBet, Project |
+| [51-sites-sync-bugs-and-token-update.md](./51-sites-sync-bugs-and-token-update.md) | 🐛 Два бага синхронизации объектов: `new HttpClient()` в Docker + отсутствие `/api/sites` в Vite proxy; обновление Bearer token |
 
 ## 🎯 Контекст проекта
 

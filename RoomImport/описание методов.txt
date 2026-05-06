@@ -1,0 +1,760 @@
+---------------------------------------------------------
+Обновить Объект
+ 
+Request URL
+https://isup-alfa-test.k8s.npc.ba/api/visary/crud/constructionsite/7849?forceUpdate=false
+Request Method
+PATCH
+
+{"Type":{"Title":"Парковка","ID":3},"EstateClass":{"Title":"Типовой","ID":1},"BuildingMaterial":{"Title":"Кирпично-монолитный","ID":3},"FinishingMaterial":{"Title":"Черновая","ID":3},"ID":7849,"RowVersion":4630021}
+
+---------------------------------------------------------
+
+Создать Объект
+ 
+Request URL
+https://isup-alfa-test.k8s.npc.ba/api/visary/crud/constructionsite
+Request Method
+POST
+
+{"StatusReadiness":0,"ProjectID":4584,"Project":{"ID":4584},"ConstructionProjectNumber":"нпс","ConstructionPermissionNumber":"рнс","StageNumber":1,"Type":{"Title":"Парковка","ID":3},"EstateClass":{"Title":"Комфорт","ID":2},"BuildingMaterial":{"Title":"Кирпично-монолитный","ID":3},"FinishingMaterial":{"Title":"Чистовая","ID":1},"Description":"ааааааааа"}
+ 
+
+---------------------------------------------------------
+Поиск проекта
+ 
+Request URL
+https://isup-alfa-test.k8s.npc.ba/api/visary/listview/constructionproject
+Request Method
+POST
+
+{"Mnemonic":"constructionproject","PageSkip":0,"PageSize":50,"Columns":["ID","Title","Program","Author","ProjectManager","Executor","Sponsor","Stage","Type","Phase","Region","Town","Date","Developer","DeveloperPIN","DeveloperGroup","AdditionalPropertiesConfig","AdditionalProperties","VideoSurveillance","SourceUrl","IdentifierKK","ConstructionProjectNumber","CreditRequest","CreditTerm","Escrow","Guarantee","Description","IdentifierZPLM","UseTypeConclusion","Beneficiaries","SelfParticipation","WholesaleRate","DiscountRate","CompetitionLevel","ProjectQuality","ProjectLiquidity","NegativeFactor","FinalDecision","PositiveFactors","SignificantLimits","LocationDescription","StateCondition","Insurance","IdDealState","FinancingStart","InflationCalcMethod","Version"],"Filter":"[\"ID\",\"=\",1234]","SearchPhrase":null,"Sorts":"null","Hidden":false,"Summaries":[]}
+ 
+---------------------------------------------------------
+Обновление проекта
+ 
+Request URL
+https://isup-alfa-test.k8s.npc.ba/api/visary/crud/constructionproject/4584?forceUpdate=false
+Request Method
+PATCH
+
+{"Town":{"Title":"г.Москва","ID":2344,"Hidden":false},"ID":4584,"RowVersion":4074289}
+ 
+
+---------------------------------------------------------
+Создание проекта
+ 
+Request URL
+https://isup-alfa-test.k8s.npc.ba/api/visary/crud/constructionproject
+Request Method
+POST
+
+{"Author":{"AvatarUrl":null,"Title":null,"ID":126,"Hidden":false,"RowVersion":0},"Date":"2026-05-05","Title":"новый проект","Type":{"Title":"Коммерческая недвижимость","ID":2},"IdentifierZPLM":"идкклм","IdentifierKK":"мдккк","Town":{"Title":"г.Москва","ID":2344}}
+ 
+
+---------------------------------------------------------
+Поиск ТЭПа у Объекта
+Request URL
+https://isup-alfa-test.k8s.npc.ba/api/visary/listview/constructionsiteindicator/onetomany/ConstructionSite?associationId=7850
+Request Method
+POST
+
+{"Mnemonic":"constructionsiteindicator","PageSkip":0,"PageSize":50,"Columns":["ID","Title","ConstructionSite","GoalValue","GoalDate","Indicator","Group","Project","Comment","SortOrder","MainValue","MainTextValue","LastUpdate","LastPlanValue","LastForecastValue","LastValue","MainSource","Version"],"Filter":"[\"Title\",\"=\",\"Площадь стоянки\"]","SearchPhrase":null,"Sorts":"null","Hidden":false,"Summaries":[{"field":"LastValue","summaryType":"Sum"}]}
+
+Тело ответа:
+{
+    "Data": [
+        {
+            "Title": "Площадь стоянки",
+            "ConstructionSite": {
+                "Title": "Тест ДОУ рнс 1",
+                "ID": 7850,
+                "Hidden": false
+            },
+            "GoalValue": 0.0,
+            "GoalDate": null,
+            "Indicator": {
+                "Title": "Площадь стоянки",
+                "ID": 107,
+                "Hidden": false
+            },
+            "Group": 10,
+            "Project": {
+                "Title": "Тест ДОУ",
+                "ID": 4584,
+                "Hidden": false
+            },
+            "Comment": null,
+            "SortOrder": 0,
+            "MainValue": null,
+            "MainTextValue": null,
+            "LastUpdate": null,
+            "LastPlanValue": 0.0,
+            "LastForecastValue": 0.0,
+            "LastValue": 0.0,
+            "MainSource": null,
+            "Version": "2026-05-05T13:57:26.647341Z",
+            "ID": 114305
+        }
+    ],
+    "Total": 1,
+    "Summaries": [
+        0.0
+    ]
+}
+
+---------------------------------------------------------
+Получить значения показателя (ТЭПа):
+Request URL
+https://isup-alfa-test.k8s.npc.ba/api/visary/listview/constructionsiteindicatorvalue/onetomany/ConstructionSiteIndicator?associationId=114305
+Request Method
+POST
+
+{"Mnemonic":"constructionsiteindicatorvalue","PageSkip":0,"PageSize":50,"Columns":["ID","Title","ConstructionSiteIndicator","Date","Value","PlanValue","ForecastValue","Stage","IsUnlimited","IndicatorGroup","TextValue","ProjectDoc","Section","Site","SortOrder","Version"],"SearchPhrase":null,"Sorts":"null","Hidden":false,"Summaries":[]}
+
+тело ответа:
+{
+    "Data": [
+        {
+            "Title": null,
+            "ConstructionSiteIndicator": {
+                "Title": "Площадь стоянки",
+                "ID": 114305,
+                "Hidden": false
+            },
+            "Date": "2026-05-05",
+            "Value": null,
+            "PlanValue": 0.0,
+            "ForecastValue": 0.0,
+            "Stage": 110,
+            "IsUnlimited": false,
+            "IndicatorGroup": 10,
+            "TextValue": null,
+            "ProjectDoc": null,
+            "Section": null,
+            "Site": {
+                "Title": "Тест ДОУ рнс 1",
+                "ID": 7850,
+                "Hidden": false
+            },
+            "SortOrder": 0,
+            "Version": "2026-05-05T13:57:26.647341Z",
+            "ID": 823476
+        },
+        {
+            "Title": null,
+            "ConstructionSiteIndicator": {
+                "Title": "Площадь стоянки",
+                "ID": 114305,
+                "Hidden": false
+            },
+            "Date": "2026-05-05",
+            "Value": null,
+            "PlanValue": 0.0,
+            "ForecastValue": 0.0,
+            "Stage": 100,
+            "IsUnlimited": false,
+            "IndicatorGroup": 10,
+            "TextValue": null,
+            "ProjectDoc": null,
+            "Section": null,
+            "Site": {
+                "Title": "Тест ДОУ рнс 1",
+                "ID": 7850,
+                "Hidden": false
+            },
+            "SortOrder": 0,
+            "Version": "2026-05-05T13:57:26.647341Z",
+            "ID": 823475
+        },
+        {
+            "Title": null,
+            "ConstructionSiteIndicator": {
+                "Title": "Площадь стоянки",
+                "ID": 114305,
+                "Hidden": false
+            },
+            "Date": "2026-05-05",
+            "Value": null,
+            "PlanValue": 0.0,
+            "ForecastValue": 0.0,
+            "Stage": 90,
+            "IsUnlimited": false,
+            "IndicatorGroup": 10,
+            "TextValue": null,
+            "ProjectDoc": null,
+            "Section": null,
+            "Site": {
+                "Title": "Тест ДОУ рнс 1",
+                "ID": 7850,
+                "Hidden": false
+            },
+            "SortOrder": 0,
+            "Version": "2026-05-05T13:57:26.647341Z",
+            "ID": 823474
+        },
+        {
+            "Title": null,
+            "ConstructionSiteIndicator": {
+                "Title": "Площадь стоянки",
+                "ID": 114305,
+                "Hidden": false
+            },
+            "Date": "2026-05-05",
+            "Value": null,
+            "PlanValue": 0.0,
+            "ForecastValue": 0.0,
+            "Stage": 80,
+            "IsUnlimited": false,
+            "IndicatorGroup": 10,
+            "TextValue": null,
+            "ProjectDoc": null,
+            "Section": null,
+            "Site": {
+                "Title": "Тест ДОУ рнс 1",
+                "ID": 7850,
+                "Hidden": false
+            },
+            "SortOrder": 0,
+            "Version": "2026-05-05T13:57:26.647341Z",
+            "ID": 823473
+        },
+        {
+            "Title": null,
+            "ConstructionSiteIndicator": {
+                "Title": "Площадь стоянки",
+                "ID": 114305,
+                "Hidden": false
+            },
+            "Date": "2026-05-05",
+            "Value": null,
+            "PlanValue": 0.0,
+            "ForecastValue": 0.0,
+            "Stage": 70,
+            "IsUnlimited": false,
+            "IndicatorGroup": 10,
+            "TextValue": null,
+            "ProjectDoc": null,
+            "Section": null,
+            "Site": {
+                "Title": "Тест ДОУ рнс 1",
+                "ID": 7850,
+                "Hidden": false
+            },
+            "SortOrder": 0,
+            "Version": "2026-05-05T13:57:26.647341Z",
+            "ID": 823472
+        },
+        {
+            "Title": null,
+            "ConstructionSiteIndicator": {
+                "Title": "Площадь стоянки",
+                "ID": 114305,
+                "Hidden": false
+            },
+            "Date": "2026-05-05",
+            "Value": null,
+            "PlanValue": 0.0,
+            "ForecastValue": 0.0,
+            "Stage": 60,
+            "IsUnlimited": false,
+            "IndicatorGroup": 10,
+            "TextValue": null,
+            "ProjectDoc": null,
+            "Section": null,
+            "Site": {
+                "Title": "Тест ДОУ рнс 1",
+                "ID": 7850,
+                "Hidden": false
+            },
+            "SortOrder": 0,
+            "Version": "2026-05-05T13:57:26.647341Z",
+            "ID": 823471
+        },
+        {
+            "Title": null,
+            "ConstructionSiteIndicator": {
+                "Title": "Площадь стоянки",
+                "ID": 114305,
+                "Hidden": false
+            },
+            "Date": "2026-05-05",
+            "Value": null,
+            "PlanValue": 0.0,
+            "ForecastValue": 0.0,
+            "Stage": 50,
+            "IsUnlimited": false,
+            "IndicatorGroup": 10,
+            "TextValue": null,
+            "ProjectDoc": null,
+            "Section": null,
+            "Site": {
+                "Title": "Тест ДОУ рнс 1",
+                "ID": 7850,
+                "Hidden": false
+            },
+            "SortOrder": 0,
+            "Version": "2026-05-05T13:57:26.647341Z",
+            "ID": 823470
+        },
+        {
+            "Title": null,
+            "ConstructionSiteIndicator": {
+                "Title": "Площадь стоянки",
+                "ID": 114305,
+                "Hidden": false
+            },
+            "Date": "2026-05-05",
+            "Value": null,
+            "PlanValue": 0.0,
+            "ForecastValue": 0.0,
+            "Stage": 40,
+            "IsUnlimited": false,
+            "IndicatorGroup": 10,
+            "TextValue": null,
+            "ProjectDoc": null,
+            "Section": null,
+            "Site": {
+                "Title": "Тест ДОУ рнс 1",
+                "ID": 7850,
+                "Hidden": false
+            },
+            "SortOrder": 0,
+            "Version": "2026-05-05T13:57:26.647341Z",
+            "ID": 823469
+        },
+        {
+            "Title": null,
+            "ConstructionSiteIndicator": {
+                "Title": "Площадь стоянки",
+                "ID": 114305,
+                "Hidden": false
+            },
+            "Date": "2026-05-05",
+            "Value": null,
+            "PlanValue": 0.0,
+            "ForecastValue": 0.0,
+            "Stage": 30,
+            "IsUnlimited": false,
+            "IndicatorGroup": 10,
+            "TextValue": null,
+            "ProjectDoc": null,
+            "Section": null,
+            "Site": {
+                "Title": "Тест ДОУ рнс 1",
+                "ID": 7850,
+                "Hidden": false
+            },
+            "SortOrder": 0,
+            "Version": "2026-05-05T13:57:26.647341Z",
+            "ID": 823468
+        },
+        {
+            "Title": null,
+            "ConstructionSiteIndicator": {
+                "Title": "Площадь стоянки",
+                "ID": 114305,
+                "Hidden": false
+            },
+            "Date": "2026-05-05",
+            "Value": null,
+            "PlanValue": 0.0,
+            "ForecastValue": 0.0,
+            "Stage": 20,
+            "IsUnlimited": false,
+            "IndicatorGroup": 10,
+            "TextValue": null,
+            "ProjectDoc": null,
+            "Section": null,
+            "Site": {
+                "Title": "Тест ДОУ рнс 1",
+                "ID": 7850,
+                "Hidden": false
+            },
+            "SortOrder": 0,
+            "Version": "2026-05-05T13:57:26.647341Z",
+            "ID": 823467
+        },
+        {
+            "Title": null,
+            "ConstructionSiteIndicator": {
+                "Title": "Площадь стоянки",
+                "ID": 114305,
+                "Hidden": false
+            },
+            "Date": "2026-05-05",
+            "Value": null,
+            "PlanValue": 0.0,
+            "ForecastValue": 0.0,
+            "Stage": 10,
+            "IsUnlimited": false,
+            "IndicatorGroup": 10,
+            "TextValue": null,
+            "ProjectDoc": null,
+            "Section": null,
+            "Site": {
+                "Title": "Тест ДОУ рнс 1",
+                "ID": 7850,
+                "Hidden": false
+            },
+            "SortOrder": 0,
+            "Version": "2026-05-05T13:57:26.647341Z",
+            "ID": 823466
+        }
+    ],
+    "Total": 11,
+    "Summaries": []
+}
+
+---------------------------------------------------------
+Обновление ЗНАЧЕНИЯ показателя (ТЭПа):
+Request URL
+https://isup-alfa-test.k8s.npc.ba/api/visary/crud/constructionsiteindicatorvalue/823470?forceUpdate=true
+Request Method
+PATCH
+ 
+{"Value":12344}
+
+---------------------------------------------------------
+Найти сделку в Проекте
+Request URL
+https://isup-alfa-test.k8s.npc.ba/api/visary/listview/deal/onetomany/ConstructionProject?associationId=4587
+Request Method
+POST
+
+{"Mnemonic":"deal","PageSkip":0,"PageSize":50,"Columns":["ID","Title","LmID","DocNumber","ConstructionProject","Organization","GroupName","CreditSum","DealStartDate","DealEndDate"],"Filter":"[\"LmID\",\"=\",\"5476\"]","SearchPhrase":null,"Sorts":"null","Hidden":false,"Summaries":[]}
+
+---------------------------------------------------------
+
+Найти сделку в общем списке
+Request URL
+https://isup-alfa-test.k8s.npc.ba/api/visary/listview/deal
+Request Method
+POST
+
+{"Mnemonic":"deal","PageSkip":0,"PageSize":50,"Columns":["ID","Title","LmID","DocNumber","ConstructionProject","Organization","GroupName","CreditSum","DealStartDate","DealEndDate"],"Filter":"[\"LmID\",\"=\",\"1234\"]","SearchPhrase":null,"Sorts":"null","Hidden":false,"Summaries":[]}
+
+---------------------------------------------------------
+Поиск организации по ПИНу
+ 
+Request URL
+https://isup-alfa-test.k8s.npc.ba/api/visary/listview/organization
+Request Method
+POST
+
+
+{"Mnemonic":"organization","PageSkip":0,"PageSize":50,"Columns":["ID","Title","Status","INN","SRO","ClientID","Region","Address","CEO","Email","Phone","AddInfo","Group","Town","Code","CurrentUser","AdditionalPropertiesConfig","AdditionalProperties","RatingERZ","FoundersInfo","ActivityInfo","SPV","OGRN","KPP","Category","StabilityCriteria1","StabilityCriteria2","StabilityCriteria3","StabilityCriteria4","StabilityCriteria5","StabilityCriteria6","StabilityCriteria7","Criteria4Result","Criteria5Result","Criteria6Result","Criteria7Result","Criteria1Result","Criteria2Result","Criteria3Result","Beneficiaries","InsuranceСompanyAccreditation"],"Filter":"[\"ClientID\",\"=\",\"gby\"]","SearchPhrase":null,"Sorts":"null","Hidden":false,"Summaries":[]}
+ 
+
+---------------------------------------------------------
+Поиск помещения в объекте
+Request URL
+https://isup-alfa-test.k8s.npc.ba/api/visary/listview/room/onetomany/Site?associationId=7850
+Request Method
+POST
+
+{"Mnemonic":"room","PageSkip":0,"PageSize":50,"Columns":["ID","Title","Site","Section","Number","Floor","Kind","RoomsNumber","IsStudio","TotalArea","LivingArea","Description","Cost","IsSeparateEntrance","IsShowcaseWindows","TotalAreaWithoutSummerRoom","SummerRoomArea","CostForOne","ExplicationNumber","BuildingSection","UniqueNumber","ProjectArea","RoomPurpose","ParkingPlaceType","CadastralNumber","IsWithdrawn","RoomCategory","ActiveShareAgreement","CandidateShareAgreement","ActiveEscrowAccount","CandidateEscrowAccount","CalculatedCostPerM","MarketCostPerM","ZalogCostPerM"],"Filter":"[\"UniqueNumber\",\"=\",\"1\"]","SearchPhrase":null,"Sorts":"null","Hidden":false,"Summaries":[]}
+
+
+---------------------------------------------------------
+Создание ЗУ
+Request URL
+https://isup-alfa-test.k8s.npc.ba/api/visary/crud/cadastralarea
+Request Method
+POST
+
+
+{"Area":5052026,"CadastralNum":"05:05:2025","LandCategory":{"Title":"Общего назначения","ID":3},"UseTypes":[{"Object":{"Title":"Земли рарешенного использования 20.12.2022","ID":10}},{"Object":{"Title":"Магазины","ID":27}},{"Object":{"Title":"Дошкольное, начальное и среднее общее образование","ID":23}}]}
+
+
+---------------------------------------------------------
+Обновление ЗУ
+Request URL
+https://isup-alfa-test.k8s.npc.ba/api/visary/crud/cadastralarea/573?forceUpdate=false
+Request Method
+PATCH
+
+{"UnstructuredArea":"134234","Area":50520264,"CadastralNum":"05:05:2025","EGRNNumber":"цукцукцук","ParentID":null,"ID":573,"RowVersion":4632364}
+
+---------------------------------------------------------
+Связь ЗУ и Объекта
+Request URL
+https://isup-alfa-test.k8s.npc.ba/api/visary/listview/constructionsite/manytomany/cadastralarea/link?associationId=7850&ids=573
+Request Method
+POST
+
+---------------------------------------------------------
+Поиск процентной ставки
+Request URL
+https://isup-alfa-test.k8s.npc.ba/api/visary/listview/percentbet
+Request Method
+POST
+
+{"Mnemonic":"percentbet","PageSkip":0,"PageSize":50,"Columns":["ID","LmID","BaseRateType","PercentKind","Deal","Rate","CommissionSum","Currency","StandardRate","SpecialRate","StartDate","EndDate","PaymentCurrency","SpecialRateCalc","BasePart","FloatRateMin","FloatRateMax","Advance","DateCreate","ModifiedAt"],"Filter":"[[\"LmID\",\"=\",\"1231\"],\"and\",[\"Deal\",\"=\",\"ID:1\"]]","SearchPhrase":null,"Sorts":"null","Hidden":false,"Summaries":[]}
+
+тело ответа:
+{
+    "Data": [
+        {
+            "LmID": null,
+            "BaseRateType": null,
+            "PercentKind": null,
+            "Deal": {
+                "ID": 1,
+                "Hidden": false
+            },
+            "Rate": null,
+            "CommissionSum": 0.0,
+            "Currency": null,
+            "StandardRate": 0.0,
+            "SpecialRate": 0.0,
+            "StartDate": null,
+            "EndDate": null,
+            "PaymentCurrency": null,
+            "SpecialRateCalc": false,
+            "BasePart": 0.0,
+            "FloatRateMin": null,
+            "FloatRateMax": null,
+            "Advance": false,
+            "DateCreate": "2026-04-22T09:23:53.367974Z",
+            "ModifiedAt": null,
+            "ID": 5
+        },
+        {
+            "LmID": "test3",
+            "BaseRateType": 3334343,
+            "PercentKind": 20,
+            "Deal": {
+                "ID": 1,
+                "Hidden": false
+            },
+            "Rate": 33.0,
+            "CommissionSum": 3.0,
+            "Currency": {
+                "Title": "Рублик",
+                "ID": 7,
+                "Hidden": false
+            },
+            "StandardRate": 0.0,
+            "SpecialRate": 0.0,
+            "StartDate": "2026-03-30",
+            "EndDate": "2026-03-31",
+            "PaymentCurrency": null,
+            "SpecialRateCalc": false,
+            "BasePart": 0.0,
+            "FloatRateMin": null,
+            "FloatRateMax": null,
+            "Advance": false,
+            "DateCreate": "2026-03-30T12:51:18.341785Z",
+            "ModifiedAt": "2026-03-30T12:52:07.266453Z",
+            "ID": 4
+        },
+        {
+            "LmID": "Test2\n",
+            "BaseRateType": 88888888,
+            "PercentKind": 10,
+            "Deal": {
+                "ID": 1,
+                "Hidden": false
+            },
+            "Rate": 222.333,
+            "CommissionSum": 32322332.0,
+            "Currency": {
+                "Title": "Рубль",
+                "ID": 1,
+                "Hidden": false
+            },
+            "StandardRate": 6666.0,
+            "SpecialRate": 88888.0,
+            "StartDate": "2026-03-30",
+            "EndDate": "2026-03-31",
+            "PaymentCurrency": {
+                "Title": "Юань 20.12.2022",
+                "ID": 6,
+                "Hidden": false
+            },
+            "SpecialRateCalc": false,
+            "BasePart": 8778787.0,
+            "FloatRateMin": 77775.0,
+            "FloatRateMax": 77798.0,
+            "Advance": false,
+            "DateCreate": "2026-03-30T12:32:50.156345Z",
+            "ModifiedAt": "2026-03-30T12:52:00.688058Z",
+            "ID": 3
+        },
+        {
+            "LmID": "Test1",
+            "BaseRateType": 88888888,
+            "PercentKind": 10,
+            "Deal": {
+                "ID": 1,
+                "Hidden": false
+            },
+            "Rate": 32323232.0,
+            "CommissionSum": 32322332.0,
+            "Currency": {
+                "Title": "Рубль",
+                "ID": 1,
+                "Hidden": false
+            },
+            "StandardRate": 6666.0,
+            "SpecialRate": 88888.0,
+            "StartDate": "2026-03-30",
+            "EndDate": "2026-03-31",
+            "PaymentCurrency": {
+                "Title": "Юань 20.12.2022",
+                "ID": 6,
+                "Hidden": false
+            },
+            "SpecialRateCalc": true,
+            "BasePart": 8778787.0,
+            "FloatRateMin": 77775.0,
+            "FloatRateMax": 77798.0,
+            "Advance": true,
+            "DateCreate": "2026-03-30T12:28:43.388186Z",
+            "ModifiedAt": "2026-03-30T12:51:52.8279Z",
+            "ID": 1
+        }
+    ],
+    "Total": 4,
+    "Summaries": []
+}
+
+---------------------------------------------------------
+создать процентную ставку
+Request URL
+https://isup-alfa-test.k8s.npc.ba/api/visary/crud/percentbet
+Request Method
+POST
+
+{"LmID":"идкклм","BaseRateType":2,"PercentKind":10,"Deal":{"ID":9},"Rate":45,"CommissionSum":456,"Currency":{"Title":"Рублик","ID":7},"StandardRate":40,"SpecialRate":65,"StartDate":"2026-05-06","EndDate":"2026-05-07","PaymentCurrency":{"Title":"Рубль","ID":1},"BasePart":4444,"FloatRateMin":6666,"FloatRateMax":7777}
+
+
+---------------------------------------------------------
+поиск секции/корпуса в объекте
+Request URL
+https://isup-alfa-test.k8s.npc.ba/api/visary/listview/constructionsection/onetomany/ConstructionSite?associationId=7850
+Request Method
+POST
+
+{"Mnemonic":"constructionsection","PageSkip":0,"PageSize":50,"Columns":["ID","Title","ConstructionSite","Type","Stage","HasUndergroundStage","Description","HasLift","ResQuantity","NonresQuantity","OtherNonresQuantity","ParkingQuantity","ResProjectArea","ResAreaWithoutSummerRoom","NonresArea","OtherNonresArea","ParkingArea","AvgResArea","AvgResAreaWithoutSummerRoom","ResPercentage","SectionID","ClaimedCost","BuildingMaterial","CostPerUnit","TotalCost","Version"],"Filter":"[\"Title\",\"=\",\"123\"]","SearchPhrase":null,"Sorts":"null","Hidden":false,"Summaries":[]}
+
+---------------------------------------------------------
+создать секуцию/корпус
+Request URL
+https://isup-alfa-test.k8s.npc.ba/api/visary/crud/constructionsection
+Request Method
+POST
+
+{"ConstructionSiteID":7850,"ConstructionSite":{"ID":7850},"Type":{"Title":"МЖД","ID":3},"BuildingMaterial":{"Title":"Кирпично-монолитный","ID":3},"Stage":0,"Title":"1.1"}
+
+---------------------------------------------------------
+Поиск помещения в секции/корпусе
+Request URL
+https://isup-alfa-test.k8s.npc.ba/api/visary/listview/room/onetomany/Section?associationId=614
+Request Method
+POST
+
+{"Mnemonic":"room","PageSkip":0,"PageSize":50,"Columns":["ID","Title","Site","Section","Number","Floor","Kind","RoomsNumber","IsStudio","TotalArea","LivingArea","Description","Cost","IsSeparateEntrance","IsShowcaseWindows","TotalAreaWithoutSummerRoom","SummerRoomArea","CostForOne","ExplicationNumber","BuildingSection","UniqueNumber","ProjectArea","RoomPurpose","ParkingPlaceType","CadastralNumber","IsWithdrawn","RoomCategory","ActiveShareAgreement","CandidateShareAgreement","ActiveEscrowAccount","CandidateEscrowAccount","CalculatedCostPerM","MarketCostPerM","ZalogCostPerM"],"Filter":"[\"UniqueNumber\",\"=\",\"1\"]","SearchPhrase":null,"Sorts":"null","Hidden":false,"Summaries":[]}
+
+---------------------------------------------------------
+поиск помещения из объекта
+Request URL
+https://isup-alfa-test.k8s.npc.ba/api/visary/listview/room/onetomany/Site?associationId=7850
+Request Method
+POST
+
+{"Mnemonic":"room","PageSkip":0,"PageSize":50,"Columns":["ID","Title","Site","Section","Number","Floor","Kind","RoomsNumber","IsStudio","TotalArea","LivingArea","Description","Cost","IsSeparateEntrance","IsShowcaseWindows","TotalAreaWithoutSummerRoom","SummerRoomArea","CostForOne","ExplicationNumber","BuildingSection","UniqueNumber","ProjectArea","RoomPurpose","ParkingPlaceType","CadastralNumber","IsWithdrawn","RoomCategory","ActiveShareAgreement","CandidateShareAgreement","ActiveEscrowAccount","CandidateEscrowAccount","CalculatedCostPerM","MarketCostPerM","ZalogCostPerM"],"Filter":"[\"UniqueNumber\",\"=\",\"1\"]","SearchPhrase":null,"Sorts":"null","Hidden":false,"Summaries":[]}
+
+---------------------------------------------------------
+создание помещения
+Request URL
+https://isup-alfa-test.k8s.npc.ba/api/visary/crud/room
+Request Method
+POST
+
+{"SiteID":7850,"Site":{"ID":7850},"Title":"ааааа","Kind":{"Title":"Машиноместо","ID":4},"ExplicationNumber":"1","Section":{"Title":"1.1","ID":614},"BuildingSection":"6","Floor":"5","CalculatedCostPerM":74,"MarketCostPerM":4981,"ZalogCostPerM":75398,"RoomsNumber":3,"ProjectArea":4645456,"TotalAreaWithoutSummerRoom":48492,"SummerRoomArea":2984911,"UniqueNumber":"1","CadastralNumber":"1","Description":"лордлпгдшпдшд","Cost":3020,"CostForOne":625}
+
+---------------------------------------------------------
+создание дду
+Request URL
+https://isup-alfa-test.k8s.npc.ba/api/visary/crud/shareagreement
+Request Method
+POST
+
+{"RoomID":20585,"Room":{"ID":20585},"Project":{"Title":"Тест ДОУ","ID":4584},"Site":{"Title":"Тест ДОУ рнс 1","ID":7850},"Title":"номер договора","Number":"номер дду","RoomKindRef":{"Title":"Машиноместо","ID":4},"ProjectNumber":"нпс","StageNumber":"этап","ConditionalNumber":"усл номер"}
+
+---------------------------------------------------------
+поиск дду для помещения
+Request URL
+https://isup-alfa-test.k8s.npc.ba/api/visary/listview/shareagreement/onetomany/Room?associationId=20585
+Request Method
+POST
+
+{"Mnemonic":"shareagreement","PageSkip":0,"PageSize":50,"Columns":["ID","Title","Number","Date","ConstructionPermitNumber","ConstructionPermitDate","ProjectNumber","ProjectTitle","DeveloperPIN","DeveloperINN","StateRegistrationStatus","StateRegistrationNumber","FilingDate","RegistrationDate","SerialNumber","RoomKind","HouseNumber","SectionNumber","RoomNumber","ConditionalNumber","TotalArea","TotalLivingArea","CadastralNumber","Cost","Deadline","DepositedAmount","IsBorrowedFunds","IsPreferentialRate","BudgetFundsAmount","Street","DepositorFullName","MotherFundAmount","IsRegisteredProvided","HouseNumberPermit","Site","Project","StageNumber","Room","ValidityStatus","RoomKindRef","MonthlyData"],"Filter":"[\"Number\",\"=\",\"номер\"]","SearchPhrase":null,"Sorts":"null","Hidden":false,"Summaries":[{"field":"TotalArea","summaryType":"Sum"},{"field":"Cost","summaryType":"Sum"}]}
+
+тело ответа
+{
+    "Data": [
+        {
+            "Title": "номер договора",
+            "Number": "номер дду",
+            "Date": null,
+            "ConstructionPermitNumber": null,
+            "ConstructionPermitDate": null,
+            "ProjectNumber": "нпс",
+            "ProjectTitle": null,
+            "DeveloperPIN": null,
+            "DeveloperINN": null,
+            "StateRegistrationStatus": null,
+            "StateRegistrationNumber": null,
+            "FilingDate": null,
+            "RegistrationDate": null,
+            "SerialNumber": null,
+            "RoomKind": "Машиноместо",
+            "HouseNumber": null,
+            "SectionNumber": null,
+            "RoomNumber": null,
+            "ConditionalNumber": "усл номер",
+            "TotalArea": null,
+            "TotalLivingArea": null,
+            "CadastralNumber": null,
+            "Cost": null,
+            "Deadline": null,
+            "DepositedAmount": null,
+            "IsBorrowedFunds": false,
+            "IsPreferentialRate": false,
+            "BudgetFundsAmount": null,
+            "Street": null,
+            "DepositorFullName": null,
+            "MotherFundAmount": null,
+            "IsRegisteredProvided": false,
+            "HouseNumberPermit": null,
+            "Site": null,
+            "Project": {
+                "Title": "Тест ДОУ",
+                "ID": 4584,
+                "Hidden": false
+            },
+            "StageNumber": "этап",
+            "Room": {
+                "Title": "ааааа",
+                "ID": 20585,
+                "Hidden": false
+            },
+            "ValidityStatus": null,
+            "RoomKindRef": {
+                "Title": "Машиноместо",
+                "ID": 4,
+                "Hidden": false
+            },
+            "MonthlyData": null,
+            "ID": 242
+        }
+    ],
+    "Total": 1,
+    "Summaries": [
+        0.0,
+        0.0000
+    ]
+}

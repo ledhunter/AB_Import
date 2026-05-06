@@ -2,6 +2,14 @@ using System.Collections.Generic;
 
 namespace Visary.Api.Dto;
 
+public sealed class VisaryRef
+{
+    public int ID { get; set; }
+    public string? Title { get; set; }
+    public bool? Hidden { get; set; }
+    public long? RowVersion { get; set; }
+}
+
 public sealed class ConstructionProjectRaw
 {
     public int ID { get; set; }
