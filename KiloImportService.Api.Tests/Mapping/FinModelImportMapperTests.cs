@@ -83,27 +83,40 @@ public class FinModelImportMapperTests : IDisposable
     }
 
     [Fact]
-    public async Task ValidateAsync_MissingColumn_ReturnsError()
+    public async Task ValidateAsync_MissingColumn_ReturnsFileLevelErrorWithDetectedColumns()
     {
-        // Arrange
-        var row = new ParsedRow(
-            SourceRowNumber: 2,
-            Sheet: "inputs",
-            Cells: new Dictionary<string, string> { ["Другая колонка"] = "значение" }
-        );
+        // Arrange — файл без целевой колонки, имитируем неверный шаблон.
+        var rows = new[]
+        {
+            new ParsedRow(
+                SourceRowNumber: 2,
+                Sheet: "inputs",
+                Cells: new Dictionary<string, string>
+                {
+                    ["Другая колонка"] = "значение",
+                    ["Ещё одна"] = "x",
+                }),
+            new ParsedRow(
+                SourceRowNumber: 3,
+                Sheet: "inputs",
+                Cells: new Dictionary<string, string> { ["Другая колонка"] = "значение2" }),
+        };
 
         // Act
         var result = await _mapper.ValidateAsync(
             new ImportContext(Guid.NewGuid(), null, 123, null),
-            new[] { row },
+            rows,
             _dbContext,
             CancellationToken.None
         );
 
-        // Assert
-        Assert.Single(result.Rows);
-        Assert.False(result.Rows[0].IsValid);
-        Assert.Contains(result.Rows[0].Errors, e => e.ErrorCode == "column_not_found");
+        // Assert — ровно одна file-level ошибка, без row-spam.
+        Assert.Empty(result.Rows);
+        Assert.Single(result.FileLevelErrors);
+        var err = result.FileLevelErrors[0];
+        Assert.Equal("column_not_found", err.ErrorCode);
+        Assert.Contains("Другая колонка", err.Message);
+        Assert.Contains("Финмодель", err.Message);
     }
 
     [Fact]

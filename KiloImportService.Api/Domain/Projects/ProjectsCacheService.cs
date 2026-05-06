@@ -124,7 +124,10 @@ public sealed class ProjectsCacheService : IProjectsCacheService
     {
         if (string.IsNullOrEmpty(query))
         {
-            return new List<CachedProject>();
+            return await _db.CachedProjects
+                .OrderBy(p => p.Title)
+                .Take(take)
+                .ToListAsync(ct);
         }
 
         // Кейс-инсенситивный contains. Провайдер-агностично:
