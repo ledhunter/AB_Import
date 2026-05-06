@@ -1,14 +1,8 @@
-using System.Net.Http.Json;
 using KiloImportService.Api.Data.Visary;
 using KiloImportService.Api.Data.Visary.Entities;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
-using Visary.Api;
 using Visary.Api.CRUD;
-using Visary.Api.Dto;
 using Visary.Api.ListView;
 using ConstructionSiteRaw = Visary.Api.Dto.ConstructionSiteRaw;
 
@@ -22,35 +16,26 @@ public interface ISitesSyncService
 
 public sealed class SitesSyncService : ISitesSyncService
 {
-    private const string Mnemonic = "constructionsite";
-
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = true,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-    };
-
     private readonly VisaryDbContext _db;
-    private readonly ICrudClient _visaryClient;
-    private readonly global::Visary.Api.Dto.VisaryOptions _options;
+    private readonly ICrudClient _crudClient;
+    private readonly IListViewClient _listViewClient;
     private readonly ILogger<SitesSyncService> _log;
 
     public SitesSyncService(
         VisaryDbContext db,
-        ICrudClient visaryClient,
-        IOptions<global::Visary.Api.Dto.VisaryOptions> options,
+        ICrudClient crudClient,
+        IListViewClient listViewClient,
         ILogger<SitesSyncService> log)
     {
         _db = db;
-        _visaryClient = visaryClient;
-        _options = options.Value;
+        _crudClient = crudClient;
+        _listViewClient = listViewClient;
         _log = log;
     }
 
     public async Task<bool> SyncAsync(int siteId, int projectId, CancellationToken ct)
     {
-        var client = GetListViewClient();
-        var siteData = await client.GetSiteByProjectAndIdAsync(projectId, siteId, ct);
+        var siteData = await _listViewClient.GetSiteByProjectAndIdAsync(projectId, siteId, ct);
         if (siteData == null)
             throw new KeyNotFoundException($"ConstructionSite with ID={siteId} not found in Visary (projectId={projectId})");
 
@@ -60,7 +45,7 @@ public sealed class SitesSyncService : ISitesSyncService
 
     public async Task<bool> UpdateSiteFinishingMaterialAsync(int siteId, int finishingMaterialId, CancellationToken ct)
     {
-        return await _visaryClient.UpdateSiteFinishingMaterialAsync(siteId, finishingMaterialId, ct);
+        return await _crudClient.UpdateSiteFinishingMaterialAsync(siteId, finishingMaterialId, ct);
     }
 
     private async Task UpsertAsync(ConstructionSiteRaw raw, CancellationToken ct)
@@ -91,12 +76,4 @@ public sealed class SitesSyncService : ISitesSyncService
             raw.ID, existing == null ? "Inserted" : "Updated");
     }
 
-    private IListViewClient GetListViewClient()
-    {
-        var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
-        return new ListViewClient(
-            new HttpClient(),
-            Options.Create(_options),
-            loggerFactory.CreateLogger<ListViewClient>());
-    }
 }
