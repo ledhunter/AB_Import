@@ -365,9 +365,37 @@ await crudClient.PatchIndicatorValueAsync(823470, new IndicatorValuePatchRequest
 
 | | |
 |---|---|
-| **Вход** | `ConstructionSiteID`, `ConstructionSite`, `Title`, `Type`, `BuildingMaterial`, `Stage` |
+| **Вход** | `ConstructionSiteID`, `ConstructionSite`, `Title`, `Type` (обязательно), `BuildingMaterial`, `Stage` (опционально) |
 | **Выход** | `ConstructionSectionRaw` с новым `ID` |
 | **Endpoint** | `POST /api/visary/crud/constructionsection` |
+
+> ⚠️ **`Type` обязателен.** Без него Visary возвращает `422 Unprocessable Entity`.
+> `BuildingMaterial` и `Stage` — необязательные (минимально валидное тело — `Type` + `Title` + связи).
+> Дефолт типа корпуса для импорта `rooms`: `{"ID":3,"Title":"МЖД"}`. Парковочный
+> вариант (`Паркинг`) — будущая доработка через динамический справочник.
+
+```csharp
+// ✅ ПРАВИЛЬНО: минимально достаточное тело для CreateSectionAsync
+var request = new SectionCreateRequest
+{
+    ConstructionSiteID = 7850,
+    ConstructionSite   = new VisaryRef { ID = 7850 },
+    Title              = "1.1",
+    Type               = new VisaryRef { ID = 3, Title = "МЖД" }, // обязательно!
+};
+var section = await crudClient.CreateSectionAsync(request, ct);
+```
+
+```csharp
+// ❌ НЕПРАВИЛЬНО: без Type — 422 Unprocessable Entity
+var request = new SectionCreateRequest
+{
+    ConstructionSiteID = 7850,
+    ConstructionSite   = new VisaryRef { ID = 7850 },
+    Title              = "1.1",
+    // Type отсутствует — Visary не примет
+};
+```
 
 ---
 
@@ -377,9 +405,54 @@ await crudClient.PatchIndicatorValueAsync(823470, new IndicatorValuePatchRequest
 
 | | |
 |---|---|
-| **Вход** | `SiteID`, `Site`, `Title`, `Kind`, `Section`, `UniqueNumber` и метрики площади/стоимости |
+| **Вход** | `SiteID`, `Site`, `Title`, `Kind`, `Section`, `ExplicationNumber`, **`UniqueNumber`**, метрики площади/стоимости |
 | **Выход** | `RoomRaw` с новым `ID` |
 | **Endpoint** | `POST /api/visary/crud/room` |
+
+> ⚠️ **`UniqueNumber` обязателен.** В импорте `rooms` это та же колонка, что
+> идёт в `Title`/`ExplicationNumber` — «Номер помещения/Квартира/Номер квартиры».
+> Без `UniqueNumber` Visary считает помещение неуникальным внутри Site.
+
+#### `PatchRoomAsync(int roomId, RoomPatchRequest request)`
+
+| | |
+|---|---|
+| **Вход** | `roomId` (URL); поля `Kind`, `Section`, `Floor`, `BuildingSection`, `RoomsNumber`, `ProjectArea`, `CostForOne`, `MarketCostPerM`, `ZalogCostPerM` |
+| **Выход** | `bool` |
+| **Endpoint** | `PATCH /api/visary/crud/room/{roomId}?forceUpdate=true` |
+
+> ⚠️ **При `forceUpdate=true` НЕ передавайте `ID`/`RowVersion` в теле запроса.**
+> Иначе Visary падает с **500 Internal Server Error**:
+> ```
+> "Can not add property RowVersion to Newtonsoft.Json.Linq.JObject.
+>  Property with the same name already exists on object."
+> ```
+> На стороне сервера эти поля наполняются из текущего состояния записи.
+>
+> В DTO `RoomPatchRequest.ID` / `RowVersion` имеют тип `int?` / `long?` —
+> `JsonIgnoreCondition.WhenWritingNull` исключает их из JSON. Метод `PatchRoomAsync`
+> явно зануляет оба поля перед сериализацией.
+
+```csharp
+// ✅ ПРАВИЛЬНО: тело без ID/RowVersion (URL уже содержит roomId)
+await crudClient.PatchRoomAsync(20586, new RoomPatchRequest
+{
+    Kind            = new VisaryRef { ID = 1 },
+    Section         = new VisaryRef { ID = 617 },
+    Floor           = "1",
+    ProjectArea     = 35.67,
+    MarketCostPerM  = 1000001,
+}, ct);
+// JSON в логах: {"Kind":{"ID":1},"Section":{"ID":617},"Floor":"1",...}
+// (без ID, без RowVersion)
+```
+
+```csharp
+// ❌ НЕПРАВИЛЬНО: ID/RowVersion в теле + forceUpdate=true → 500
+// (например если DTO имеет int ID = 0; long RowVersion = 0)
+// JSON: {"ID":20586,"RowVersion":0,"Kind":...}
+// Visary возвращает: "Can not add property RowVersion to JObject..."
+```
 
 ---
 
@@ -389,9 +462,40 @@ await crudClient.PatchIndicatorValueAsync(823470, new IndicatorValuePatchRequest
 
 | | |
 |---|---|
-| **Вход** | `RoomID`, `Room`, `Project`, `Site`, `Title`, `Number`, `RoomKindRef` |
+| **Вход** | `RoomID`, `Room`, `Project`, `Site`, `Title`, `Number`, **`RoomKindRef`**, `ProjectNumber`, `ConditionalNumber` |
 | **Выход** | `ShareAgreementRaw` с новым `ID` |
 | **Endpoint** | `POST /api/visary/crud/shareagreement` |
+
+> ⚠️ Минимально полное тело включает `Project` (из контекста импорта),
+> `RoomKindRef` (тот же `Kind`, что и у Room), `ProjectNumber` (НПС из строки)
+> и `ConditionalNumber` (= номер помещения = `Room.UniqueNumber`).
+
+```csharp
+// ✅ ПРАВИЛЬНО: полный набор полей, проверенный в roomsForm-импорте
+await crudClient.CreateShareAgreementAsync(new ShareAgreementCreateRequest
+{
+    RoomID            = 20585,
+    Room              = new VisaryRef { ID = 20585 },
+    Project           = new VisaryRef { ID = 4584 },         // из ImportContext.VisaryProjectId
+    Site              = new VisaryRef { ID = 7850 },         // из ImportContext.VisarySiteId
+    RoomKindRef       = new VisaryRef { ID = 4 },            // совпадает с Room.Kind
+    Number            = "номер ДДУ",
+    Title             = "номер ДДУ",
+    ProjectNumber     = "нпс",                                // из строки файла («Номер проекта»)
+    ConditionalNumber = "№ првк 1 -1-1",                      // = Room.UniqueNumber
+}, ct);
+```
+
+#### `PatchShareAgreementAsync(int shareAgreementId, ShareAgreementPatchRequest request)`
+
+| | |
+|---|---|
+| **Вход** | `shareAgreementId` (URL); поля `Number`, `Title`, `Site`, `Project` |
+| **Выход** | `bool` |
+| **Endpoint** | `PATCH /api/visary/crud/shareagreement/{id}?forceUpdate=true` |
+
+> ⚠️ Те же грабли с `forceUpdate=true`, что и у `PatchRoomAsync` — `ID`/`RowVersion`
+> nullable и принудительно зануляются перед сериализацией.
 
 ---
 
@@ -410,6 +514,83 @@ public sealed class VisaryRef
 ```
 
 **Правило**: при создании/обновлении достаточно передать только `ID`. `Title` добавляйте для читаемости.
+
+---
+
+## ⚠️ Ловушки десериализации listview-ответов
+
+Visary в listview-ответах возвращает некоторые поля разными типами (то скаляр,
+то ссылка, то null). Для DTO этого недостаточно строгого `string?` / `VisaryRef?` —
+парсер ломается с `JsonException: The JSON value could not be converted to ...`.
+
+**Решение**: для таких полей в *Raw DTO использовать `JsonElement?`. Если бизнес-логика
+не использует поле — этого достаточно. Если использует — разбор на стороне caller-а.
+
+| DTO | Поле | Тип в DTO | Причина |
+|-----|------|-----------|---------|
+| `RoomRaw` | `RoomCategory` | `JsonElement?` | listview шлёт `int`, crud — `VisaryRef` |
+| `RoomRaw` | `ActiveShareAgreement` | `JsonElement?` | непредсказуемая форма |
+| `RoomRaw` | `CandidateShareAgreement` | `JsonElement?` | непредсказуемая форма |
+| `RoomRaw` | `ActiveEscrowAccount` | `JsonElement?` | непредсказуемая форма |
+| `RoomRaw` | `CandidateEscrowAccount` | `JsonElement?` | непредсказуемая форма |
+| `ShareAgreementRaw` | `ValidityStatus` | `JsonElement?` | приходит и числом, и строкой |
+
+### ❌ Типичная ошибка
+
+```csharp
+// Объявили VisaryRef? а Visary прислал число → 500 ошибка десериализации:
+// "The JSON value could not be converted to Visary.Api.Dto.VisaryRef.
+//  Path: $.Data[0].ActiveShareAgreement | LineNumber: 0 | BytePositionInLine: 660."
+public sealed class RoomRaw
+{
+    public VisaryRef? ActiveShareAgreement { get; set; }   // ← ломается
+}
+```
+
+### ✅ Правильно
+
+```csharp
+// JsonElement? принимает любую форму без падения парсера
+public sealed class RoomRaw
+{
+    public JsonElement? ActiveShareAgreement { get; set; } // string / int / object / null
+}
+```
+
+См. также `doc_project/56-visary-dto-deserialization-pitfalls.md`.
+
+---
+
+## 📜 Логирование запросов в Visary
+
+`CrudClient.PostCrudAsync` / `PatchCrudAsync` логируют **полное тело запроса**
+на уровне `Information` ДО отправки и тело ошибочного ответа на уровне `Error`.
+Это критично при отладке 4xx/5xx — без него непонятно, что именно отвергнуто.
+
+```text
+[INF] Visary → POST https://.../api/visary/crud/constructionsection 
+       body={"ConstructionSiteID":7850,"ConstructionSite":{"ID":7850},"Title":"1.1","Type":{"ID":3,"Title":"МЖД"}}
+[ERR] Visary error 422: <тело ответа Visary>
+```
+
+> ⚠️ Тело запроса **сериализуется один раз** (`JsonSerializer.Serialize(body, JsonOptions)`),
+> затем переиспользуется через `StringContent`. Использовать `JsonContent.Create(body)`
+> напрямую без предварительной сериализации — нельзя, тогда логи увидят только URL,
+> но не тело.
+
+### `forceUpdate` — две разные стратегии
+
+| Endpoint | `forceUpdate` | Что в теле |
+|----------|---------------|------------|
+| `PATCH /constructionsite/{id}` | `=false` | `ID` + актуальный `RowVersion` обязательны |
+| `PATCH /constructionproject/{id}` | `=false` | `ID` + `RowVersion` |
+| `PATCH /cadastralarea/{id}` | `=false` | `ID` + `RowVersion` |
+| `PATCH /constructionsiteindicatorvalue/{id}` | `=true` | **только** изменяемые поля (без `ID`/`RowVersion`) |
+| `PATCH /room/{id}` | `=true` | **только** изменяемые поля (без `ID`/`RowVersion`) |
+| `PATCH /shareagreement/{id}` | `=true` | **только** изменяемые поля (без `ID`/`RowVersion`) |
+
+При `forceUpdate=true` Visary сам наполняет JObject из текущего состояния записи —
+повторно отправлять `ID`/`RowVersion` нельзя (500: "Can not add property … to JObject").
 
 ---
 
@@ -432,7 +613,14 @@ public sealed class VisaryRef
 - [ ] В маппере внедрить `IListViewClient` и/или `ICrudClient` через DI
 - [ ] Для поиска — вызвать соответствующий `GetXxxAsync()`
 - [ ] Для создания — подготовить `XxxCreateRequest` и вызвать `CreateXxxAsync()`
-- [ ] Для обновления — получить `RowVersion` через поиск, затем `PatchXxxAsync()`
+- [ ] Для обновления:
+  - **`forceUpdate=false`** — получить `RowVersion` через поиск, затем `PatchXxxAsync()` с `ID`+`RowVersion`
+  - **`forceUpdate=true`** — отправлять **только** изменяемые поля (без `ID`/`RowVersion`)
+- [ ] Справочники (`RoomKind`, `FinishingMaterial`, …) тянуть из живого Visary API
+      (`_listView.ListXxxAsync`), а не из локальной visary_db — иначе ID не совпадут
+      со стендом.
+- [ ] Если listview-поле в DTO ломает парсер — заменить тип на `JsonElement?`
+      (см. раздел «Ловушки десериализации»).
 - [ ] Зарегистрировать маппер через `IImportMapper` в `Program.cs`
 - [ ] Написать тест с `Mock<IListViewClient>` / `Mock<ICrudClient>`
 
@@ -444,8 +632,24 @@ public sealed class VisaryRef
 - `doc_project/39-visary-api-refactoring.md` — рефакторинг библиотеки
 - `doc_project/23-finmodel-import.md` — пример маппера, использующего CRUD
 - `doc_project/44-listview-body-contract.md` — контракт тела ListView запроса
+- `doc_project/56-visary-dto-deserialization-pitfalls.md` — полиморфные поля DTO
 
 ---
 
-**Версия**: 1.0  
-**Дата**: 2026-05-06
+## 📝 История версий
+
+- **1.1** (2026-05-07):
+  - `CreateSectionAsync`: уточнено, что `Type` обязателен (без него 422); дефолт `МЖД (ID=3)` для импорта `rooms`.
+  - `CreateRoomAsync`: явно отмечен обязательный `UniqueNumber`.
+  - `CreateShareAgreementAsync`: добавлены `Project`, `RoomKindRef`, `ProjectNumber`, `ConditionalNumber` в минимальное полное тело.
+  - Добавлены секции `PatchRoomAsync` / `PatchShareAgreementAsync` с описанием грабли `forceUpdate=true` (нельзя слать `ID`/`RowVersion` — 500 "Can not add property RowVersion to JObject").
+  - DTO `RoomPatchRequest` / `ShareAgreementPatchRequest`: `ID`/`RowVersion` стали `int?` / `long?`, `JsonIgnoreCondition.WhenWritingNull` исключает их из JSON.
+  - Добавлен раздел «Ловушки десериализации» (`Active*ShareAgreement`, `*EscrowAccount`, `ValidityStatus` → `JsonElement?`).
+  - Добавлен раздел «Логирование запросов в Visary»: тело request/response пишется на уровне INFO/ERROR в `PostCrudAsync`/`PatchCrudAsync`.
+  - В чек-лист добавлены пункты про справочники из живого API и про нужность ловушек десериализации.
+- **1.0** (2026-05-06): первичная версия.
+
+---
+
+**Версия**: 1.1  
+**Дата**: 2026-05-07

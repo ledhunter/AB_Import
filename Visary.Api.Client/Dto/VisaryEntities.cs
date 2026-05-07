@@ -105,10 +105,13 @@ public sealed class RoomRaw
     // В listview RoomCategory приходит скаляром (int), а в crud-ответе — VisaryRef.
     // Принимаем оба варианта через JsonElement; при необходимости разобрать на стороне caller-а.
     public JsonElement? RoomCategory { get; set; }
-    public VisaryRef? ActiveShareAgreement { get; set; }
-    public VisaryRef? CandidateShareAgreement { get; set; }
-    public VisaryRef? ActiveEscrowAccount { get; set; }
-    public VisaryRef? CandidateEscrowAccount { get; set; }
+    // В listview Active*/Candidate* поля приходят разной формы — иногда скаляром,
+    // иногда VisaryRef. Принимаем как JsonElement; маппер использует только Number/Title и т.п.,
+    // эти поля для бизнес-логики не нужны.
+    public JsonElement? ActiveShareAgreement { get; set; }
+    public JsonElement? CandidateShareAgreement { get; set; }
+    public JsonElement? ActiveEscrowAccount { get; set; }
+    public JsonElement? CandidateEscrowAccount { get; set; }
     public double? CalculatedCostPerM { get; set; }
     public double? MarketCostPerM { get; set; }
     public double? ZalogCostPerM { get; set; }
@@ -220,6 +223,8 @@ public sealed class ShareAgreementRaw
     public VisaryRef? Project { get; set; }
     public string? StageNumber { get; set; }
     public VisaryRef? Room { get; set; }
-    public string? ValidityStatus { get; set; }
+    // ValidityStatus иногда приходит числом, иногда строкой — принимаем оба варианта.
+    // Маппер импорта rooms-form это поле не использует.
+    public JsonElement? ValidityStatus { get; set; }
     public VisaryRef? RoomKindRef { get; set; }
 }

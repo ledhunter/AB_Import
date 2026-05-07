@@ -24,6 +24,18 @@ public interface IListViewClient
     Task<ConstructionSiteRaw?> GetSiteByProjectAndIdAsync(
         int projectId, int siteId, CancellationToken ct = default);
 
+    /// <summary>
+    /// Поиск Site по любой комбинации (РНС, НПС, Этап) — три стратегии из
+    /// сценария импорта rooms-form (см. RoomImport/room_sa_create.puml):
+    ///   1) РНС + Этап         (передать permission+stage, projectNum=null)
+    ///   2) РНС + НПС + Этап   (передать всё)
+    ///   3) НПС + Этап         (передать project+stage, permission=null)
+    /// Не указанные параметры в фильтр не включаются. Если все null — выбрасывает ArgumentException.
+    /// </summary>
+    Task<ListViewResponse<ConstructionSiteRaw>> FindSitesAsync(
+        string? permissionNumber, string? projectNumber, string? stageNumber,
+        CancellationToken ct = default);
+
     Task<ListViewResponse<ConstructionSiteIndicatorRaw>> GetIndicatorsBySiteAsync(
         int siteId, string? titleFilter = null, CancellationToken ct = default);
 
@@ -228,6 +240,46 @@ public sealed class ListViewClient : VisaryHttpBase<ListViewClient>, IListViewCl
     {
         var response = await GetSitesByProjectAsync(projectId, ct);
         return response.Data.FirstOrDefault(s => s.ID == siteId);
+    }
+
+    public Task<ListViewResponse<ConstructionSiteRaw>> FindSitesAsync(
+        string? permissionNumber, string? projectNumber, string? stageNumber, CancellationToken ct)
+    {
+        var parts = new List<string>(3);
+        if (!string.IsNullOrWhiteSpace(permissionNumber))
+            parts.Add(FilterByString("ConstructionPermissionNumber", permissionNumber));
+        if (!string.IsNullOrWhiteSpace(projectNumber))
+            parts.Add(FilterByString("ConstructionProjectNumber", projectNumber));
+        if (!string.IsNullOrWhiteSpace(stageNumber))
+            parts.Add(FilterByString("StageNumber", stageNumber));
+
+        if (parts.Count == 0)
+            throw new ArgumentException(
+                "FindSitesAsync требует хотя бы один из параметров: permissionNumber/projectNumber/stageNumber.");
+
+        // Связываем фильтры через AND слева направо: ((f1 AND f2) AND f3).
+        var filter = parts.Aggregate((a, b) => FilterAnd(a, b));
+
+        var body = new
+        {
+            Mnemonic = VisaryMnemonics.Site,
+            PageSkip = 0,
+            PageSize = Options.LargePageSize,
+            Columns = SiteColumns,
+            Filter = filter,
+            SearchPhrase = (string?)null,
+            Sorts = SortsNullSentinel,
+            Hidden = false,
+            Summaries = Array.Empty<object>(),
+        };
+
+        _log.LogDebug("Visary → GET listview/{Mnemonic} find perm='{P}' proj='{Pr}' stage='{S}'",
+            VisaryMnemonics.Site, permissionNumber, projectNumber, stageNumber);
+        return PostListViewAsync<ConstructionSiteRaw>(
+            $"{BaseUrl}/api/visary/listview/{VisaryMnemonics.Site}",
+            body,
+            $"{VisaryMnemonics.Site} find(perm={permissionNumber},proj={projectNumber},stage={stageNumber})",
+            ct);
     }
 
     // ─── Indicators (ТЭПы) ───────────────────────────────────────────────────

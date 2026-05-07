@@ -48,8 +48,24 @@ public interface ICrudClient
     Task<RoomRaw> CreateRoomAsync(
         RoomCreateRequest request, CancellationToken ct = default);
 
+    Task<bool> PatchRoomAsync(
+        int roomId, RoomPatchRequest request, CancellationToken ct = default);
+
     Task<ShareAgreementRaw> CreateShareAgreementAsync(
         ShareAgreementCreateRequest request, CancellationToken ct = default);
+
+    Task<bool> PatchShareAgreementAsync(
+        int shareAgreementId, ShareAgreementPatchRequest request, CancellationToken ct = default);
+
+    /// <summary>
+    /// Привязывает Organization участником Site. Соответствует шагу из puml
+    /// «Добавить в Участники Объекта найденную Организацию с ролью Застройщик».
+    /// Реализован через manytomany-link, как и <see cref="LinkCadastralAreaToSiteAsync"/>.
+    /// ⚠️ Backend Visary ставит роль на основе типа связи; если роль на стенде задаётся
+    /// иначе (отдельной сущностью ParticipantRole), потребуется дополнительный вызов.
+    /// </summary>
+    Task<bool> LinkOrganizationToSiteAsync(
+        int siteId, int organizationId, CancellationToken ct = default);
 
     // ─── GET by ID (чтение, через /api/visary/crud/{mnemonic}/{id}) ──────────
     // Возвращают *Full DTO с полным набором полей сущности — в отличие от
@@ -271,6 +287,24 @@ public sealed class CrudClient : VisaryHttpBase<CrudClient>, ICrudClient
         return result;
     }
 
+    /// <summary>
+    /// PATCH Room. Используется <c>forceUpdate=true</c>, чтобы импорт не требовал
+    /// предварительной выборки RoomFull ради RowVersion (по аналогии с PATCH ТЭП).
+    /// </summary>
+    public Task<bool> PatchRoomAsync(int roomId, RoomPatchRequest request, CancellationToken ct)
+    {
+        // forceUpdate=true ⇒ ID/RowVersion в теле НЕ отправляются (Visary падает 500
+        // «Can not add property RowVersion to JObject» при их наличии). Поля ID/RowVersion
+        // в RoomPatchRequest nullable + WhenWritingNull → не попадают в JSON.
+        request.ID = null;
+        request.RowVersion = null;
+        _log.LogDebug("Visary → PATCH {Mnemonic} id={Id}", VisaryMnemonics.Room, roomId);
+        return PatchAndReportAsync(
+            $"{BaseUrl}/api/visary/crud/{VisaryMnemonics.Room}/{roomId}?forceUpdate=true",
+            request, $"{VisaryMnemonics.Room}/{roomId}", roomId, ct,
+            $"CrudClient.PatchRoomAsync: roomId={{Id}} success");
+    }
+
     // ─── ShareAgreement (ДДУ) ────────────────────────────────────────────────
 
     public async Task<ShareAgreementRaw> CreateShareAgreementAsync(
@@ -281,6 +315,39 @@ public sealed class CrudClient : VisaryHttpBase<CrudClient>, ICrudClient
             $"{BaseUrl}/api/visary/crud/{VisaryMnemonics.ShareAgreement}", request, VisaryMnemonics.ShareAgreement, ct);
         _log.LogInformation("CrudClient.CreateShareAgreementAsync: created id={Id}", result.ID);
         return result;
+    }
+
+    /// <summary>
+    /// PATCH ShareAgreement (ДДУ). Используется <c>forceUpdate=true</c>, чтобы избежать
+    /// дополнительной выборки ShareAgreementFull ради RowVersion при импорте.
+    /// </summary>
+    public Task<bool> PatchShareAgreementAsync(
+        int shareAgreementId, ShareAgreementPatchRequest request, CancellationToken ct)
+    {
+        // См. комментарий в PatchRoomAsync: forceUpdate=true ⇒ убираем ID/RowVersion из тела.
+        request.ID = null;
+        request.RowVersion = null;
+        _log.LogDebug("Visary → PATCH {Mnemonic} id={Id}", VisaryMnemonics.ShareAgreement, shareAgreementId);
+        return PatchAndReportAsync(
+            $"{BaseUrl}/api/visary/crud/{VisaryMnemonics.ShareAgreement}/{shareAgreementId}?forceUpdate=true",
+            request, $"{VisaryMnemonics.ShareAgreement}/{shareAgreementId}", shareAgreementId, ct,
+            $"CrudClient.PatchShareAgreementAsync: shareAgreementId={{Id}} success");
+    }
+
+    // ─── Organization ↔ Site link ────────────────────────────────────────────
+
+    public async Task<bool> LinkOrganizationToSiteAsync(int siteId, int organizationId, CancellationToken ct)
+    {
+        _log.LogDebug("Visary → POST {Mnemonic}/manytomany/{Linked}/link siteId={SiteId} orgId={OrgId}",
+            VisaryMnemonics.Site, VisaryMnemonics.Organization, siteId, organizationId);
+        using var req = NewRequest(HttpMethod.Post,
+            $"{BaseUrl}/api/visary/listview/{VisaryMnemonics.Site}/manytomany/{VisaryMnemonics.Organization}/link?associationId={siteId}&ids={organizationId}");
+        using var response = await _http.SendAsync(req, ct);
+        await HandleAuthErrorAsync(response, ct);
+        await HandleErrorAsync(response, ct);
+        _log.LogInformation("CrudClient.LinkOrganizationToSiteAsync: siteId={SiteId} orgId={OrgId} success",
+            siteId, organizationId);
+        return true;
     }
 
     // ─── GET by ID (полные DTO через /crud/{mnemonic}/{id}) ──────────────────
@@ -337,8 +404,11 @@ public sealed class CrudClient : VisaryHttpBase<CrudClient>, ICrudClient
     private async Task<TEntity> PostCrudAsync<TEntity>(
         string url, object body, string logLabel, CancellationToken ct)
     {
+        var bodyJson = System.Text.Json.JsonSerializer.Serialize(body, JsonOptions);
+        _log.LogInformation("Visary → POST {Url} body={Body}", url, bodyJson);
+
         using var req = NewRequest(HttpMethod.Post, url);
-        req.Content = JsonContent.Create(body, options: JsonOptions);
+        req.Content = new StringContent(bodyJson, System.Text.Encoding.UTF8, "application/json");
         using var response = await _http.SendAsync(req, ct);
         await HandleAuthErrorAsync(response, ct);
         await HandleErrorAsync(response, ct);
@@ -349,8 +419,11 @@ public sealed class CrudClient : VisaryHttpBase<CrudClient>, ICrudClient
 
     private async Task PatchCrudAsync(string url, object body, string logLabel, CancellationToken ct)
     {
+        var bodyJson = System.Text.Json.JsonSerializer.Serialize(body, JsonOptions);
+        _log.LogInformation("Visary → PATCH {Url} body={Body}", url, bodyJson);
+
         using var req = NewRequest(HttpMethod.Patch, url);
-        req.Content = JsonContent.Create(body, options: JsonOptions);
+        req.Content = new StringContent(bodyJson, System.Text.Encoding.UTF8, "application/json");
         using var response = await _http.SendAsync(req, ct);
         await HandleAuthErrorAsync(response, ct);
         await HandleConflictAsync(response, ct, logLabel);
