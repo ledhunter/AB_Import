@@ -15,6 +15,9 @@ public interface ICrudClient
     Task<bool> UpdateSiteEstateClassAsync(
         int siteId, int estateClassId, CancellationToken ct = default);
 
+    Task<bool> UpdateSiteAddressAsync(
+        int siteId, string address, CancellationToken ct = default);
+
     Task<bool> PatchSiteAsync(
         int siteId, SitePatchRequest request, CancellationToken ct = default);
 
@@ -56,6 +59,9 @@ public interface ICrudClient
 
     Task<bool> PatchShareAgreementAsync(
         int shareAgreementId, ShareAgreementPatchRequest request, CancellationToken ct = default);
+
+    Task<WbsRaw> CreateWbsAsync(
+        WbsCreateRequest request, CancellationToken ct = default);
 
     /// <summary>
     /// Привязывает Organization участником Site. Соответствует шагу из puml
@@ -159,6 +165,32 @@ public sealed class CrudClient : VisaryHttpBase<CrudClient>, ICrudClient
             body, $"{VisaryMnemonics.Site}/{siteId}", ct);
 
         _log.LogInformation("CrudClient.UpdateSiteEstateClassAsync: siteId={SiteId} success", siteId);
+        return true;
+    }
+
+    public async Task<bool> UpdateSiteAddressAsync(
+        int siteId, string address, CancellationToken ct)
+    {
+        // Тот же паттерн, что в UpdateSiteFinishingMaterialAsync / UpdateSiteEstateClassAsync:
+        // GET /crud/{site}/{id} ради актуального RowVersion → PATCH с forceUpdate=false.
+        // Address — простой строковый атрибут (не FK), поэтому в body передаётся как строка,
+        // без обёртки VisaryRef. См. doc_project/63-site-finishing-material-update-crud.md.
+        var current = await GetCrudByIdAsync<ConstructionSiteFull>(
+            VisaryMnemonics.Site, siteId, ct);
+        if (current is null)
+            throw new KeyNotFoundException($"ConstructionSite с ID={siteId} не найден в Visary");
+
+        var body = new
+        {
+            ID = siteId,
+            current.RowVersion,
+            Address = address,
+        };
+        await PatchCrudAsync(
+            $"{BaseUrl}/api/visary/crud/{VisaryMnemonics.Site}/{siteId}?forceUpdate=false",
+            body, $"{VisaryMnemonics.Site}/{siteId}", ct);
+
+        _log.LogInformation("CrudClient.UpdateSiteAddressAsync: siteId={SiteId} success", siteId);
         return true;
     }
 
@@ -332,6 +364,22 @@ public sealed class CrudClient : VisaryHttpBase<CrudClient>, ICrudClient
             $"{BaseUrl}/api/visary/crud/{VisaryMnemonics.ShareAgreement}/{shareAgreementId}?forceUpdate=true",
             request, $"{VisaryMnemonics.ShareAgreement}/{shareAgreementId}", shareAgreementId, ct,
             $"CrudClient.PatchShareAgreementAsync: shareAgreementId={{Id}} success");
+    }
+
+    // ─── WBS (ИСР — главы и подстатьи бюджета) ───────────────────────────────
+
+    public async Task<WbsRaw> CreateWbsAsync(WbsCreateRequest request, CancellationToken ct)
+    {
+        // POST /api/visary/crud/wbs — Code (КБК) присваивается сервером автоматически
+        // на основании ParentID + порядка создания. Глава = ParentID null, подстатья
+        // = ParentID указанной главы. ConstructionSite опционален (главу проекта можно
+        // создать без привязки к ОКСу; подстатью — обычно с ОКСом).
+        _log.LogDebug("Visary → POST {Mnemonic}", VisaryMnemonics.Wbs);
+        var result = await PostCrudAsync<WbsRaw>(
+            $"{BaseUrl}/api/visary/crud/{VisaryMnemonics.Wbs}", request, VisaryMnemonics.Wbs, ct);
+        _log.LogInformation("CrudClient.CreateWbsAsync: created id={Id} code={Code} parentId={ParentId}",
+            result.ID, result.Code ?? "(server-assigned)", request.ParentID);
+        return result;
     }
 
     // ─── Organization ↔ Site link ────────────────────────────────────────────

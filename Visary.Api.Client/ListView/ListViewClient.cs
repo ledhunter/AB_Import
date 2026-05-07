@@ -69,6 +69,13 @@ public interface IListViewClient
     Task<ListViewResponse<CadastralAreaFull>> ListCadastralAreasAsync(
         string? cadastralNumFilter = null, CancellationToken ct = default);
 
+    /// <summary>
+    /// Список WBS-записей (главы и подстатьи бюджета) у проекта.
+    /// Используется для поиска существующей главы по Title/Code перед созданием подстатьи.
+    /// </summary>
+    Task<ListViewResponse<WbsRaw>> GetWbsByProjectAsync(
+        int projectId, CancellationToken ct = default);
+
     // ─── Справочники (list для резолвинга «название → ID») ──────────────────
     // Используются мапперами импорта: тянем справочник один раз на сессию,
     // строим Title → ID словарь по живым данным (не хардкод switch'ем).
@@ -148,6 +155,10 @@ public sealed class ListViewClient : VisaryHttpBase<ListViewClient>, IListViewCl
     // Минимальный набор колонок для справочников: достаточно для резолвинга «название → ID».
     // Если нужен полный DTO — берите через ICrudClient.GetXxxByIdAsync.
     private static readonly string[] DictionaryColumns = ["ID", "Title", "Hidden"];
+
+    private static readonly string[] WbsColumns =
+        ["ID", "Title", "Code", "ParentID", "Parent", "ProjectID", "Project",
+         "ConstructionSite", "DeclaredSum", "ConfirmedSum"];
 
     private static readonly string[] ShareAgreementColumns =
         ["ID", "Title", "Number", "Date", "ConstructionPermitNumber", "ConstructionPermitDate",
@@ -552,6 +563,31 @@ public sealed class ListViewClient : VisaryHttpBase<ListViewClient>, IListViewCl
         return PostListViewAsync<CadastralAreaFull>(
             $"{BaseUrl}/api/visary/listview/{VisaryMnemonics.CadastralArea}",
             body, VisaryMnemonics.CadastralArea, ct);
+    }
+
+    // ─── WBS (ИСР — главы и подстатьи бюджета) ───────────────────────────────
+
+    public Task<ListViewResponse<WbsRaw>> GetWbsByProjectAsync(int projectId, CancellationToken ct)
+    {
+        // listview/wbs/onetomany/ConstructionProject — паттерн «дочерние сущности проекта»,
+        // как для Site/Indicator. Возвращает все WBS-записи проекта (главы и подстатьи)
+        // одной страницей. Code/ParentID позволяют построить иерархию на клиенте.
+        var body = new
+        {
+            Mnemonic = VisaryMnemonics.Wbs,
+            PageSkip = 0,
+            PageSize = Options.LargePageSize,
+            Columns = WbsColumns,
+            SearchPhrase = (string?)null,
+            Sorts = SortsNullSentinel,
+            Hidden = false,
+            Summaries = Array.Empty<object>(),
+        };
+        _log.LogDebug("Visary → GET listview/{Mnemonic}/onetomany/ConstructionProject projectId={ProjectId}",
+            VisaryMnemonics.Wbs, projectId);
+        return PostListViewAsync<WbsRaw>(
+            $"{BaseUrl}/api/visary/listview/{VisaryMnemonics.Wbs}/onetomany/ConstructionProject?associationId={projectId}",
+            body, $"{VisaryMnemonics.Wbs}/onetomany/ConstructionProject id={projectId}", ct);
     }
 
     // ─── Справочники ─────────────────────────────────────────────────────────

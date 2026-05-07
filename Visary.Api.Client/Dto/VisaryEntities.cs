@@ -228,3 +228,23 @@ public sealed class ShareAgreementRaw
     public JsonElement? ValidityStatus { get; set; }
     public VisaryRef? RoomKindRef { get; set; }
 }
+
+/// <summary>
+/// WBS (ИСР — иерархическая структура работ): главы и подстатьи бюджета объекта строительства.
+/// Самоссылающаяся иерархия: <c>Глава 1</c> (Code="1.", ParentID=null)
+///   → <c>Затраты на приобретение прав на ЗУ</c> (Code="1.1.", ParentID=ID главы).
+/// Code присваивается сервером автоматически на основании Parent + порядка создания.
+/// </summary>
+public sealed class WbsRaw
+{
+    public int ID { get; set; }
+    public string? Title { get; set; }
+    public string? Code { get; set; }
+    public int? ParentID { get; set; }
+    public VisaryRef? Parent { get; set; }
+    public int? ProjectID { get; set; }
+    public VisaryRef? Project { get; set; }
+    public VisaryRef? ConstructionSite { get; set; }
+    public double? DeclaredSum { get; set; }
+    public double? ConfirmedSum { get; set; }
+}

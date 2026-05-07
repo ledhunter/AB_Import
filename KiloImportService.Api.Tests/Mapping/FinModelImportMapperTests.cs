@@ -29,6 +29,9 @@ public class FinModelImportMapperTests : IDisposable
         _mockCrud.Setup(c => c.UpdateSiteEstateClassAsync(
                 It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
+        _mockCrud.Setup(c => c.UpdateSiteAddressAsync(
+                It.IsAny<int>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
 
         _mockListView = new Mock<IListViewClient>();
 
@@ -140,7 +143,8 @@ public class FinModelImportMapperTests : IDisposable
         string finishing = "Черновая",
         string estate = "Комфорт",
         string buildingArea = "1234.5",
-        string buildingDensity = "0.42")
+        string buildingDensity = "0.42",
+        string address = "ул. Ленина, 1")
         => new(SourceRowNumber: 2, Sheet: "inputs",
             Cells: new Dictionary<string, string>
             {
@@ -148,6 +152,7 @@ public class FinModelImportMapperTests : IDisposable
                 ["Класс жилья"]        = estate,
                 ["Площадь застройки"]  = buildingArea,
                 ["Плотность застройки"] = buildingDensity,
+                ["Строительный адрес"] = address,
             });
 
     private static ImportContext Ctx(int? siteId = 123)
@@ -331,6 +336,7 @@ public class FinModelImportMapperTests : IDisposable
                 ["Класс жилья"]          = "Комфорт",
                 ["Площадь застройки"]    = "100",
                 ["Плотность застройки"]  = "0.5",
+                ["Строительный адрес"]   = "ул. Ленина, 1",
             });
 
         var result = await _mapper.ValidateAsync(Ctx(), new[] { row }, _dbContext, default);
@@ -351,6 +357,7 @@ public class FinModelImportMapperTests : IDisposable
                 [colName]                = "Комфорт",
                 ["Площадь застройки"]    = "100",
                 ["Плотность застройки"]  = "0.5",
+                ["Строительный адрес"]   = "ул. Ленина, 1",
             });
 
         var result = await _mapper.ValidateAsync(Ctx(), new[] { row }, _dbContext, default);
@@ -387,6 +394,7 @@ public class FinModelImportMapperTests : IDisposable
                 ["Класс жилья"]          = "Комфорт",
                 [colName]                = "999",
                 ["Плотность застройки"]  = "0.5",
+                ["Строительный адрес"]   = "ул. Ленина, 1",
             });
 
         var result = await _mapper.ValidateAsync(Ctx(), new[] { row }, _dbContext, default);
@@ -432,10 +440,11 @@ public class FinModelImportMapperTests : IDisposable
         var row = new ParsedRow(2, "inputs",
             new Dictionary<string, string>
             {
-                ["Тип отделки"]       = "Черновая",
-                ["Класс жилья"]       = "Комфорт",
-                ["Площадь застройки"] = "100",
+                ["Тип отделки"]        = "Черновая",
+                ["Класс жилья"]        = "Комфорт",
+                ["Площадь застройки"]  = "100",
                 [colName]              = "0.5",
+                ["Строительный адрес"] = "ул. Ленина, 1",
             });
 
         var result = await _mapper.ValidateAsync(Ctx(), new[] { row }, _dbContext, default);
@@ -491,6 +500,7 @@ public class FinModelImportMapperTests : IDisposable
         Assert.Equal(1, apply.AppliedCount);
         _mockCrud.Verify(c => c.UpdateSiteFinishingMaterialAsync(123, 3, It.IsAny<CancellationToken>()), Times.Once);
         _mockCrud.Verify(c => c.UpdateSiteEstateClassAsync(123, 12, It.IsAny<CancellationToken>()), Times.Once);
+        _mockCrud.Verify(c => c.UpdateSiteAddressAsync(123, "ул. Ленина, 1", It.IsAny<CancellationToken>()), Times.Once);
 
         // Indicator 1: «Площадь застройки» → indicator=114306 → value=823481, Stage=50 → PATCH 555.5
         _mockListView.Verify(c => c.GetIndicatorsBySiteAsync(123, "Площадь застройки", It.IsAny<CancellationToken>()), Times.Once);
@@ -568,5 +578,88 @@ public class FinModelImportMapperTests : IDisposable
         _mockCrud.Verify(c => c.UpdateSiteFinishingMaterialAsync(123, 3, It.IsAny<CancellationToken>()), Times.Once);
         _mockCrud.Verify(c => c.UpdateSiteEstateClassAsync(123, 12, It.IsAny<CancellationToken>()), Times.Once);
         _mockCrud.Verify(c => c.PatchIndicatorValueAsync(It.IsAny<int>(), It.IsAny<IndicatorValuePatchRequest>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    // ─── Address ─────────────────────────────────────────────────────────────
+
+    [Theory]
+    [InlineData("ул. Ленина, 1")]
+    [InlineData("г. Москва, Тверская ул., д. 13")]
+    public async Task ValidateAsync_Address_StoredAsString(string addr)
+    {
+        var result = await _mapper.ValidateAsync(
+            Ctx(), new[] { Row(address: addr) }, _dbContext, default);
+
+        Assert.True(result.Rows[0].IsValid);
+        Assert.Equal(addr, result.Rows[0].MappedValues.RootElement.GetProperty("Address").GetString());
+    }
+
+    [Theory]
+    [InlineData("Address")]
+    [InlineData("Адрес")]
+    [InlineData("строительный адрес")]   // case-insensitive
+    public async Task ValidateAsync_AddressColumnAliases_WorkCaseInsensitive(string colName)
+    {
+        var row = new ParsedRow(2, "inputs",
+            new Dictionary<string, string>
+            {
+                ["Тип отделки"]        = "Черновая",
+                ["Класс жилья"]        = "Комфорт",
+                ["Площадь застройки"]  = "100",
+                ["Плотность застройки"] = "0.5",
+                [colName]              = "ул. Тверская, 13",
+            });
+
+        var result = await _mapper.ValidateAsync(Ctx(), new[] { row }, _dbContext, default);
+
+        Assert.True(result.Rows[0].IsValid);
+        Assert.Equal("ул. Тверская, 13",
+            result.Rows[0].MappedValues.RootElement.GetProperty("Address").GetString());
+    }
+
+    [Fact]
+    public async Task ValidateAsync_MissingAddressColumn_ReturnsFileLevelError()
+    {
+        var rows = new[]
+        {
+            new ParsedRow(2, "inputs", new Dictionary<string, string>
+            {
+                ["Тип отделки"]         = "Черновая",
+                ["Класс жилья"]         = "Премиум",
+                ["Площадь застройки"]   = "100",
+                ["Плотность застройки"] = "0.5",
+            }),
+        };
+
+        var result = await _mapper.ValidateAsync(Ctx(), rows, _dbContext, default);
+
+        Assert.Empty(result.Rows);
+        Assert.Contains(result.FileLevelErrors,
+            e => e.ErrorCode == "column_not_found" && e.Message.Contains("Строительный адрес"));
+    }
+
+    [Fact]
+    public async Task ValidateAsync_EmptyAddressValue_ReturnsRowError()
+    {
+        var result = await _mapper.ValidateAsync(
+            Ctx(), new[] { Row(address: "") }, _dbContext, default);
+
+        Assert.False(result.Rows[0].IsValid);
+        Assert.Contains(result.Rows[0].Errors,
+            e => e.ErrorCode == "value_empty" && e.Message.Contains("Строительный адрес"));
+    }
+
+    [Fact]
+    public async Task ApplyAsync_Address_CallsUpdateSiteAddressAsync()
+    {
+        var validation = await _mapper.ValidateAsync(
+            Ctx(), new[] { Row(address: "г. Уфа, ул. Чернышевского, 88") },
+            _dbContext, default);
+
+        var apply = await _mapper.ApplyAsync(Ctx(), _dbContext, validation.Rows, default);
+
+        Assert.Equal(1, apply.AppliedCount);
+        _mockCrud.Verify(c => c.UpdateSiteAddressAsync(
+            123, "г. Уфа, ул. Чернышевского, 88", It.IsAny<CancellationToken>()), Times.Once);
     }
 }

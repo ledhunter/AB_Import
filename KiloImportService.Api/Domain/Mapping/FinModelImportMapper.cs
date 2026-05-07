@@ -14,10 +14,11 @@ namespace KiloImportService.Api.Domain.Mapping;
 /// Обновление параметров объекта строительства через Visary CRUD API.
 ///
 /// Поддерживаемые параметры:
-///   • «Тип отделки»       → FinishingMaterial   (FK на Site)
-///   • «Класс жилья»       → EstateClass         (FK на Site, в Visary «Класс недвижимости»)
-///   • «Площадь застройки» → ConstructionSiteIndicator + ConstructionSiteIndicatorValue
-///                            с конкретной стадией (Stage = 50 «Экспертиза»)
+///   • «Тип отделки»          → FinishingMaterial (FK на Site)
+///   • «Класс жилья»          → EstateClass       (FK на Site, в Visary «Класс недвижимости»)
+///   • «Строительный адрес»   → Address           (строковый атрибут Site)
+///   • «Площадь застройки»    → ConstructionSiteIndicator + ConstructionSiteIndicatorValue
+///                               с конкретной стадией (Stage = 50 «Экспертиза»)
 ///
 /// Справочники подтягиваются динамически из Visary (Title → ID lookup case-insensitive).
 /// Хардкод-фолбэков нет: если справочник недоступен — file-level error.
@@ -48,6 +49,11 @@ public sealed class FinModelImportMapper : IImportMapper
     // «Класс жилья» в шаблоне = «Класс недвижимости» (EstateClass) на стороне Visary.
     private static readonly string[] EstateClassAliases =
         ["Класс жилья", "EstateClass", "Класс недвижимости"];
+
+    // «Строительный адрес» — простой строковый атрибут Site (поле Address в Visary).
+    // Не справочник, поэтому без TryLoadDictionaryAsync / ResolveDictionaryValue.
+    private static readonly string[] AddressAliases =
+        ["Строительный адрес", "Address", "Адрес"];
 
     // Domain.Model.Enums.ProjectStage: 50 = Expertise (Экспертиза).
     // Источник: FinModel/Альфа Банк. Управление проектами.drawio.xml — диаграмма enum'а.
@@ -139,6 +145,7 @@ public sealed class FinModelImportMapper : IImportMapper
 
         var fileFinishingCol = FindColumn(allColumns, FinishingTypeAliases);
         var fileEstateCol    = FindColumn(allColumns, EstateClassAliases);
+        var fileAddressCol   = FindColumn(allColumns, AddressAliases);
         var indicatorCols    = Indicators
             .Select(p => (Param: p, Col: FindColumn(allColumns, p.Aliases)))
             .ToArray();
@@ -146,12 +153,14 @@ public sealed class FinModelImportMapper : IImportMapper
         // Если НИ ОДНОЙ целевой колонки нет — пользователь явно загрузил не тот шаблон.
         var anyFound = fileFinishingCol is not null
                        || fileEstateCol is not null
+                       || fileAddressCol is not null
                        || indicatorCols.Any(x => x.Col is not null);
 
         if (!anyFound)
         {
             var allAliases = FinishingTypeAliases
                 .Concat(EstateClassAliases)
+                .Concat(AddressAliases)
                 .Concat(Indicators.SelectMany(p => p.Aliases))
                 .ToArray();
             fileErrors.Add(BuildColumnNotFoundError(allColumns, allAliases,
@@ -168,6 +177,9 @@ public sealed class FinModelImportMapper : IImportMapper
         if (fileEstateCol is null)
             fileErrors.Add(BuildColumnNotFoundError(allColumns, EstateClassAliases,
                 "Не найдена колонка 'Класс жилья'"));
+        if (fileAddressCol is null)
+            fileErrors.Add(BuildColumnNotFoundError(allColumns, AddressAliases,
+                "Не найдена колонка 'Строительный адрес'"));
         foreach (var (param, col) in indicatorCols)
         {
             if (col is null)
@@ -199,6 +211,9 @@ public sealed class FinModelImportMapper : IImportMapper
                 row, fileEstateCol!, EstateClassAliases, estateByTitle,
                 "Класс жилья", allowedEstate, rowErrors);
 
+            var addressValue = ReadCellTrimmed(
+                row, fileAddressCol!, AddressAliases, "Строительный адрес", rowErrors);
+
             var indicatorValues = new Dictionary<string, double>();
             foreach (var (param, col) in indicatorCols)
             {
@@ -218,6 +233,7 @@ public sealed class FinModelImportMapper : IImportMapper
                 FinishingMaterialTitle = finishingEntry.Value.Title,
                 EstateClassId          = estateEntry!.Value.Id,
                 EstateClassTitle       = estateEntry.Value.Title,
+                Address                = addressValue,
                 Indicators             = indicatorValues,
             });
 
@@ -257,11 +273,17 @@ public sealed class FinModelImportMapper : IImportMapper
         var siteId = context.VisarySiteId.Value;
         var finishingMaterialId = root.GetProperty("FinishingMaterialId").GetInt32();
         var estateClassId       = root.GetProperty("EstateClassId").GetInt32();
+        var address             = root.TryGetProperty("Address", out var addrEl)
+                                  && addrEl.ValueKind == JsonValueKind.String
+                                  ? addrEl.GetString()
+                                  : null;
 
         try
         {
             await _visaryClient.UpdateSiteFinishingMaterialAsync(siteId, finishingMaterialId, ct);
             await _visaryClient.UpdateSiteEstateClassAsync(siteId, estateClassId, ct);
+            if (!string.IsNullOrWhiteSpace(address))
+                await _visaryClient.UpdateSiteAddressAsync(siteId, address, ct);
 
             // Indicator-параметры: для каждого находим показатель → конкретное значение
             // нужной стадии → PATCH. Каждый параметр обрабатывается независимо;
@@ -291,8 +313,8 @@ public sealed class FinModelImportMapper : IImportMapper
             }
 
             _log.LogInformation(
-                "FinModelImportMapper.ApplyAsync: SiteId={SiteId} FinishingMaterialId={Fm} EstateClassId={Ec} indicators={Indicators}",
-                siteId, finishingMaterialId, estateClassId, Indicators.Length);
+                "FinModelImportMapper.ApplyAsync: SiteId={SiteId} FinishingMaterialId={Fm} EstateClassId={Ec} Address='{Address}' indicators={Indicators}",
+                siteId, finishingMaterialId, estateClassId, address ?? "(не задан)", Indicators.Length);
 
             return new ApplyResult(errors.Count == 0 ? 1 : 0, errors);
         }

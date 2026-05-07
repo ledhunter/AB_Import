@@ -13,6 +13,7 @@ public static class VisaryMnemonics
     public const string PercentBet = "percentbet";
     public const string CadastralArea = "cadastralarea";
     public const string ShareAgreement = "shareagreement";
+    public const string Wbs = "wbs";
 
     // ─── Справочники ────────────────────────────────────────────────────
     public const string Town                = "town";
