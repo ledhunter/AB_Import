@@ -23,6 +23,7 @@ public class ImportTypesController : ControllerBase
         var meta = new Dictionary<string, (string label, string description)>
         {
             ["rooms"]            = ("Помещения",          "Импорт реестра помещений (квартир, машиномест, кладовых)"),
+            ["roomsForm"]        = ("Помещения (Единая форма 3)", "Импорт помещений по шаблону «Единая форма 3» (Site/Section/Room/ДДУ через Visary API)"),
             ["finmodel"]         = ("Финмодель",          "Импорт финансовой модели (обновление параметров объекта строительства)"),
             ["shareAgreements"]  = ("ДДУ",                "Импорт договоров долевого участия"),
             ["mixed"]            = ("Помещения + ДДУ",   "Совместный импорт помещений и связанных ДДУ"),

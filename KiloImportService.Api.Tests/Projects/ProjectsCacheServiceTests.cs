@@ -282,6 +282,10 @@ public class ProjectsCacheServiceTests
         public Task<ListViewResponse<ConstructionProjectRaw>> GetProjectByIdAsync(int projectId, CancellationToken ct)
             => throw new NotImplementedException();
 
+        public Task<ListViewResponse<ConstructionSiteRaw>> FindSitesAsync(
+            string? permissionNumber, string? projectNumber, string? stageNumber, CancellationToken ct)
+            => throw new NotImplementedException();
+
         public Task<ListViewResponse<ConstructionSiteIndicatorRaw>> GetIndicatorsBySiteAsync(
             int siteId, string? titleFilter, CancellationToken ct)
             => throw new NotImplementedException();

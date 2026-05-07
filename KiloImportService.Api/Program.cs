@@ -53,6 +53,7 @@ try
     // ─── Мапперы (Strategy per importType) ───
     builder.Services.AddSingleton<IImportMapper, RoomsImportMapper>();
     builder.Services.AddSingleton<IImportMapper, FinModelImportMapper>();
+    builder.Services.AddSingleton<IImportMapper, RoomsFormImportMapper>();
     builder.Services.AddSingleton<IImportMapperRegistry, ImportMapperRegistry>();
 
     // ─── Pipeline + Storage ───
