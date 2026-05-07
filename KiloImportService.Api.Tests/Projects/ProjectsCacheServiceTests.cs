@@ -320,6 +320,9 @@ public class ProjectsCacheServiceTests
 
         public Task<ListViewResponse<CadastralAreaFull>>      ListCadastralAreasAsync(string? cadastralNumFilter, CancellationToken ct) => throw new NotImplementedException();
 
+        public Task<ListViewResponse<WbsRaw>> GetWbsByProjectAsync(int projectId, CancellationToken ct)
+            => throw new NotImplementedException();
+
         public Task<ListViewResponse<TownRaw>>                ListTownsAsync(string? titleFilter, CancellationToken ct) => throw new NotImplementedException();
         public Task<ListViewResponse<RegionRaw>>              ListRegionsAsync(string? titleFilter, CancellationToken ct) => throw new NotImplementedException();
         public Task<ListViewResponse<ProjectTypeRaw>>         ListProjectTypesAsync(CancellationToken ct) => throw new NotImplementedException();

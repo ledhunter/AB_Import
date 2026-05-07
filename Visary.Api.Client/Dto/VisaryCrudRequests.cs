@@ -192,3 +192,22 @@ public sealed class ShareAgreementCreateRequest
     public string? StageNumber { get; set; }
     public string? ConditionalNumber { get; set; }
 }
+
+/// <summary>
+/// POST <c>/api/visary/crud/wbs</c> — создание главы или подстатьи ИСР.
+/// • Глава: <c>ParentID=null, Parent=null</c>, ProjectID указывает на проект.
+/// • Подстатья: <c>ParentID</c> = ID родителя (главы или другой статьи).
+/// Code (КБК, например "1.1.") присваивается сервером автоматически.
+/// </summary>
+public sealed class WbsCreateRequest
+{
+    public int ProjectID { get; set; }
+    public VisaryRef? Project { get; set; }
+    public int? ParentID { get; set; }
+    public VisaryRef? Parent { get; set; }
+    public int? ConstructionSiteID { get; set; }
+    public VisaryRef? ConstructionSite { get; set; }
+    public string? Title { get; set; }
+    public double? DeclaredSum { get; set; }
+    public double? ConfirmedSum { get; set; }
+}
