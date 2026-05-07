@@ -15,11 +15,16 @@ public sealed class SitePatchRequest
     public int? StageNumber { get; set; }
 }
 
-/// <summary>PATCH-запрос для Room: только поля, обновляемые из импорта rooms-form.</summary>
+/// <summary>
+/// PATCH-запрос для Room (через <c>/crud/room/{id}?forceUpdate=true</c>).
+/// ID берётся из URL, RowVersion не требуется → поля nullable, чтобы при
+/// <see cref="System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull"/>
+/// не попадать в тело. Иначе Visary падает 500: «Can not add property RowVersion to JObject».
+/// </summary>
 public sealed class RoomPatchRequest
 {
-    public int ID { get; set; }
-    public long RowVersion { get; set; }
+    public int? ID { get; set; }
+    public long? RowVersion { get; set; }
     public VisaryRef? Kind { get; set; }
     public VisaryRef? Section { get; set; }
     public string? ExplicationNumber { get; set; }
@@ -32,11 +37,14 @@ public sealed class RoomPatchRequest
     public double? ZalogCostPerM { get; set; }
 }
 
-/// <summary>PATCH-запрос для ShareAgreement: только поля, обновляемые из импорта rooms-form.</summary>
+/// <summary>
+/// PATCH-запрос для ShareAgreement (через <c>/crud/shareagreement/{id}?forceUpdate=true</c>).
+/// Аналогично <see cref="RoomPatchRequest"/>: ID/RowVersion не нужны в теле.
+/// </summary>
 public sealed class ShareAgreementPatchRequest
 {
-    public int ID { get; set; }
-    public long RowVersion { get; set; }
+    public int? ID { get; set; }
+    public long? RowVersion { get; set; }
     public string? Number { get; set; }
     public string? Title { get; set; }
     public VisaryRef? Site { get; set; }

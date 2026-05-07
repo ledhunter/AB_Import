@@ -293,7 +293,11 @@ public sealed class CrudClient : VisaryHttpBase<CrudClient>, ICrudClient
     /// </summary>
     public Task<bool> PatchRoomAsync(int roomId, RoomPatchRequest request, CancellationToken ct)
     {
-        ApplyEntityId(request, roomId, r => r.ID, (r, v) => r.ID = v, nameof(roomId));
+        // forceUpdate=true ⇒ ID/RowVersion в теле НЕ отправляются (Visary падает 500
+        // «Can not add property RowVersion to JObject» при их наличии). Поля ID/RowVersion
+        // в RoomPatchRequest nullable + WhenWritingNull → не попадают в JSON.
+        request.ID = null;
+        request.RowVersion = null;
         _log.LogDebug("Visary → PATCH {Mnemonic} id={Id}", VisaryMnemonics.Room, roomId);
         return PatchAndReportAsync(
             $"{BaseUrl}/api/visary/crud/{VisaryMnemonics.Room}/{roomId}?forceUpdate=true",
@@ -320,7 +324,9 @@ public sealed class CrudClient : VisaryHttpBase<CrudClient>, ICrudClient
     public Task<bool> PatchShareAgreementAsync(
         int shareAgreementId, ShareAgreementPatchRequest request, CancellationToken ct)
     {
-        ApplyEntityId(request, shareAgreementId, r => r.ID, (r, v) => r.ID = v, nameof(shareAgreementId));
+        // См. комментарий в PatchRoomAsync: forceUpdate=true ⇒ убираем ID/RowVersion из тела.
+        request.ID = null;
+        request.RowVersion = null;
         _log.LogDebug("Visary → PATCH {Mnemonic} id={Id}", VisaryMnemonics.ShareAgreement, shareAgreementId);
         return PatchAndReportAsync(
             $"{BaseUrl}/api/visary/crud/{VisaryMnemonics.ShareAgreement}/{shareAgreementId}?forceUpdate=true",
@@ -398,8 +404,11 @@ public sealed class CrudClient : VisaryHttpBase<CrudClient>, ICrudClient
     private async Task<TEntity> PostCrudAsync<TEntity>(
         string url, object body, string logLabel, CancellationToken ct)
     {
+        var bodyJson = System.Text.Json.JsonSerializer.Serialize(body, JsonOptions);
+        _log.LogInformation("Visary → POST {Url} body={Body}", url, bodyJson);
+
         using var req = NewRequest(HttpMethod.Post, url);
-        req.Content = JsonContent.Create(body, options: JsonOptions);
+        req.Content = new StringContent(bodyJson, System.Text.Encoding.UTF8, "application/json");
         using var response = await _http.SendAsync(req, ct);
         await HandleAuthErrorAsync(response, ct);
         await HandleErrorAsync(response, ct);
@@ -410,8 +419,11 @@ public sealed class CrudClient : VisaryHttpBase<CrudClient>, ICrudClient
 
     private async Task PatchCrudAsync(string url, object body, string logLabel, CancellationToken ct)
     {
+        var bodyJson = System.Text.Json.JsonSerializer.Serialize(body, JsonOptions);
+        _log.LogInformation("Visary → PATCH {Url} body={Body}", url, bodyJson);
+
         using var req = NewRequest(HttpMethod.Patch, url);
-        req.Content = JsonContent.Create(body, options: JsonOptions);
+        req.Content = new StringContent(bodyJson, System.Text.Encoding.UTF8, "application/json");
         using var response = await _http.SendAsync(req, ct);
         await HandleAuthErrorAsync(response, ct);
         await HandleConflictAsync(response, ct, logLabel);
