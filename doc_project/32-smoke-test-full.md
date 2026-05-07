@@ -139,7 +139,7 @@ FinModelImportMapper.ValidateAsync: completed mappedRows=1 fileErrors=0
 **Симптом**: В UI Select "Проект" не показывает опции
 
 **Решение**:
-1. Проверь токен в `.env.local`
+1. Проверь токен в **корневом `.env`** (SSOT — см. [54](./54-visary-token-hot-reload.md))
 2. Проверь DevTools → Network → `/api/projects/search`
 3. Проверь логи backend на ошибки 401/403
 
@@ -148,8 +148,8 @@ FinModelImportMapper.ValidateAsync: completed mappedRows=1 fileErrors=0
 **Симптом**: `401 Unauthorized` в логах backend
 
 **Решение**:
-1. Обнови токен в `.env.local`
-2. Перезапусти frontend: `npm run dev`
+1. Обнови `Visary__BearerToken` и `VITE_VISARY_API_TOKEN` в **корневом `.env`**
+2. Перезапусти процессы: `docker compose up -d --force-recreate backend frontend` (или `npm run dev` локально)
 
 ---
 

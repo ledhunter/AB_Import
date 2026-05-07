@@ -145,6 +145,214 @@ public class XlsxParserTests
     }
 
     [SkippableFact]
+    public async Task KeyValueVertical_EmitsRowPerStageColumn()
+    {
+        Skip.IfNot(SkipReason is null, SkipReason);
+        // Структура «Inputs»: C — название параметра, H/I/J — этапы.
+        // Заполним C28="Тип отделки", C29="Площадь", и три этапа со значениями.
+        using var wb = new XLWorkbook();
+        var ws = wb.Worksheets.Add("Inputs");
+        ws.Cell(28, 3).Value = "Тип отделки";
+        ws.Cell(29, 3).Value = "Площадь";
+        ws.Cell(28, 8).Value = "Черновая";   // H
+        ws.Cell(29, 8).Value = "100";
+        ws.Cell(28, 9).Value = "Чистовая";   // I
+        ws.Cell(29, 9).Value = "120";
+        ws.Cell(28, 10).Value = "Чистовая";  // J
+        ws.Cell(29, 10).Value = "120";
+        var ms = new MemoryStream();
+        wb.SaveAs(ms);
+        ms.Position = 0;
+
+        var result = await _parser.ParseAsync(ms,
+            new KeyValueVertical("Inputs", "C", "H"));
+
+        Assert.Empty(result.Errors);
+        Assert.Equal(3, result.Rows.Count);
+        Assert.Equal(new[] { "Тип отделки", "Площадь" }, result.Headers);
+
+        Assert.Equal("Inputs (H)", result.Rows[0].Sheet);
+        Assert.Equal("Черновая", result.Rows[0].Cells["Тип отделки"]);
+        Assert.Equal("100", result.Rows[0].Cells["Площадь"]);
+        Assert.Equal(8, result.Rows[0].SourceRowNumber); // колонка H = 8
+
+        Assert.Equal("Inputs (I)", result.Rows[1].Sheet);
+        Assert.Equal("Чистовая", result.Rows[1].Cells["Тип отделки"]);
+        Assert.Equal(9, result.Rows[1].SourceRowNumber);
+    }
+
+    [SkippableFact]
+    public async Task KeyValueVertical_FindsSheetCaseInsensitive()
+    {
+        Skip.IfNot(SkipReason is null, SkipReason);
+        using var wb = new XLWorkbook();
+        var ws = wb.Worksheets.Add("INPUTS");
+        ws.Cell(5, 3).Value = "Тип отделки";
+        ws.Cell(5, 8).Value = "Черновая";
+        var ms = new MemoryStream();
+        wb.SaveAs(ms);
+        ms.Position = 0;
+
+        var result = await _parser.ParseAsync(ms,
+            new KeyValueVertical("inputs", "C", "H"));
+
+        Assert.Empty(result.Errors);
+        Assert.Single(result.Rows);
+        Assert.Equal("Черновая", result.Rows[0].Cells["Тип отделки"]);
+    }
+
+    [SkippableFact]
+    public async Task KeyValueVertical_SheetMissing_ReturnsFileError()
+    {
+        Skip.IfNot(SkipReason is null, SkipReason);
+        using var wb = new XLWorkbook();
+        wb.Worksheets.Add("Outputs"); // не Inputs
+        var ws = wb.Worksheets.First();
+        ws.Cell(1, 1).Value = "x";
+        var ms = new MemoryStream();
+        wb.SaveAs(ms);
+        ms.Position = 0;
+
+        var result = await _parser.ParseAsync(ms,
+            new KeyValueVertical("Inputs", "C", "H"));
+
+        Assert.Empty(result.Rows);
+        Assert.NotEmpty(result.Errors);
+        Assert.Contains("Inputs", result.Errors[0].Message);
+        Assert.Contains("Outputs", result.Errors[0].Message); // показывает доступные
+    }
+
+    [SkippableFact]
+    public async Task KeyValueVertical_StageCount_LimitsValueColumnsRead()
+    {
+        Skip.IfNot(SkipReason is null, SkipReason);
+        // Control: F=параметр, G=значение. «Количество этапов»=1 → читаем только H,
+        // даже если I и J заполнены «про запас».
+        using var wb = new XLWorkbook();
+        var ctrl = wb.Worksheets.Add("Control");
+        ctrl.Cell(3, 6).Value = "Какой-то другой параметр"; // F3
+        ctrl.Cell(4, 6).Value = "Количество этапов";        // F4
+        ctrl.Cell(4, 7).Value = 1;                           // G4
+        var ws = wb.Worksheets.Add("Inputs");
+        ws.Cell(28, 3).Value = "Тип отделки";
+        ws.Cell(28, 8).Value = "Черновая";  // H — единственный валидный этап
+        ws.Cell(28, 9).Value = "Чистовая";  // I — должна быть проигнорирована
+        ws.Cell(28, 10).Value = "Чистовая"; // J — должна быть проигнорирована
+        var ms = new MemoryStream();
+        wb.SaveAs(ms);
+        ms.Position = 0;
+
+        var result = await _parser.ParseAsync(ms,
+            new KeyValueVertical("Inputs", "C", "H",
+                StageCount: new StageCountReference("Control", "F", "G", "Количество этапов")));
+
+        Assert.Empty(result.Errors);
+        Assert.Single(result.Rows); // ровно 1 этап
+        Assert.Equal("Inputs (H)", result.Rows[0].Sheet);
+        Assert.Equal("Черновая", result.Rows[0].Cells["Тип отделки"]);
+    }
+
+    [SkippableFact]
+    public async Task KeyValueVertical_StageCount_ThreeStages_ReadsHIJ()
+    {
+        Skip.IfNot(SkipReason is null, SkipReason);
+        using var wb = new XLWorkbook();
+        var ctrl = wb.Worksheets.Add("Control");
+        ctrl.Cell(4, 6).Value = "Количество этапов";
+        ctrl.Cell(4, 7).Value = 3;
+        var ws = wb.Worksheets.Add("Inputs");
+        ws.Cell(28, 3).Value = "Тип отделки";
+        ws.Cell(28, 8).Value = "Черновая";   // H
+        ws.Cell(28, 9).Value = "Предчистовая"; // I
+        ws.Cell(28, 10).Value = "Чистовая";  // J
+        ws.Cell(28, 11).Value = "За пределами"; // K — за границей этапов, должна быть проигнорирована
+        var ms = new MemoryStream();
+        wb.SaveAs(ms);
+        ms.Position = 0;
+
+        var result = await _parser.ParseAsync(ms,
+            new KeyValueVertical("Inputs", "C", "H",
+                StageCount: new StageCountReference("Control", "F", "G", "Количество этапов")));
+
+        Assert.Empty(result.Errors);
+        Assert.Equal(3, result.Rows.Count);
+        Assert.Equal("Inputs (H)", result.Rows[0].Sheet);
+        Assert.Equal("Inputs (I)", result.Rows[1].Sheet);
+        Assert.Equal("Inputs (J)", result.Rows[2].Sheet);
+    }
+
+    [SkippableFact]
+    public async Task KeyValueVertical_StageCount_MissingControlSheet_ReturnsFileError()
+    {
+        Skip.IfNot(SkipReason is null, SkipReason);
+        using var wb = new XLWorkbook();
+        var ws = wb.Worksheets.Add("Inputs");
+        ws.Cell(28, 3).Value = "Тип отделки";
+        ws.Cell(28, 8).Value = "Черновая";
+        var ms = new MemoryStream();
+        wb.SaveAs(ms);
+        ms.Position = 0;
+
+        var result = await _parser.ParseAsync(ms,
+            new KeyValueVertical("Inputs", "C", "H",
+                StageCount: new StageCountReference("Control", "F", "G", "Количество этапов")));
+
+        Assert.Empty(result.Rows);
+        Assert.NotEmpty(result.Errors);
+        Assert.Contains("Control", result.Errors[0].Message);
+    }
+
+    [SkippableFact]
+    public async Task KeyValueVertical_StageCount_EmitsRowEvenWhenStageEmpty()
+    {
+        Skip.IfNot(SkipReason is null, SkipReason);
+        // 2 этапа, но колонка I (этап 2) пустая — всё равно эмитим ParsedRow,
+        // чтобы маппер показал value_empty конкретно для этапа 2.
+        using var wb = new XLWorkbook();
+        var ctrl = wb.Worksheets.Add("Control");
+        ctrl.Cell(4, 6).Value = "Количество этапов";
+        ctrl.Cell(4, 7).Value = 2;
+        var ws = wb.Worksheets.Add("Inputs");
+        ws.Cell(28, 3).Value = "Тип отделки";
+        ws.Cell(28, 8).Value = "Черновая"; // H
+        // I (col 9) — пусто
+        var ms = new MemoryStream();
+        wb.SaveAs(ms);
+        ms.Position = 0;
+
+        var result = await _parser.ParseAsync(ms,
+            new KeyValueVertical("Inputs", "C", "H",
+                StageCount: new StageCountReference("Control", "F", "G", "Количество этапов")));
+
+        Assert.Empty(result.Errors);
+        Assert.Equal(2, result.Rows.Count);
+        Assert.Equal("Черновая", result.Rows[0].Cells["Тип отделки"]);
+        Assert.Equal(string.Empty, result.Rows[1].Cells["Тип отделки"]);
+    }
+
+    [SkippableFact]
+    public async Task KeyValueVertical_SkipsEmptyStageColumns()
+    {
+        Skip.IfNot(SkipReason is null, SkipReason);
+        using var wb = new XLWorkbook();
+        var ws = wb.Worksheets.Add("Inputs");
+        ws.Cell(28, 3).Value = "Тип отделки";
+        ws.Cell(28, 8).Value = "Черновая";   // H
+        // I (9) — пусто, должна быть пропущена
+        ws.Cell(28, 10).Value = "Чистовая";  // J
+        var ms = new MemoryStream();
+        wb.SaveAs(ms);
+        ms.Position = 0;
+
+        var result = await _parser.ParseAsync(ms,
+            new KeyValueVertical("Inputs", "C", "H"));
+
+        Assert.Equal(2, result.Rows.Count);
+        Assert.Equal("Inputs (H)", result.Rows[0].Sheet);
+        Assert.Equal("Inputs (J)", result.Rows[1].Sheet);
+    }
+
+    [SkippableFact]
     public async Task UsesFirstSheet_WhenMultipleSheets()
     {
         Skip.IfNot(SkipReason is null, SkipReason);

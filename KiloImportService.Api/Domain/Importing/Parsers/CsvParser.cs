@@ -13,7 +13,7 @@ public sealed class CsvParser : IFileParser
 {
     public FileFormat Format => FileFormat.Csv;
 
-    public async Task<ParseResult> ParseAsync(Stream stream, CancellationToken ct = default)
+    public async Task<ParseResult> ParseAsync(Stream stream, FileLayoutHint? layout = null, CancellationToken ct = default)
     {
         // У CSV «листа» нет — используем общую метку «CSV» для отчёта.
         const string SheetName = "CSV";
@@ -21,6 +21,13 @@ public sealed class CsvParser : IFileParser
         var headers = new List<string>();
         var rows = new List<ParsedRow>();
         var errors = new List<ParseError>();
+
+        if (layout is KeyValueVertical)
+        {
+            errors.Add(new ParseError(null,
+                "Раскладка KeyValueVertical не поддерживается для CSV. Используйте XLSX-шаблон."));
+            return new ParseResult(headers, rows, errors);
+        }
 
         var config = new CsvConfiguration(CultureInfo.InvariantCulture)
         {

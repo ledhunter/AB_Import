@@ -143,7 +143,7 @@ public sealed class ImportPipeline
         ParseResult parseResult;
         await using (var stream = await _storage.OpenReadAsync(session.FileSnapshot!.RelativePath, ct))
         {
-            parseResult = await parser.ParseAsync(stream, ct);
+            parseResult = await parser.ParseAsync(stream, mapper.LayoutHint, ct);
         }
 
         // Сохраняем file-level ошибки парсинга.

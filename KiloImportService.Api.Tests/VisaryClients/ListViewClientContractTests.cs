@@ -68,12 +68,14 @@ public sealed class ListViewClientContractTests
         var (client, handler) = TestVisaryClientFactory.NewListView();
         handler.EnqueueJson(EmptyListResponse);
 
-        // Дёргаем любой публичный метод, который проксирует фильтр через FilterByString:
-        // GetDealsAsync(lmIdFilter) кладёт filter в body как строку JSON.
+        // Дёргаем публичный метод, который проксирует фильтр через FilterByString ("=").
+        // GetDealsAsync(lmIdFilter) и ListTownsAsync(titleFilter) оба используют FilterByString.
+        // ⚠️ GetIndicatorsBySiteAsync здесь не подходит — он использует FilterByStringContains
+        // (Title в Visary может содержать хвостовые пробелы, см. doc 67).
         if (field == "LmID")
             await client.GetDealsAsync(value, default);
         else
-            await client.GetIndicatorsBySiteAsync(siteId: 1, titleFilter: value, ct: default);
+            await client.ListTownsAsync(value, default);
 
         var body = handler.RequestBodies[0]!;
         // Значение фильтра внутри тела JSON-сериализовано ещё раз (filter — это строка).
@@ -81,6 +83,25 @@ public sealed class ListViewClientContractTests
         var doc = JsonDocument.Parse(body);
         var filter = doc.RootElement.GetProperty("Filter").GetString();
         Assert.Equal(expectedJson, filter);
+    }
+
+    [Fact]
+    public async Task GetIndicatorsBySiteAsync_uses_contains_filter_for_title()
+    {
+        // Регрессия: показатели в Visary могут иметь хвостовые пробелы в Title
+        // ("Площадь застройки "). Точный "=" фильтр не находит их — используем "contains"
+        // на сервере, а строгое сравнение Trim()+OrdinalIgnoreCase делается уже в коде
+        // (FinModelImportMapper.ApplyIndicatorAsync).
+        var (client, handler) = TestVisaryClientFactory.NewListView();
+        handler.EnqueueJson(EmptyListResponse);
+
+        await client.GetIndicatorsBySiteAsync(siteId: 7847, titleFilter: "Площадь застройки", ct: default);
+
+        var body = handler.RequestBodies[0]!;
+        var doc = JsonDocument.Parse(body);
+        var filter = doc.RootElement.GetProperty("Filter").GetString();
+        Assert.Contains("\"contains\"", filter);
+        Assert.Contains("\\u041F\\u043B\\u043E\\u0449\\u0430\\u0434\\u044C", filter); // "Площадь" в \uXXXX
     }
 
     [Fact]

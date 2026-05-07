@@ -12,6 +12,9 @@ public interface ICrudClient
     Task<bool> UpdateSiteFinishingMaterialAsync(
         int siteId, int finishingMaterialId, CancellationToken ct = default);
 
+    Task<bool> UpdateSiteEstateClassAsync(
+        int siteId, int estateClassId, CancellationToken ct = default);
+
     Task<bool> PatchSiteAsync(
         int siteId, SitePatchRequest request, CancellationToken ct = default);
 
@@ -105,14 +108,57 @@ public sealed class CrudClient : VisaryHttpBase<CrudClient>, ICrudClient
     public async Task<bool> UpdateSiteFinishingMaterialAsync(
         int siteId, int finishingMaterialId, CancellationToken ct)
     {
-        var siteData = await FetchSiteForUpdateAsync(siteId, ct);
-        if (siteData == null)
+        // 1. GET текущий site по CRUD endpoint — нам нужен актуальный RowVersion (long)
+        //    для optimistic locking. Listview-эндпоинт возвращает Version:DateTime,
+        //    что для PATCH /crud/ не подходит — поэтому идём через /crud/.
+        //    Используем переиспользуемый GetCrudByIdAsync<ConstructionSiteFull> из
+        //    VisaryHttpBase (тот же, что и для остальных GET-методов в этом клиенте).
+        var current = await GetCrudByIdAsync<ConstructionSiteFull>(
+            VisaryMnemonics.Site, siteId, ct);
+        if (current is null)
             throw new KeyNotFoundException($"ConstructionSite с ID={siteId} не найден в Visary");
 
-        siteData.FinishingMaterialId = finishingMaterialId;
-        await PutSiteFullAsync(siteData, ct);
+        // 2. PATCH с RowVersion + FinishingMaterial как VisaryRef ({ ID }).
+        //    forceUpdate=false — сервер сравнивает наш RowVersion с актуальным.
+        //    Под forceUpdate=true Visary внутри пытается «дописать» поля в загруженный
+        //    JObject и падает с "Property RowVersion already exists" — поэтому false,
+        //    как в PatchSiteAsync. См. doc_project/56-site-finishing-material-update-crud.md.
+        var body = new
+        {
+            ID = siteId,
+            current.RowVersion,
+            FinishingMaterial = new { ID = finishingMaterialId },
+        };
+        await PatchCrudAsync(
+            $"{BaseUrl}/api/visary/crud/{VisaryMnemonics.Site}/{siteId}?forceUpdate=false",
+            body, $"{VisaryMnemonics.Site}/{siteId}", ct);
 
         _log.LogInformation("CrudClient.UpdateSiteFinishingMaterialAsync: siteId={SiteId} success", siteId);
+        return true;
+    }
+
+    public async Task<bool> UpdateSiteEstateClassAsync(
+        int siteId, int estateClassId, CancellationToken ct)
+    {
+        // Аналогично UpdateSiteFinishingMaterialAsync: GET текущий site (для RowVersion)
+        // → PATCH /crud/{site}/{id}?forceUpdate=false с FK как VisaryRef ({ ID }).
+        // См. doc_project/63-site-finishing-material-update-crud.md.
+        var current = await GetCrudByIdAsync<ConstructionSiteFull>(
+            VisaryMnemonics.Site, siteId, ct);
+        if (current is null)
+            throw new KeyNotFoundException($"ConstructionSite с ID={siteId} не найден в Visary");
+
+        var body = new
+        {
+            ID = siteId,
+            current.RowVersion,
+            EstateClass = new { ID = estateClassId },
+        };
+        await PatchCrudAsync(
+            $"{BaseUrl}/api/visary/crud/{VisaryMnemonics.Site}/{siteId}?forceUpdate=false",
+            body, $"{VisaryMnemonics.Site}/{siteId}", ct);
+
+        _log.LogInformation("CrudClient.UpdateSiteEstateClassAsync: siteId={SiteId} success", siteId);
         return true;
     }
 
@@ -158,15 +204,18 @@ public sealed class CrudClient : VisaryHttpBase<CrudClient>, ICrudClient
 
     // ─── ConstructionSiteIndicatorValue (ТЭП) ────────────────────────────────
 
-    public async Task<bool> PatchIndicatorValueAsync(
+    public Task<bool> PatchIndicatorValueAsync(
         int valueId, IndicatorValuePatchRequest request, CancellationToken ct)
     {
+        // Optimistic locking: caller обязан прислать актуальный RowVersion (получить через
+        // GetIndicatorValueByIdAsync). forceUpdate=false — сервер сравнит RowVersion и
+        // вернёт 409, если запись изменилась. См. doc_project/63 (тот же паттерн для Site).
+        ApplyEntityId(request, valueId, r => r.ID, (r, v) => r.ID = v, nameof(valueId));
         _log.LogDebug("Visary → PATCH {Mnemonic} id={Id}", VisaryMnemonics.SiteIndicatorValue, valueId);
-        await PatchCrudAsync(
-            $"{BaseUrl}/api/visary/crud/{VisaryMnemonics.SiteIndicatorValue}/{valueId}?forceUpdate=true",
-            request, $"{VisaryMnemonics.SiteIndicatorValue}/{valueId}", ct);
-        _log.LogInformation("CrudClient.PatchIndicatorValueAsync: valueId={ValueId} success", valueId);
-        return true;
+        return PatchAndReportAsync(
+            $"{BaseUrl}/api/visary/crud/{VisaryMnemonics.SiteIndicatorValue}/{valueId}?forceUpdate=false",
+            request, $"{VisaryMnemonics.SiteIndicatorValue}/{valueId}", valueId, ct,
+            $"CrudClient.PatchIndicatorValueAsync: valueId={{Id}} success");
     }
 
     // ─── CadastralArea (ЗУ) ──────────────────────────────────────────────────
@@ -370,69 +419,7 @@ public sealed class CrudClient : VisaryHttpBase<CrudClient>, ICrudClient
         _log.LogInformation("Visary ← 200 PATCH {Label}", logLabel);
     }
 
-    // ─── UpdateSiteFinishingMaterialAsync internals (PUT через listview) ─────
-    // Используется legacy UI-flow: получает строку через listview и шлёт PUT с тем же
-    // массивом. Сохраняем как есть — PATCH через /crud/ требует RowVersion (long), а
-    // listview отдаёт Version (DateTime); миграция небезопасна без проверки на стенде.
-
-    private async Task<SiteUpdateData?> FetchSiteForUpdateAsync(int siteId, CancellationToken ct)
-    {
-        var body = new
-        {
-            Mnemonic = VisaryMnemonics.Site,
-            PageSkip = 0,
-            PageSize = 1,
-            Columns = new[] { "ID", "FinishingMaterialId", "Version" },
-            AssociatedID = siteId,
-        };
-
-        using var req = NewRequest(HttpMethod.Post,
-            $"{BaseUrl}/api/visary/listview/{VisaryMnemonics.Site}");
-        req.Content = JsonContent.Create(body, options: JsonOptions);
-
-        _log.LogDebug("Visary → GET {Mnemonic} by ID={SiteId}", VisaryMnemonics.Site, siteId);
-        using var response = await _http.SendAsync(req, ct);
-        await HandleAuthErrorAsync(response, ct);
-        await HandleErrorAsync(response, ct);
-
-        var parsed = await response.Content
-            .ReadFromJsonAsync<ListViewResponse<SiteUpdateData>>(JsonOptions, ct)
-            ?? new ListViewResponse<SiteUpdateData>();
-
-        if (parsed.Data.Count == 0)
-        {
-            _log.LogWarning("Visary ← 200 {Mnemonic} siteId={SiteId}: no rows", VisaryMnemonics.Site, siteId);
-            return null;
-        }
-
-        _log.LogInformation("Visary ← 200 {Mnemonic} siteId={SiteId}: 1 row", VisaryMnemonics.Site, siteId);
-        return parsed.Data[0];
-    }
-
-    private async Task PutSiteFullAsync(SiteUpdateData siteData, CancellationToken ct)
-    {
-        var body = new
-        {
-            Mnemonic = VisaryMnemonics.Site,
-            Data = new[] { siteData },
-        };
-
-        using var req = NewRequest(HttpMethod.Put,
-            $"{BaseUrl}/api/visary/listview/{VisaryMnemonics.Site}");
-        req.Content = JsonContent.Create(body, options: JsonOptions);
-
-        _log.LogDebug("Visary → PUT {Mnemonic} ID={SiteId}", VisaryMnemonics.Site, siteData.ID);
-        using var response = await _http.SendAsync(req, ct);
-        await HandleAuthErrorAsync(response, ct);
-        await HandleConflictAsync(response, ct, $"{VisaryMnemonics.Site}/{siteData.ID}");
-        await HandleErrorAsync(response, ct);
-        _log.LogInformation("Visary ← 200 PUT {Mnemonic} ID={SiteId}", VisaryMnemonics.Site, siteData.ID);
-    }
-
-    private sealed class SiteUpdateData
-    {
-        public int ID { get; set; }
-        public int? FinishingMaterialId { get; set; }
-        public DateTime? Version { get; set; }
-    }
+    // GET по ID через /crud/{mnemonic}/{id} живёт в VisaryHttpBase.GetCrudByIdAsync<T>
+    // и используется во всех Get*ByIdAsync-методах этого клиента, включая
+    // UpdateSiteFinishingMaterialAsync (для чтения актуального RowVersion).
 }

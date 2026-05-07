@@ -1,3 +1,4 @@
+using KiloImportService.Api.Configuration;
 using KiloImportService.Api.Data;
 using KiloImportService.Api.Data.Visary;
 using KiloImportService.Api.Domain.Importing;
@@ -27,13 +28,18 @@ Log.Logger = new LoggerConfiguration()
 
 try
 {
+    // SSOT для секретов — корневой `.env` (gitignored). Те же переменные читают
+    // docker-compose, Vite (через envDir='..'), и backend здесь.
+    // В контейнере docker-compose сам инжектит env'ы — этот вызов тогда no-op.
+    DotEnvLoader.LoadFromAncestors(Directory.GetCurrentDirectory());
+
     var builder = WebApplication.CreateBuilder(args);
     builder.Host.UseSerilog();
 
-    // Локальный override для секретов (BearerToken и т.п.) — файл в .gitignore.
-    // reloadOnChange:true + IOptionsMonitor в Visary-клиентах ⇒ замена токена
-    // в файле подхватывается следующим HTTP-запросом без рестарта приложения.
-    builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true);
+    // Visary__BearerToken (и прочие Visary__*) приходит через стандартный
+    // AddEnvironmentVariables — двойное подчёркивание мапится в Visary:BearerToken.
+    // Hot-reload токена больше нет: для смены — обновить `.env` и перезапустить процесс
+    // (контейнер: docker compose up -d --force-recreate backend).
 
     // ─── EF Core: 2 контекста на 2 PostgreSQL ───
     builder.Services.AddDbContext<ImportServiceDbContext>(opt =>

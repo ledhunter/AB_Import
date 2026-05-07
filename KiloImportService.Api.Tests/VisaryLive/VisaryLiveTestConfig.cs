@@ -1,6 +1,6 @@
 using System.IO;
 using System.Text.Json;
-
+// JsonDocument используется только в IsTokenLikelyAlive (парс JWT-payload).
 namespace KiloImportService.Api.Tests.VisaryLive;
 
 /// <summary>
@@ -8,10 +8,11 @@ namespace KiloImportService.Api.Tests.VisaryLive;
 /// Источники в порядке приоритета:
 ///   1. env var <c>VISARY_TEST_TOKEN</c> / <c>VISARY_TEST_BASEURL</c>
 ///   2. <c>.audit/.token</c> в корне репозитория (используется audit-скриптом)
-///   3. <c>KiloImportService.Api/appsettings.Local.json</c> (тот же файл, что у API)
+///   3. корневой <c>.env</c> (поля <c>Visary__BearerToken</c> / <c>Visary__BaseUrl</c>) —
+///      тот же файл, что читают docker-compose, Vite и backend.
 ///
 /// Если токен не найден или истёк — все live-тесты пропускаются через
-/// <c>Skip.IfNot(...)</c>. Локально перед запуском обновите токен в любом из источников.
+/// <c>Skip.IfNot(...)</c>. Локально перед запуском обновите токен в корневом <c>.env</c>.
 /// </summary>
 internal static class VisaryLiveTestConfig
 {
@@ -24,11 +25,11 @@ internal static class VisaryLiveTestConfig
 
         var fileToken  = TryReadFile(FindRepoFile(".audit/.token"))?.Trim();
 
-        var (jsonBase, jsonToken) = ReadAppSettingsLocal();
+        var (dotEnvBase, dotEnvToken) = ReadDotEnv();
 
         return (
-            BaseUrl: envBaseUrl ?? jsonBase ?? DefaultBaseUrl,
-            Token:   envToken   ?? fileToken ?? jsonToken
+            BaseUrl: envBaseUrl ?? dotEnvBase ?? DefaultBaseUrl,
+            Token:   envToken   ?? fileToken  ?? dotEnvToken
         );
     }
 
@@ -59,7 +60,7 @@ internal static class VisaryLiveTestConfig
     {
         var (baseUrl, token) = Resolve();
         if (string.IsNullOrWhiteSpace(token))
-            return "Live-тесты пропущены: токен не задан. Установите VISARY_TEST_TOKEN, или положите токен в .audit/.token, или в appsettings.Local.json (Visary:BearerToken).";
+            return "Live-тесты пропущены: токен не задан. Установите VISARY_TEST_TOKEN, или положите токен в .audit/.token, или в корневом .env (Visary__BearerToken).";
         if (!IsTokenLikelyAlive(token))
             return $"Live-тесты пропущены: токен истёк (BaseUrl={baseUrl}). Получите свежий из DevTools Visary.";
         return "OK";
@@ -82,19 +83,32 @@ internal static class VisaryLiveTestConfig
         return null;
     }
 
-    private static (string? BaseUrl, string? Token) ReadAppSettingsLocal()
+    // Парсит корневой .env и достаёт Visary__* — те же ключи, что читает docker-compose
+    // и backend через DotEnvLoader. Single Source Of Truth для токена.
+    private static (string? BaseUrl, string? Token) ReadDotEnv()
     {
-        var path = FindRepoFile("KiloImportService.Api/appsettings.Local.json");
+        var path = FindRepoFile(".env");
         if (path == null || !File.Exists(path)) return (null, null);
+
+        string? baseUrl = null, token = null;
         try
         {
-            using var doc = JsonDocument.Parse(File.ReadAllText(path));
-            if (!doc.RootElement.TryGetProperty("Visary", out var v)) return (null, null);
-            string? baseUrl = v.TryGetProperty("BaseUrl", out var b) ? b.GetString() : null;
-            string? token   = v.TryGetProperty("BearerToken", out var t) ? t.GetString() : null;
-            return (baseUrl, token);
+            foreach (var rawLine in File.ReadAllLines(path))
+            {
+                var line = rawLine.Trim();
+                if (line.Length == 0 || line.StartsWith('#')) continue;
+                var eq = line.IndexOf('=');
+                if (eq <= 0) continue;
+                var key = line[..eq].Trim();
+                var val = line[(eq + 1)..].Trim();
+                if (val.Length >= 2 && val[0] == '"' && val[^1] == '"') val = val[1..^1];
+
+                if (key == "Visary__BaseUrl")     baseUrl = val;
+                if (key == "Visary__BearerToken") token   = val;
+            }
         }
         catch { return (null, null); }
+        return (baseUrl, token);
     }
 }
 
