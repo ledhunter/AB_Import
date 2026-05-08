@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.Json;
 using KiloImportService.Api.Data.Visary;
 using KiloImportService.Api.Domain.Importing;
+using KiloImportService.Api.Domain.Mapping.Budget;
 using Microsoft.EntityFrameworkCore;
 using Visary.Api.CRUD;
 using Visary.Api.Dto;
@@ -19,6 +20,10 @@ namespace KiloImportService.Api.Domain.Mapping;
 ///   • «Строительный адрес»   → Address           (строковый атрибут Site)
 ///   • «Площадь застройки»    → ConstructionSiteIndicator + ConstructionSiteIndicatorValue
 ///                               с конкретной стадией (Stage = 50 «Экспертиза»)
+///   • Бюджет («Себестоимость») → WBS (ИСР), главы и подстатьи. Title из файла резолвится
+///     в Code (КБК) через эталонный справочник <see cref="IBudgetReferenceProvider"/>.
+///     Идемпотентно: на повторном импорте суммы у существующих подстатей PATCH-аются,
+///     дубликаты не создаются.
 ///
 /// Справочники подтягиваются динамически из Visary (Title → ID lookup case-insensitive).
 /// Хардкод-фолбэков нет: если справочник недоступен — file-level error.
@@ -31,7 +36,9 @@ public sealed class FinModelImportMapper : IImportMapper
     /// Шаблон «Финмодель» — вертикальный key-value layout:
     ///   • лист «Inputs», колонка C — название параметра, колонки H+ — значения по этапам;
     ///   • количество этапов задаётся на листе «Control» в строке параметра
-    ///     «Выбрать количество этапов» (имя в столбце F, значение в столбце G).
+    ///     «Выбрать количество этапов»;
+    ///   • в той же «Inputs» ниже маркера «Себестоимость» лежит секция бюджета,
+    ///     которую парсер эмитит отдельным набором строк (Sheet с суффиксом «(budget)»).
     /// </summary>
     public FileLayoutHint LayoutHint { get; } = new KeyValueVertical(
         SheetName: "Inputs",
@@ -41,7 +48,19 @@ public sealed class FinModelImportMapper : IImportMapper
             SheetName: "Control",
             KeyColumn: "F",
             ValueColumn: "G",
-            ParameterName: "Выбрать количество этапов"));
+            ParameterName: "Выбрать количество этапов"),
+        Budget: new BudgetSectionHint(
+            MarkerColumn: "C",
+            StartMarker: "Себестоимость",
+            // Секция бюджета заканчивается перед блоком исторической отчётности
+            // (или его эквивалентом). Любой из этих текстов в C → стоп.
+            EndMarkers: new[]
+            {
+                "Историческая фин. отчетность",
+                "Бухгалтерский баланс",
+                "Финансовые показатели",
+            },
+            LastIncludedColumn: "G"));
 
     private static readonly string[] FinishingTypeAliases =
         ["Тип отделки", "FinishingType", "Finishing"];
@@ -59,6 +78,11 @@ public sealed class FinModelImportMapper : IImportMapper
     // Источник: FinModel/Альфа Банк. Управление проектами.drawio.xml — диаграмма enum'а.
     private const int ProjectStageExpertise = 50;
     private const string ExpertiseHumanName = "Экспертиза";
+
+    // Маркер «строки бюджета», эмитируемой XlsxParser-ом (см. BudgetSectionHint.SheetMarker).
+    // У бюджетных ParsedRow — Sheet вида "Inputs (budget)". Все остальные строки идут
+    // через обычный flow (KV-параметры/показатели).
+    private const string BudgetSheetSuffix = "(budget)";
 
     // Декларативный список indicator-параметров. Добавление нового показателя =
     // одна строка в массиве (не нужно трогать flow). Title должен совпадать с тем,
@@ -80,15 +104,18 @@ public sealed class FinModelImportMapper : IImportMapper
     private readonly ILogger<FinModelImportMapper> _log;
     private readonly ICrudClient _visaryClient;
     private readonly IListViewClient _listViewClient;
+    private readonly IBudgetReferenceProvider _budgetRef;
 
     public FinModelImportMapper(
         ILogger<FinModelImportMapper> log,
         ICrudClient visaryClient,
-        IListViewClient listViewClient)
+        IListViewClient listViewClient,
+        IBudgetReferenceProvider budgetRef)
     {
         _log = log;
         _visaryClient = visaryClient;
         _listViewClient = listViewClient;
+        _budgetRef = budgetRef;
     }
 
     public async Task<ValidationResult> ValidateAsync(
@@ -119,6 +146,38 @@ public sealed class FinModelImportMapper : IImportMapper
             return new ValidationResult([], fileErrors);
         }
 
+        // Разделяем строки: бюджетные (Sheet с суффиксом (budget)) и обычные KV-стадии.
+        var budgetRows = rows.Where(IsBudgetRow).ToList();
+        var stageRows = rows.Where(r => !IsBudgetRow(r)).ToList();
+
+        var (paramMappedRows, paramFileErrors) = await ValidateParametersAsync(
+            stageRows, visaryDb, ct);
+        fileErrors.AddRange(paramFileErrors);
+
+        var budgetMappedRows = ValidateBudget(budgetRows, fileErrors);
+
+        // Если параметрический поток отбраковал всё (нет целевых колонок шаблона) и
+        // бюджет тоже пуст — возвращаем только file-level errors. Если хоть один поток
+        // дал mapped-строки — возвращаем их вместе.
+        var combined = new List<MappedRow>(paramMappedRows.Count + budgetMappedRows.Count);
+        combined.AddRange(paramMappedRows);
+        combined.AddRange(budgetMappedRows);
+
+        _log.LogInformation(
+            "FinModelImportMapper.ValidateAsync: completed paramRows={Param} budgetRows={Budget} fileErrors={FileErrorCount}",
+            paramMappedRows.Count, budgetMappedRows.Count, fileErrors.Count);
+        return new ValidationResult(combined, fileErrors);
+    }
+
+    private async Task<(List<MappedRow> Rows, List<RowError> FileErrors)> ValidateParametersAsync(
+        IReadOnlyList<ParsedRow> rows, VisaryDbContext visaryDb, CancellationToken ct)
+    {
+        var fileErrors = new List<RowError>();
+        var mappedRows = new List<MappedRow>();
+
+        if (rows.Count == 0)
+            return (mappedRows, fileErrors);
+
         // Тянем оба справочника один раз на сессию.
         var finishingByTitle = await TryLoadDictionaryAsync(
             "Тип отделки",
@@ -126,7 +185,7 @@ public sealed class FinModelImportMapper : IImportMapper
             m => m.ID, m => m.Title,
             fileErrors, ct);
         if (finishingByTitle is null)
-            return new ValidationResult([], fileErrors);
+            return (mappedRows, fileErrors);
 
         var estateByTitle = await TryLoadDictionaryAsync(
             "Класс недвижимости",
@@ -134,7 +193,7 @@ public sealed class FinModelImportMapper : IImportMapper
             m => m.ID, m => m.Title,
             fileErrors, ct);
         if (estateByTitle is null)
-            return new ValidationResult([], fileErrors);
+            return (mappedRows, fileErrors);
 
         // Pre-flight колонок.
         var allColumns = rows
@@ -167,7 +226,7 @@ public sealed class FinModelImportMapper : IImportMapper
                 "Не найдены целевые колонки шаблона 'Финмодель'"));
             _log.LogWarning("FinModelImportMapper.ValidateAsync: no target columns found. Detected: {Detected}",
                 string.Join(", ", allColumns));
-            return new ValidationResult([], fileErrors);
+            return (mappedRows, fileErrors);
         }
 
         // Какая-то колонка нашлась, но не все — отдельная file-level ошибка на каждую.
@@ -187,12 +246,10 @@ public sealed class FinModelImportMapper : IImportMapper
                     $"Не найдена колонка '{param.HumanName}'"));
         }
         if (fileErrors.Count > 0)
-            return new ValidationResult([], fileErrors);
+            return (mappedRows, fileErrors);
 
         var allowedFinishing = string.Join(", ", finishingByTitle.Values.Select(v => v.Title));
         var allowedEstate    = string.Join(", ", estateByTitle.Values.Select(v => v.Title));
-
-        var mappedRows = new List<MappedRow>(rows.Count);
 
         for (int i = 0; i < rows.Count; i++)
         {
@@ -229,6 +286,7 @@ public sealed class FinModelImportMapper : IImportMapper
 
             var mappedJson = JsonSerializer.Serialize(new
             {
+                Kind                   = "params",
                 FinishingMaterialId    = finishingEntry!.Value.Id,
                 FinishingMaterialTitle = finishingEntry.Value.Title,
                 EstateClassId          = estateEntry!.Value.Id,
@@ -241,9 +299,7 @@ public sealed class FinModelImportMapper : IImportMapper
                 row.SourceRowNumber, true, JsonDocument.Parse(mappedJson), rowErrors));
         }
 
-        _log.LogInformation("FinModelImportMapper.ValidateAsync: completed mappedRows={Count} fileErrors={FileErrorCount}",
-            mappedRows.Count, fileErrors.Count);
-        return new ValidationResult(mappedRows, fileErrors);
+        return (mappedRows, fileErrors);
     }
 
     public async Task<ApplyResult> ApplyAsync(
@@ -268,9 +324,48 @@ public sealed class FinModelImportMapper : IImportMapper
             return new ApplyResult(0, errors);
         }
 
-        var firstRow = validRows[0];
-        var root = firstRow.MappedValues.RootElement;
+        // Разделяем mapped-строки по Kind.
+        var paramRows = validRows.Where(r => GetKind(r) == "params").ToList();
+        var budgetRows = validRows.Where(r => GetKind(r) == "budget").ToList();
+
         var siteId = context.VisarySiteId.Value;
+        int applied = 0;
+
+        if (paramRows.Count > 0)
+        {
+            var paramApply = await ApplyParametersAsync(siteId, paramRows, errors, ct);
+            applied += paramApply;
+        }
+
+        if (budgetRows.Count > 0)
+        {
+            var projectId = await ResolveProjectIdAsync(siteId, context.VisaryProjectId, visaryDb, ct);
+            if (projectId is null)
+            {
+                errors.Add(new RowError(null, "project_required",
+                    $"Не удалось определить проект (ConstructionProject) для объекта siteId={siteId}: " +
+                    "бюджет (главы/подстатьи WBS) привязывается к проекту."));
+            }
+            else
+            {
+                var budgetApply = await ApplyBudgetAsync(projectId.Value, siteId, budgetRows, errors, ct);
+                applied += budgetApply;
+            }
+        }
+
+        return new ApplyResult(applied, errors);
+    }
+
+    /// <summary>
+    /// Применяет параметрические обновления (FK + indicators + Address) — по бизнесу
+    /// у нас ОДНА «логическая» строка для Site (даже если этапов несколько). Берём
+    /// первую валидную и игнорируем остальные.
+    /// </summary>
+    private async Task<int> ApplyParametersAsync(
+        int siteId, IReadOnlyList<MappedRow> paramRows, List<RowError> errors, CancellationToken ct)
+    {
+        var firstRow = paramRows[0];
+        var root = firstRow.MappedValues.RootElement;
         var finishingMaterialId = root.GetProperty("FinishingMaterialId").GetInt32();
         var estateClassId       = root.GetProperty("EstateClassId").GetInt32();
         var address             = root.TryGetProperty("Address", out var addrEl)
@@ -313,24 +408,24 @@ public sealed class FinModelImportMapper : IImportMapper
             }
 
             _log.LogInformation(
-                "FinModelImportMapper.ApplyAsync: SiteId={SiteId} FinishingMaterialId={Fm} EstateClassId={Ec} Address='{Address}' indicators={Indicators}",
+                "FinModelImportMapper.ApplyParametersAsync: SiteId={SiteId} FinishingMaterialId={Fm} EstateClassId={Ec} Address='{Address}' indicators={Indicators}",
                 siteId, finishingMaterialId, estateClassId, address ?? "(не задан)", Indicators.Length);
 
-            return new ApplyResult(errors.Count == 0 ? 1 : 0, errors);
+            return errors.Count == 0 ? 1 : 0;
         }
         catch (KeyNotFoundException ex)
         {
             _log.LogError(ex, "Visary site not found for siteId={SiteId}", siteId);
             errors.Add(new RowError(null, "visary_site_not_found",
                 $"Объект строительства {siteId} не найден в Visary."));
-            return new ApplyResult(0, errors);
+            return 0;
         }
         catch (Exception ex)
         {
             _log.LogError(ex, "Visary update failed for siteId={SiteId}", siteId);
             errors.Add(new RowError(null, "visary_update_error",
                 $"Ошибка обновления в Visary: {ex.Message}"));
-            return new ApplyResult(0, errors);
+            return 0;
         }
     }
 
@@ -386,6 +481,386 @@ public sealed class FinModelImportMapper : IImportMapper
                 yield return (param, v.GetDouble());
             }
         }
+    }
+
+    // ─── Budget flow ─────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Сборка mapped-строк бюджета: проходим бюджетные ParsedRow в порядке исходных строк,
+    /// отслеживаем текущую главу через эталонный справочник, агрегируем суммы (по этапам)
+    /// одной и той же подстатьи. На выходе — по одному <see cref="MappedRow"/> на
+    /// уникальную пару (ChapterCode, ArticleCode) с готовым <c>DeclaredSum</c>/<c>ConfirmedSum</c>.
+    ///
+    /// Title из файла резолвится в эталонную запись через
+    /// <see cref="IBudgetReferenceProvider.FindByTitle"/> (нормализация: lower-case +
+    /// схлопывание пробелов/переносов). Не найденные Title — мягкий skip с trace-логом
+    /// (валидное поведение для v0.2: в реальном файле много рабочих заголовков и сумм,
+    /// которые не имеют соответствия в справочнике).
+    /// </summary>
+    private List<MappedRow> ValidateBudget(
+        IReadOnlyList<ParsedRow> budgetRows, List<RowError> fileErrors)
+    {
+        var mapped = new List<MappedRow>();
+        if (budgetRows.Count == 0) return mapped;
+
+        // Сортируем по SourceRowNumber, чтобы chapter-tracking шёл сверху вниз.
+        var ordered = budgetRows.OrderBy(r => r.SourceRowNumber).ToList();
+
+        BudgetReferenceEntry? currentChapter = null;
+        // Бакет (chapterCode + articleCode) → суммарный (Sum, ArticleEntry, FirstRowNumber).
+        var aggregated = new Dictionary<string, BudgetAggregateBucket>(StringComparer.Ordinal);
+        int matchedRows = 0, unmatchedRows = 0;
+
+        foreach (var row in ordered)
+        {
+            if (!row.Cells.TryGetValue("C", out var rawTitle)) continue;
+            var title = rawTitle?.Trim();
+            if (string.IsNullOrEmpty(title)) continue;
+
+            // Skip-маркеры: «Этап X», «Итого…», «Этапы».
+            if (IsBudgetSkipLine(title)) continue;
+
+            var entry = _budgetRef.FindByTitle(title);
+            if (entry is null)
+            {
+                unmatchedRows++;
+                _log.LogTrace(
+                    "Budget row {RowNum}: Title '{Title}' не найден в справочнике — skip",
+                    row.SourceRowNumber, title);
+                continue;
+            }
+
+            if (entry.IsChapter)
+            {
+                currentChapter = entry;
+                continue;
+            }
+
+            // Article: parse sum from column E (если её нет — 0).
+            row.Cells.TryGetValue("E", out var sumStr);
+            var sum = ParseSumOrZero(sumStr);
+
+            // ParentCode у статьи — Code главы (или промежуточной секции). Если у нас
+            // currentChapter не выставлен (файл начался с подстатьи) — берём parent из
+            // самого entry; если parent — не глава, поднимаемся до главы по справочнику.
+            var chapter = currentChapter
+                          ?? ResolveChapterFor(entry)
+                          ?? null;
+            if (chapter is null)
+            {
+                _log.LogTrace(
+                    "Budget row {RowNum}: невозможно определить главу для '{Title}' (Code={Code})",
+                    row.SourceRowNumber, entry.Title, entry.Code);
+                unmatchedRows++;
+                continue;
+            }
+
+            matchedRows++;
+            var key = $"{chapter.Code}|{entry.Code}";
+            if (aggregated.TryGetValue(key, out var bucket))
+            {
+                bucket.Sum += sum;
+            }
+            else
+            {
+                aggregated[key] = new BudgetAggregateBucket(
+                    Chapter: chapter, Article: entry,
+                    Sum: sum, FirstRowNumber: row.SourceRowNumber);
+            }
+        }
+
+        if (aggregated.Count == 0 && matchedRows == 0)
+        {
+            _log.LogInformation(
+                "FinModelImportMapper: budget block scanned ({BudgetRows} rows), но ни одной подстатьи не сопоставлено со справочником.",
+                budgetRows.Count);
+            return mapped;
+        }
+
+        foreach (var bucket in aggregated.Values.OrderBy(b => b.FirstRowNumber))
+        {
+            var json = JsonSerializer.Serialize(new
+            {
+                Kind          = "budget",
+                ChapterCode   = bucket.Chapter.Code,
+                ChapterTitle  = bucket.Chapter.Title,
+                ArticleCode   = bucket.Article.Code,
+                ArticleTitle  = bucket.Article.Title,
+                DeclaredSum   = bucket.Sum,
+                ConfirmedSum  = bucket.Sum,
+            });
+            mapped.Add(new MappedRow(
+                bucket.FirstRowNumber, true, JsonDocument.Parse(json), Array.Empty<RowError>()));
+        }
+
+        _log.LogInformation(
+            "FinModelImportMapper: budget aggregated → {Articles} уникальных подстатей (матчей в справочнике: {Matched}, пропущено: {Skipped})",
+            aggregated.Count, matchedRows, unmatchedRows);
+        return mapped;
+    }
+
+    private BudgetReferenceEntry? ResolveChapterFor(BudgetReferenceEntry entry)
+    {
+        // Поднимаемся по ParentCode до главы (Depth=1).
+        var cursor = entry;
+        while (cursor.ParentCode is not null)
+        {
+            var parent = _budgetRef.FindByCode(cursor.ParentCode);
+            if (parent is null) return null;
+            if (parent.IsChapter) return parent;
+            cursor = parent;
+        }
+        return cursor.IsChapter ? cursor : null;
+    }
+
+    private async Task<int?> ResolveProjectIdAsync(
+        int siteId, int? contextProjectId, VisaryDbContext visaryDb, CancellationToken ct)
+    {
+        if (contextProjectId is > 0) return contextProjectId;
+
+        // Берём ProjectID из локального Visary-зеркала (синкается отдельно).
+        // При невалидном/устаревшем зеркале — null, ошибка пробросится выше.
+        var site = await visaryDb.ConstructionSites
+            .AsNoTracking()
+            .FirstOrDefaultAsync(s => s.Id == siteId, ct);
+        return site?.ConstructionProjectId is > 0 ? site.ConstructionProjectId : null;
+    }
+
+    /// <summary>
+    /// Идемпотентное применение бюджета: для каждой главы-уникальной выгружаем
+    /// существующие WBS проекта, ищем главу/подстатью по Title; если статья есть —
+    /// PATCH-аем суммы, если нет — создаём. Подстатьи привязываем к ОКСу.
+    /// </summary>
+    private async Task<int> ApplyBudgetAsync(
+        int projectId, int siteId,
+        IReadOnlyList<MappedRow> budgetRows, List<RowError> errors, CancellationToken ct)
+    {
+        // 1) Один раз тянем существующий WBS-список проекта — для матчинга глав/статей.
+        ListViewResponse<WbsRaw> existing;
+        try
+        {
+            existing = await _listViewClient.GetWbsByProjectAsync(projectId, ct);
+        }
+        catch (Exception ex)
+        {
+            _log.LogError(ex, "Budget: failed to load existing WBS for projectId={Pid}", projectId);
+            errors.Add(new RowError(null, "wbs_list_failed",
+                $"Не удалось получить существующий WBS проекта {projectId}: {ex.Message}"));
+            return 0;
+        }
+
+        // Группируем mapped по ChapterCode (порядок важен для логов: Глава 1 → 2 → …).
+        var byChapter = budgetRows
+            .GroupBy(r => r.MappedValues.RootElement.GetProperty("ChapterCode").GetString()!)
+            .OrderBy(g => g.Key);
+
+        // Кэш chapter-id, чтобы не дёргать find дважды при нескольких подстатьях главы.
+        var chapterIdByTitle = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        int created = 0, patched = 0, failures = 0;
+
+        foreach (var group in byChapter)
+        {
+            ct.ThrowIfCancellationRequested();
+            var first = group.First().MappedValues.RootElement;
+            var chapterTitle = first.GetProperty("ChapterTitle").GetString()!;
+            var chapterCode = first.GetProperty("ChapterCode").GetString()!;
+
+            // 2) Глава: сначала ищем в existing.Data по Title (ParentID is null).
+            int chapterId;
+            try
+            {
+                chapterId = await EnsureChapterAsync(
+                    projectId, chapterTitle, chapterCode, existing.Data, chapterIdByTitle, ct);
+            }
+            catch (Exception ex)
+            {
+                _log.LogError(ex, "Budget: failed to ensure chapter '{Title}'", chapterTitle);
+                errors.Add(new RowError(null, "wbs_chapter_failed",
+                    $"Не удалось создать/найти главу '{chapterTitle}': {ex.Message}"));
+                failures++;
+                continue;
+            }
+
+            // 3) Подстатьи: одна за другой, идемпотентно.
+            foreach (var row in group)
+            {
+                ct.ThrowIfCancellationRequested();
+                var root = row.MappedValues.RootElement;
+                var articleTitle = root.GetProperty("ArticleTitle").GetString()!;
+                var declared     = root.GetProperty("DeclaredSum").GetDouble();
+                var confirmed    = root.GetProperty("ConfirmedSum").GetDouble();
+
+                try
+                {
+                    var (op, _) = await UpsertArticleAsync(
+                        projectId, siteId, chapterId,
+                        articleTitle, declared, confirmed,
+                        existing.Data, ct);
+                    if (op == BudgetOp.Created) created++;
+                    else if (op == BudgetOp.Patched) patched++;
+                }
+                catch (Exception ex)
+                {
+                    _log.LogError(ex, "Budget: failed to upsert article '{Title}'", articleTitle);
+                    errors.Add(new RowError(null, "wbs_article_failed",
+                        $"Не удалось импортировать статью '{articleTitle}' (глава '{chapterTitle}'): {ex.Message}"));
+                    failures++;
+                }
+            }
+        }
+
+        _log.LogInformation(
+            "FinModelImportMapper.ApplyBudgetAsync: created={Created} patched={Patched} failed={Failed} (siteId={SiteId} projectId={Pid})",
+            created, patched, failures, siteId, projectId);
+        return created + patched;
+    }
+
+    private async Task<int> EnsureChapterAsync(
+        int projectId, string chapterTitle, string chapterCode,
+        IReadOnlyList<WbsRaw> existing, Dictionary<string, int> cache,
+        CancellationToken ct)
+    {
+        if (cache.TryGetValue(chapterTitle, out var cachedId)) return cachedId;
+
+        var match = FindChapter(existing, chapterTitle, chapterCode);
+        if (match is not null)
+        {
+            cache[chapterTitle] = match.ID;
+            _log.LogDebug("Budget: chapter '{Title}' уже существует — id={Id} code={Code}",
+                chapterTitle, match.ID, match.Code);
+            return match.ID;
+        }
+
+        // Создаём главу: ParentID/Parent = null (top-level), ConstructionSite не привязан
+        // (главу проекта обычно держат «общей»; подстатьи привяжем к ОКСу).
+        var created = await _visaryClient.CreateWbsAsync(new WbsCreateRequest
+        {
+            ProjectID = projectId,
+            Project = new VisaryRef { ID = projectId },
+            Title = chapterTitle,
+            ParentID = null,
+            Parent = null,
+        }, ct);
+        cache[chapterTitle] = created.ID;
+        _log.LogInformation("Budget: chapter '{Title}' created → id={Id} code={Code}",
+            chapterTitle, created.ID, created.Code);
+        return created.ID;
+    }
+
+    private static WbsRaw? FindChapter(IReadOnlyList<WbsRaw> wbs, string title, string code)
+    {
+        var titleNorm = BudgetReferenceEntry.NormalizeTitle(title);
+        // Сначала ищем главу по Code (точному, заданному сервером — например "1.").
+        var byCode = wbs.FirstOrDefault(w =>
+            w.ParentID is null
+            && string.Equals(w.Code?.Trim(), code, StringComparison.OrdinalIgnoreCase));
+        if (byCode is not null) return byCode;
+        // Если код ещё не присвоен (только что создали в параллельной сессии — маловероятно)
+        // — fallback по Title.
+        return wbs.FirstOrDefault(w =>
+            w.ParentID is null
+            && BudgetReferenceEntry.NormalizeTitle(w.Title ?? "") == titleNorm);
+    }
+
+    private async Task<(BudgetOp Op, int WbsId)> UpsertArticleAsync(
+        int projectId, int siteId, int chapterId,
+        string articleTitle, double declaredSum, double confirmedSum,
+        IReadOnlyList<WbsRaw> existing, CancellationToken ct)
+    {
+        // Идемпотентность: ищем существующую подстатью под этой главой по Title.
+        var titleNorm = BudgetReferenceEntry.NormalizeTitle(articleTitle);
+        var match = existing.FirstOrDefault(w =>
+            w.ParentID == chapterId
+            && BudgetReferenceEntry.NormalizeTitle(w.Title ?? "") == titleNorm);
+
+        if (match is not null)
+        {
+            // Если суммы уже совпадают — пропускаем, чтобы не было «фантомных» PATCH.
+            if (NearlyEqual(match.DeclaredSum, declaredSum)
+                && NearlyEqual(match.ConfirmedSum, confirmedSum))
+            {
+                _log.LogDebug(
+                    "Budget: article '{Title}' (id={Id}) — суммы совпадают ({Sum}), PATCH не нужен",
+                    articleTitle, match.ID, declaredSum);
+                return (BudgetOp.Skipped, match.ID);
+            }
+
+            await _visaryClient.PatchWbsAsync(match.ID, new WbsPatchRequest
+            {
+                DeclaredSum = declaredSum,
+                ConfirmedSum = confirmedSum,
+            }, ct);
+            _log.LogInformation(
+                "Budget: article '{Title}' (id={Id}) PATCH сумм {OldDeclared}→{NewDeclared}",
+                articleTitle, match.ID,
+                match.DeclaredSum?.ToString(CultureInfo.InvariantCulture) ?? "null", declaredSum);
+            return (BudgetOp.Patched, match.ID);
+        }
+
+        var created = await _visaryClient.CreateWbsAsync(new WbsCreateRequest
+        {
+            ProjectID = projectId,
+            Project = new VisaryRef { ID = projectId },
+            ParentID = chapterId,
+            Parent = new VisaryRef { ID = chapterId },
+            ConstructionSiteID = siteId,
+            ConstructionSite = new VisaryRef { ID = siteId },
+            Title = articleTitle,
+            DeclaredSum = declaredSum,
+            ConfirmedSum = confirmedSum,
+        }, ct);
+        _log.LogInformation(
+            "Budget: article '{Title}' created → id={Id} code={Code} sum={Sum}",
+            articleTitle, created.ID, created.Code, declaredSum);
+        return (BudgetOp.Created, created.ID);
+    }
+
+    private static bool NearlyEqual(double? a, double b)
+    {
+        if (a is null) return false;
+        return Math.Abs(a.Value - b) < 0.005; // в Visary суммы хранятся с 2 знаками
+    }
+
+    private static bool IsBudgetSkipLine(string title)
+    {
+        // «Этап 1», «Этап 1.», «Этапы», «Итого», «Итого:» — служебные строки.
+        var t = title.Trim();
+        if (t.StartsWith("Этап", StringComparison.OrdinalIgnoreCase)) return true;
+        if (t.StartsWith("Итого", StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
+    }
+
+    private static double ParseSumOrZero(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return 0;
+        return TryParseFlexibleDouble(raw, out var d) ? d : 0;
+    }
+
+    private static bool IsBudgetRow(ParsedRow row)
+        => row.Sheet?.EndsWith(BudgetSheetSuffix, StringComparison.Ordinal) == true;
+
+    private static string GetKind(MappedRow r)
+    {
+        var root = r.MappedValues.RootElement;
+        return root.ValueKind == JsonValueKind.Object
+               && root.TryGetProperty("Kind", out var k)
+               && k.ValueKind == JsonValueKind.String
+            ? (k.GetString() ?? "params")
+            : "params";
+    }
+
+    private enum BudgetOp { Created, Patched, Skipped }
+
+    private sealed class BudgetAggregateBucket(
+        BudgetReferenceEntry Chapter,
+        BudgetReferenceEntry Article,
+        double Sum,
+        int FirstRowNumber)
+    {
+        public BudgetReferenceEntry Chapter { get; } = Chapter;
+        public BudgetReferenceEntry Article { get; } = Article;
+        public double Sum { get; set; } = Sum;
+        public int FirstRowNumber { get; } = FirstRowNumber;
     }
 
     // ─── Generic helpers ─────────────────────────────────────────────────────
@@ -489,7 +964,7 @@ public sealed class FinModelImportMapper : IImportMapper
     // Excel может отдать ячейку как "12345.67", "12345,67" или "12 345,67" — пробуем оба.
     private static bool TryParseFlexibleDouble(string raw, out double result)
     {
-        var cleaned = raw.Replace(" ", "").Replace(" ", "");
+        var cleaned = raw.Replace(" ", "").Replace(" ", "");
         if (double.TryParse(cleaned, NumberStyles.Float, CultureInfo.InvariantCulture, out result))
             return true;
         return double.TryParse(cleaned.Replace(',', '.'), NumberStyles.Float,

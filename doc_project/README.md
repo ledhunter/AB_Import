@@ -52,6 +52,7 @@
 | [68-rooms-import.md](./68-rooms-import.md) | 🏠 Импорт «Помещения» (`rooms`) по «Пример импорта.xlsx» / «Единая форма 3»: per-row сверка выбранного ОКСа (НПС+Этап+опц. РНС), группировка по листу = тип, fallback Kind по имени листа («Квартиры»→«Квартира»), `Section.Type=МЖД` дефолт, `RoomKind` из живого Visary API |
 | [69-finmodel-address.md](./69-finmodel-address.md) | 🏠 Финмодель: добавлен параметр «Строительный адрес» (`Address`) — простой строковый атрибут Site через `UpdateSiteAddressAsync`, без справочника (отличие от FinishingMaterial / EstateClass — `Address = "string"`, не `VisaryRef`) |
 | [70-wbs-api-foundation.md](./70-wbs-api-foundation.md) | 🏛️ WBS (ИСР) API клиент v0.1: `Wbs` мнемоника, `WbsRaw` / `WbsCreateRequest`, `CreateWbsAsync` + `GetWbsByProjectAsync`, smoke-тесты на проекте 4584. Code присваивается сервером (Глава 1 → 1.1, 1.2…). Маппер бюджета — следующий шаг |
+| [71-finmodel-budget-import.md](./71-finmodel-budget-import.md) | 💰 Импорт «Финмодель → Себестоимость» (WBS v0.2): `BudgetSectionHint` для парсера, `BudgetReferenceProvider` (Title→Code, ~100 статей в коде), идемпотентный `ApplyBudgetAsync` (find/create/patch) + `PatchWbsAsync` `forceUpdate=true`. Повторный импорт не плодит дубликатов; суммы PATCH-аются |
 
 ## 🎯 Контекст проекта
 

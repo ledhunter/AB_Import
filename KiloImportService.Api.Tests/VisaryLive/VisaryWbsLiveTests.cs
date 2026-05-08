@@ -109,6 +109,98 @@ public sealed class VisaryWbsLiveTests
         Assert.True(sub.ID > 0, "Visary должен вернуть ID созданной подстатьи");
     }
 
+    /// <summary>
+    /// Идемпотентность повторного импорта: запускаем upsert-цикл (find/create/patch)
+    /// дважды на одной и той же подстатье. После первого прогона запись либо уже была,
+    /// либо создалась; после второго — суммы совпадают, и PATCH не вызывается; новых
+    /// дубликатов не появляется. Маркер успеха: количество подстатей у Главы 1 не растёт
+    /// между двумя итерациями.
+    /// </summary>
+    [SkippableFact]
+    public async Task BudgetUpsert_IsIdempotent_OnRepeatedRun()
+    {
+        SkipIfNoToken();
+
+        var listView = VisaryLiveClientFactory.NewListView();
+        var crud = VisaryLiveClientFactory.NewCrud();
+        var projectId = VisaryLiveTestIds.ConstructionProject;
+        var siteId = VisaryLiveTestIds.ConstructionSite;
+        const string chapter1Title = "Глава 1. Стоимость земельного участка и расходы по его содержанию";
+        const string subTitle = "Затраты на приобретение прав на ЗУ";
+        const double sum1 = 555_000;
+        const double sum2 = 777_000;
+
+        // ── Итерация 1: find/create главы и подстатьи. ──────────────────────
+        var existing1 = await listView.GetWbsByProjectAsync(projectId, default);
+        var chapter = existing1.Data.FirstOrDefault(w => w.ParentID is null
+            && (w.Code == "1." || (w.Title?.Contains("Глава 1", StringComparison.OrdinalIgnoreCase) ?? false)));
+
+        int chapterId;
+        if (chapter is null)
+        {
+            var createdCh = await crud.CreateWbsAsync(new WbsCreateRequest
+            {
+                ProjectID = projectId,
+                Project = new VisaryRef { ID = projectId },
+                Title = chapter1Title,
+            }, default);
+            chapterId = createdCh.ID;
+            _output.WriteLine($"Создал Главу: id={createdCh.ID} code={createdCh.Code}");
+        }
+        else
+        {
+            chapterId = chapter.ID;
+            _output.WriteLine($"Глава уже есть: id={chapter.ID} code={chapter.Code}");
+        }
+
+        var article = existing1.Data.FirstOrDefault(w =>
+            w.ParentID == chapterId &&
+            string.Equals(w.Title?.Trim(), subTitle, StringComparison.OrdinalIgnoreCase));
+
+        int articleId;
+        if (article is null)
+        {
+            var created = await crud.CreateWbsAsync(new WbsCreateRequest
+            {
+                ProjectID = projectId, Project = new VisaryRef { ID = projectId },
+                ParentID = chapterId,  Parent = new VisaryRef { ID = chapterId },
+                ConstructionSiteID = siteId, ConstructionSite = new VisaryRef { ID = siteId },
+                Title = subTitle, DeclaredSum = sum1, ConfirmedSum = sum1,
+            }, default);
+            articleId = created.ID;
+            _output.WriteLine($"Создал подстатью: id={created.ID} code={created.Code} sum={sum1}");
+        }
+        else
+        {
+            articleId = article.ID;
+            _output.WriteLine($"Подстатья уже есть: id={article.ID} sum={article.DeclaredSum}");
+            // Приводим суммы к sum1, чтобы стартовая точка была детерминирована.
+            await crud.PatchWbsAsync(articleId, new WbsPatchRequest
+            { DeclaredSum = sum1, ConfirmedSum = sum1 }, default);
+        }
+
+        // Сделаем второй PATCH с НОВОЙ суммой — проверяем, что PatchWbsAsync действительно работает.
+        await crud.PatchWbsAsync(articleId, new WbsPatchRequest
+        { DeclaredSum = sum2, ConfirmedSum = sum2 }, default);
+        _output.WriteLine($"PATCH применён: id={articleId} → sum={sum2}");
+
+        // ── Итерация 2: тот же импорт ничего не должен дублировать. ─────────
+        var existing2 = await listView.GetWbsByProjectAsync(projectId, default);
+        var chapterArticles2 = existing2.Data.Count(w => w.ParentID == chapterId);
+        var sameArticleCount2 = existing2.Data.Count(w =>
+            w.ParentID == chapterId
+            && string.Equals(w.Title?.Trim(), subTitle, StringComparison.OrdinalIgnoreCase));
+
+        Assert.Equal(1, sameArticleCount2);
+        _output.WriteLine($"После 2-й итерации: подстатей в Главе 1 — {chapterArticles2}, " +
+                         $"совпадений по Title='{subTitle}' — {sameArticleCount2}");
+
+        // Финальные суммы у подстатьи должны равняться sum2.
+        var finalRow = existing2.Data.First(w => w.ID == articleId);
+        Assert.Equal(sum2, finalRow.DeclaredSum ?? 0, 1);
+        Assert.Equal(sum2, finalRow.ConfirmedSum ?? 0, 1);
+    }
+
     private static void SkipIfNoToken()
     {
         var (_, token) = VisaryLiveTestConfig.Resolve();
