@@ -63,6 +63,9 @@ public interface ICrudClient
     Task<WbsRaw> CreateWbsAsync(
         WbsCreateRequest request, CancellationToken ct = default);
 
+    Task<bool> PatchWbsAsync(
+        int wbsId, WbsPatchRequest request, CancellationToken ct = default);
+
     /// <summary>
     /// Привязывает Organization участником Site. Соответствует шагу из puml
     /// «Добавить в Участники Объекта найденную Организацию с ролью Застройщик».
@@ -380,6 +383,26 @@ public sealed class CrudClient : VisaryHttpBase<CrudClient>, ICrudClient
         _log.LogInformation("CrudClient.CreateWbsAsync: created id={Id} code={Code} parentId={ParentId}",
             result.ID, result.Code ?? "(server-assigned)", request.ParentID);
         return result;
+    }
+
+    /// <summary>
+    /// PATCH WBS-записи (главы или подстатьи бюджета). Используется <c>forceUpdate=true</c>
+    /// — тот же приём, что для Room/ShareAgreement: ID/RowVersion из тела убираются (Visary
+    /// падает 500 «Can not add property RowVersion to JObject» при их наличии). Импорт
+    /// бюджета вызывает этот метод для обновления <c>DeclaredSum</c>/<c>ConfirmedSum</c>
+    /// существующей подстатьи (идемпотентность повторного импорта — без дублирования).
+    /// </summary>
+    public Task<bool> PatchWbsAsync(int wbsId, WbsPatchRequest request, CancellationToken ct)
+    {
+        // forceUpdate=true ⇒ ID/RowVersion в теле НЕ отправляются. Поля nullable +
+        // WhenWritingNull → не попадают в JSON. См. PatchRoomAsync / PatchShareAgreementAsync.
+        request.ID = null;
+        request.RowVersion = null;
+        _log.LogDebug("Visary → PATCH {Mnemonic} id={Id}", VisaryMnemonics.Wbs, wbsId);
+        return PatchAndReportAsync(
+            $"{BaseUrl}/api/visary/crud/{VisaryMnemonics.Wbs}/{wbsId}?forceUpdate=true",
+            request, $"{VisaryMnemonics.Wbs}/{wbsId}", wbsId, ct,
+            $"CrudClient.PatchWbsAsync: wbsId={{Id}} success");
     }
 
     // ─── Organization ↔ Site link ────────────────────────────────────────────

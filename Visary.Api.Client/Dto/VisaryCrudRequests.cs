@@ -211,3 +211,21 @@ public sealed class WbsCreateRequest
     public double? DeclaredSum { get; set; }
     public double? ConfirmedSum { get; set; }
 }
+
+/// <summary>
+/// PATCH <c>/api/visary/crud/wbs/{id}?forceUpdate=true</c> — обновление сумм
+/// существующей подстатьи ИСР при повторном импорте бюджета. Используется
+/// <c>forceUpdate=true</c>, чтобы не делать дополнительный GET ради RowVersion
+/// (тот же подход, что в <see cref="RoomPatchRequest"/> / <see cref="ShareAgreementPatchRequest"/>).
+/// Поля <c>ID</c>/<c>RowVersion</c> — nullable + <c>WhenWritingNull</c>: они не должны
+/// попадать в тело при <c>forceUpdate=true</c>, иначе Visary падает 500
+/// «Can not add property RowVersion to JObject».
+/// </summary>
+public sealed class WbsPatchRequest
+{
+    public int? ID { get; set; }
+    public long? RowVersion { get; set; }
+    public string? Title { get; set; }
+    public double? DeclaredSum { get; set; }
+    public double? ConfirmedSum { get; set; }
+}

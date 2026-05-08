@@ -211,7 +211,91 @@ public sealed class XlsxParser : IFileParser
                 $"В листе '{sheetName}' нет ни одной заполненной колонки-значения от '{layout.ValueStartColumn}' и правее."));
         }
 
+        // ─── Бюджетная секция (опционально) ──────────────────────────────────
+        // Если в layout задан BudgetSectionHint — пройдёмся по тому же листу
+        // ниже маркера StartMarker и эмитим строки с буквенными ключами в Cells.
+        // Если ничего не нашли — добавляем file-level error (StartMarker не найден),
+        // но главный поток валидации (стадии) уже отработал.
+        if (layout.Budget is { } budget)
+        {
+            ExtractBudgetSection(sheet, sheetName, budget, rows, errors, ct);
+        }
+
         return new ParseResult(headers, rows, errors);
+    }
+
+    /// <summary>
+    /// Сканирует лист от строки-маркера <see cref="BudgetSectionHint.StartMarker"/>
+    /// до первой строки с любым из <see cref="BudgetSectionHint.EndMarkers"/> и
+    /// добавляет в <paramref name="rows"/> по одной <see cref="ParsedRow"/> на каждую
+    /// непустую строку (ключи ячеек — буквы колонок, до <see cref="BudgetSectionHint.LastIncludedColumn"/>
+    /// включительно). Маркер начала и конца не входят в эмитируемый набор.
+    /// </summary>
+    private static void ExtractBudgetSection(
+        IXLWorksheet sheet, string sheetName, BudgetSectionHint hint,
+        List<ParsedRow> rows, List<ParseError> errors, CancellationToken ct)
+    {
+        if (!TryParseColumnLetter(hint.MarkerColumn, out var markerCol))
+        {
+            errors.Add(new ParseError(null, $"BudgetSectionHint: некорректная колонка-маркер '{hint.MarkerColumn}'."));
+            return;
+        }
+        if (!TryParseColumnLetter(hint.LastIncludedColumn, out var lastCol))
+        {
+            errors.Add(new ParseError(null, $"BudgetSectionHint: некорректная LastIncludedColumn '{hint.LastIncludedColumn}'."));
+            return;
+        }
+
+        var range = sheet.RangeUsed();
+        if (range is null) return;
+        var lastRow = range.LastRow().RowNumber();
+
+        // Ищем строку StartMarker (case-insensitive substring) в колонке MarkerColumn.
+        int? startRow = null;
+        for (int r = 1; r <= lastRow; r++)
+        {
+            ct.ThrowIfCancellationRequested();
+            var text = sheet.Cell(r, markerCol).GetString();
+            if (!string.IsNullOrWhiteSpace(text)
+                && text.Contains(hint.StartMarker, StringComparison.OrdinalIgnoreCase))
+            {
+                startRow = r;
+                break;
+            }
+        }
+        if (startRow is null)
+        {
+            errors.Add(new ParseError(null,
+                $"BudgetSectionHint: маркер начала '{hint.StartMarker}' не найден " +
+                $"в колонке '{hint.MarkerColumn}' листа '{sheetName}'."));
+            return;
+        }
+
+        var budgetSheetTag = $"{sheetName} {hint.SheetMarker}";
+        for (int r = startRow.Value + 1; r <= lastRow; r++)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            var marker = sheet.Cell(r, markerCol).GetString();
+            // Стоп: первый маркер из EndMarkers (любая часть текста ячейки).
+            if (!string.IsNullOrWhiteSpace(marker) && hint.EndMarkers.Any(m =>
+                    marker.Contains(m, StringComparison.OrdinalIgnoreCase)))
+            {
+                break;
+            }
+
+            // Собираем все ячейки от A до LastIncludedColumn — ключи Cells = буквы.
+            var cells = new Dictionary<string, string>(lastCol, StringComparer.Ordinal);
+            bool any = false;
+            for (int c = 1; c <= lastCol; c++)
+            {
+                var v = sheet.Cell(r, c).GetString();
+                if (!string.IsNullOrWhiteSpace(v)) any = true;
+                cells[ColumnLetter(c)] = v ?? string.Empty;
+            }
+            if (!any) continue;
+            rows.Add(new ParsedRow(r, budgetSheetTag, cells));
+        }
     }
 
     /// <summary>

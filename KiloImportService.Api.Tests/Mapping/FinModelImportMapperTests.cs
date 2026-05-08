@@ -2,6 +2,7 @@ using KiloImportService.Api.Data.Visary;
 using KiloImportService.Api.Data.Visary.Entities;
 using KiloImportService.Api.Domain.Importing;
 using KiloImportService.Api.Domain.Mapping;
+using KiloImportService.Api.Domain.Mapping.Budget;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
@@ -118,10 +119,16 @@ public class FinModelImportMapperTests : IDisposable
             .Setup(c => c.PatchIndicatorValueAsync(It.IsAny<int>(), It.IsAny<IndicatorValuePatchRequest>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
 
+        // Эталонный справочник статей бюджета грузится из embedded-ресурса
+        // KiloImportService.Api → используем реальный provider (без сети, in-process).
+        var budgetRef = new BudgetReferenceProvider(
+            NullLogger<BudgetReferenceProvider>.Instance);
+
         _mapper = new FinModelImportMapper(
             NullLogger<FinModelImportMapper>.Instance,
             _mockCrud.Object,
-            _mockListView.Object);
+            _mockListView.Object,
+            budgetRef);
 
         var options = new DbContextOptionsBuilder<VisaryDbContext>()
             .UseInMemoryDatabase($"FinModelTest_{Guid.NewGuid()}")

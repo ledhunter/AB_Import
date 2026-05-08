@@ -57,6 +57,10 @@ try
     builder.Services.AddSingleton<IFileParserFactory, FileParserFactory>();
 
     // ─── Мапперы (Strategy per importType) ───
+    // Эталонный справочник статей бюджета (Title→Code КБК) — один на жизнь приложения.
+    // Загружается лениво из embedded-ресурса при первом запросе.
+    builder.Services.AddSingleton<KiloImportService.Api.Domain.Mapping.Budget.IBudgetReferenceProvider,
+        KiloImportService.Api.Domain.Mapping.Budget.BudgetReferenceProvider>();
     builder.Services.AddSingleton<IImportMapper, FinModelImportMapper>();
     builder.Services.AddSingleton<IImportMapper, RoomsFormImportMapper>();
     builder.Services.AddSingleton<IImportMapperRegistry, ImportMapperRegistry>();
