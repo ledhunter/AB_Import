@@ -56,11 +56,17 @@ ParsedRow[] (по листам) ──► ValidateAsync ──► MappedRow[] �
 ### Apply phase
 
 1. Сгруппировать `IsValid` строки по `Sheet` (порядок листов сохраняется).
-2. Для каждого листа залогировать заголовок:
+2. **РНС в Site, если он там пустой** — один раз на сессию, до основного цикла:
+   - собрать distinct непустые `PermissionNumber` из валидных строк;
+   - перечитать Site через `GetSiteByIdFullAsync` (свежий `RowVersion`);
+   - если `site.ConstructionPermissionNumber` пустой — `PatchSiteAsync` с первым кандидатом;
+   - при наличии в файле разных РНС — лог-warn и берётся первый;
+   - при ошибке PATCH — лог-warn, импорт продолжается (помещения создаются всё равно).
+3. Для каждого листа залогировать заголовок:
    ```
    RoomsForm.Apply: ───── Лист 'Квартиры' — N валидных строк ─────
    ```
-3. Для каждой строки внутри листа:
+4. Для каждой строки внутри листа:
    - **Organization-застройщик**: по PIN найти Org, привязать к Site
      (один раз на сессию — кэш `siteOrgLinked`).
    - **Section**: numeric-часть из «№ стр/корп» (`«лит. 1»` → `«1»`);
@@ -79,8 +85,11 @@ ParsedRow[] (по листам) ──► ValidateAsync ──► MappedRow[] �
 bool projectOk = string.Equals(rowProjectNum, siteProjectNumber, StringComparison.OrdinalIgnoreCase);
 bool stageOk   = rowStageNum.HasValue && siteStageNumber.HasValue
               && rowStageNum.Value == siteStageNumber.Value;
+// РНС: 3 случая «совпадения» — пусто в файле, равно Site.РНС, либо Site.РНС пуст
+// (тогда в Apply один раз PATCH-аем Site через PatchSiteAsync).
 bool permissionOk = string.IsNullOrWhiteSpace(rowPermission)
-              || string.Equals(rowPermission, sitePermissionNumber, StringComparison.OrdinalIgnoreCase);
+              || string.Equals(rowPermission, sitePermissionNumber, StringComparison.OrdinalIgnoreCase)
+              || string.IsNullOrWhiteSpace(sitePermissionNumber);  // 👈 Site пустой → row может его заполнить
 
 if (!projectOk || !stageOk || !permissionOk)
 {
@@ -89,6 +98,33 @@ if (!projectOk || !stageOk || !permissionOk)
     mappedRows.Add(new MappedRow(row.SourceRowNumber, IsValid: false, ...));
     continue;
 }
+```
+
+### Обновление РНС в Site (один раз на сессию)
+
+```csharp
+// В начале ApplyAsync, до группировки по листам:
+await TryUpdateSitePermissionNumberAsync(siteId, rows, ct);
+
+// Внутри:
+var permissionsInFile = rows
+    .Where(mr => mr.IsValid)
+    .Select(mr => GetStringOrNull(mr.MappedValues.RootElement, "PermissionNumber"))
+    .Where(p => !string.IsNullOrWhiteSpace(p))
+    .Select(p => p!.Trim())
+    .Distinct(StringComparer.OrdinalIgnoreCase)
+    .ToList();
+if (permissionsInFile.Count == 0) return;
+
+// 👇 СВЕЖИЙ RowVersion (не из Validate) — между Validate и Apply Site могли поменять
+var current = await _crud.GetSiteByIdFullAsync(siteId, ct);
+if (!string.IsNullOrWhiteSpace(current.ConstructionPermissionNumber)) return; // уже не пустой
+
+await _crud.PatchSiteAsync(siteId, new SitePatchRequest
+{
+    RowVersion                   = current.RowVersion,         // 👈 optimistic lock
+    ConstructionPermissionNumber = permissionsInFile[0],
+}, ct);
 ```
 
 ### Группировка по листу в Apply
@@ -108,6 +144,113 @@ foreach (var sheetGroup in rowsBySheet)
     foreach (var mr in sheetGroup) { /* ... */ }
 }
 ```
+
+### Формирование `Title` / `UniqueNumber` помещения
+
+Контракт нейминга (применяется как в `CreateRoomAsync`, так и в
+`PatchRoomAsync` — чтобы повторный импорт не оставлял старого Title):
+
+```csharp
+var uniqueNumber = $"{roomNumber}_{sectionTitle}_{buildingSection}";
+//   Пример: «15/16_1.1_1»
+
+var roomTitle = string.IsNullOrWhiteSpace(roomKindTitle)
+    ? uniqueNumber
+    : $"{roomKindTitle} {uniqueNumber}";
+//   Пример: «Машиноместо 15/16_1.1_1»
+```
+
+| Источник | Поле в `MappedValues` | Куда подставляется |
+|---|---|---|
+| Колонка «Номер помещения» | `RoomNumber` | `ExplicationNumber`, первая часть `UniqueNumber` |
+| Section.Title (нумерик, напр. «1.1») | `SectionTitleNumeric` → переменная `sectionTitle` в Apply | средняя часть `UniqueNumber` |
+| Колонка «Подъезд/Секция» | `BuildingSection` | последняя часть `UniqueNumber`, поле `BuildingSection` |
+| Резолв `RoomKind.Title` | `RoomKindTitle` | префикс в `Title` |
+
+⚠️ `RoomPatchRequest` обязан содержать `Title` и `UniqueNumber` — без них
+PATCH оставит у Room устаревшее имя из предыдущей реализации (просто номер
+помещения), даже когда Kind/Section/BuildingSection обновились.
+
+### `StageNumber` в ShareAgreement
+
+При создании ДДУ передаём номер этапа объекта строительства (из колонки
+«Этап» в файле). Поле `ShareAgreementCreateRequest.StageNumber` —
+строка, поэтому `int` из MappedValues пере-сериализуется в `string`.
+
+```csharp
+var stageNumberForSa = GetStringOrNull(v, "StageNumberRaw")
+    ?? GetIntOrNull(v, "StageNumber")?.ToString(CultureInfo.InvariantCulture);
+
+await _crud.CreateShareAgreementAsync(new ShareAgreementCreateRequest
+{
+    ...
+    StageNumber       = stageNumberForSa,  // 👈
+    ConditionalNumber = roomNumber,
+});
+```
+
+⚠️ `StageNumberRaw` — это **строка из файла как есть** («1», «1а»),
+`StageNumber` — нормализованный `int?`. Для ДДУ предпочтительнее
+сырое значение, чтобы не терять буквенный суффикс этапа.
+
+### Прогресс валидации по листам (без потерь)
+
+Событие `StageProgress` шлётся в трёх случаях:
+1. **Первая строка каждого листа** (`sheetProcessed == 1`) — гарантирует
+   появление листа в `sheetProgress[]` UI, даже если в листе всего 1-2
+   строки и throttle бы их пропустил.
+2. **Последняя строка каждого листа** (`sheetProcessed == sheetTotal`) —
+   финальное «N из N · 100%» по листу.
+3. **Throttle** — каждые `notifyEvery = max(1, total/50)` строк.
+
+Без п.1 при 3+ листах разной длины «средние» листы могли вообще не
+получить событие → не появлялись в UI. Симптом: на странице валидации
+видны только первый и последний листы.
+
+### Площадь по категории помещения
+
+Справочник Visary `RoomCategory` (подтверждено на стенде через
+`GET /api/visary/crud/roomkind/3`):
+
+| Значение | Категория |
+|---|---|
+| `0` | **Residential** — Квартира, Апартамент (единственная жилая) |
+| `1` | NonResidential |
+| `2` | ParkingPlace (Машиноместо) |
+| `3` | OtherNonResidential (Кладовая, Коммерческое и т. п.) |
+
+Поле, в которое попадает «Площадь» из Excel, зависит от этой категории:
+
+| `RoomCategory` | `ProjectArea` | `TotalArea` |
+|---|---|---|
+| `0` (Residential) или `null` | площадь из файла | `null` |
+| `≠ 0` (любое нежилое) | **`0`** | площадь из файла |
+
+```csharp
+private const int ResidentialRoomCategory = 0; // справочник Visary RoomCategory
+
+var isNonResidential = roomCategory.HasValue
+                    && roomCategory.Value != ResidentialRoomCategory;
+double? projectAreaForCrud = isNonResidential ? 0d : areaFromFile;
+double? totalAreaForCrud   = isNonResidential ? areaFromFile : null;
+```
+
+⚠️ При `RoomCategory == null` (категория не пришла из справочника) намеренно
+ведём себя как для жилого — чтобы случайно не положить площадь в неправильное
+поле для незнакомого Kind.
+
+⚠️ **Listview-columns для `RoomKind` обязан включать `RoomCategory`**. Общий
+`DictionaryColumns = ["ID", "Title", "Hidden"]` ЭТО ПОЛЕ НЕ ВОЗВРАЩАЕТ — без
+правки `RoomCategory` у всех Kind пришёл бы `null` и все помещения считались
+бы жилыми (симптом: у машиномест заполнена `ProjectArea`, `TotalArea` пустая).
+Поэтому в [ListViewClient.cs](../Visary.Api.Client/ListView/ListViewClient.cs)
+сделан отдельный массив `RoomKindColumns = ["ID", "Title", "Hidden", "RoomCategory"]`,
+и `ListRoomKindsAsync` идёт inline-запросом, а не через общий
+`ListDictionaryAsync`. Для проверки — лог `RoomsForm.Validate: RoomCategory по Kind: ...`
+показывает фактические значения.
+
+`RoomCreateRequest` и `RoomPatchRequest` получили поле `TotalArea` —
+без него PATCH оставит у Room устаревшее значение.
 
 ### Резолв Kind по имени листа (fallback)
 
@@ -171,10 +314,119 @@ var kindByTitle = await visaryDb.RoomKinds.AsNoTracking()...;  // вернёт �
 `PatchRoomAsync` и `PatchShareAgreementAsync` зануляют эти поля перед сериализацией.
 Подробности — в `doc_project/50-visary-api-new-methods.md` (раздел «Логирование запросов в Visary» / «forceUpdate=true|false»).
 
-### 4. Полиморфные поля DTO `RoomRaw` / `ShareAgreementRaw`
+### 4. Room.find_or_create — уникальность в разрезе `Section × Kind × Number`
+
+В одной секции могут одновременно быть **квартира №3**, **машиноместо №3**
+и **кладовая №3** — это три разных помещения. Поэтому матч в `ApplyAsync`
+обязан учитывать `Kind`:
+
+```csharp
+// ✅ ПРАВИЛЬНО — с учётом Kind
+var match = roomsInSection.Data.FirstOrDefault(r =>
+    (kindId is null || r.Kind?.ID == kindId.Value)
+    && (string.Equals(r.ExplicationNumber, roomNumber, OIC) ||
+        string.Equals(r.Number,            roomNumber, OIC)));
+```
+
+```csharp
+// ❌ НЕПРАВИЛЬНО — без Kind
+var match = roomsInSection.Data.FirstOrDefault(r =>
+    string.Equals(r.ExplicationNumber, roomNumber, OIC) ||
+    string.Equals(r.Number,            roomNumber, OIC));
+// → файл с 6 квартирами и 3 машиноместами в одной секции (номера 1..3 пересекаются)
+//   создаст 3 машиноместа, PATCH-нет их же как квартиры (меняя Kind), и потеряет 3 строки.
+```
+
+**Симптом**: из файла «6 квартир + 3 машиноместа» создаётся 3+3=6 помещений,
+а 3 квартиры «исчезают».
+
+### 5. Полиморфные поля DTO `RoomRaw` / `ShareAgreementRaw`
 
 `Active*ShareAgreement`, `*EscrowAccount`, `ValidityStatus` приходят разными
 типами — в DTO это `JsonElement?`. См. `doc_project/56-visary-dto-deserialization-pitfalls.md`.
+
+### 6. Парсер обходит ВСЕ листы файла
+
+`XlsxParser.ParseTabular` итерирует по всем worksheets рабочей книги; каждая
+`ParsedRow.Sheet` содержит имя своего листа, а маппер группирует строки по
+`Sheet` в `ApplyAsync`. Это критично для шаблонов «Пример импорта.xlsx» /
+«Единая форма 3», у которых разные виды помещений лежат на разных листах
+(«Квартиры», «Машиноместа», «Кладовые»).
+
+```csharp
+// ✅ ПРАВИЛЬНО — обходим все листы, пустые молча пропускаем
+foreach (var sheet in workbook.Worksheets)
+{
+    var range = sheet.RangeUsed();
+    if (range is null) continue;            // напр. пустой «Справочник»
+    // ... читаем заголовки и строки данного листа,
+    //     эмитим ParsedRow с sheet.Name
+}
+```
+
+```csharp
+// ❌ НЕПРАВИЛЬНО — раньше парсер читал только первый лист
+var sheet = workbook.Worksheets.FirstOrDefault();
+// → если первый лист «Квартиры», то «Машиноместа» и «Кладовые» молча терялись;
+//   если первый лист пуст или «Справочник» — импорт падал «нет данных».
+```
+
+**Союз заголовков**: у листов могут быть разные колонки («Колич. комнат» есть
+только в «Квартирах»). В `ParseResult.Headers` собирается **union** — это нужно
+UI; в `ParsedRow.Cells` каждой строки только ключи **своего** листа.
+
+**Коллизии `SourceRowNumber`**: строка 5 встречается в каждом листе.
+`StagedRow` и `ImportError` хранят `Sheet` отдельным полем; уникальный индекс —
+`(ImportSessionId, Sheet, SourceRowNumber)`. Миграция:
+`20260512095902_AddSheetToStagedRowAndError`.
+
+```csharp
+// ✅ Pipeline пишет Sheet вместе со строкой
+_serviceDb.StagedRows.Add(new StagedRow
+{
+    ImportSessionId = sessionId,
+    Sheet           = raw.Sheet ?? string.Empty,  // 👈
+    SourceRowNumber = mr.SourceRowNumber,
+    ...
+});
+```
+
+```csharp
+// ❌ Без Sheet — 23505 duplicate key violation на втором листе
+// "duplicate key value violates unique constraint
+//  IX_staged_rows_ImportSessionId_SourceRowNumber"
+```
+
+⚠️ `ExcelDataReaderParser` (для `.xls`/`.xlsb`) **пока** читает только первый
+лист. Если в файле помещений будет XLS-формат с несколькими листами — нужно
+дополнить и его (через `reader.NextResult()`); для актуального шаблона xlsx
+этого не требуется.
+
+### 7. PATCH Site через `forceUpdate=false` — с актуальным `RowVersion`
+
+`PatchSiteAsync` использует `forceUpdate=false` (optimistic locking), в отличие
+от `PatchRoom/PatchShareAgreement/PatchWbs` с `forceUpdate=true`. Поэтому **обязательно**
+читать свежий `RowVersion` через `GetSiteByIdFullAsync` непосредственно перед PATCH —
+тот RowVersion, что был получен в Validate, может уже устареть. Сценарий — на стенде
+пользователь параллельно редактирует ОКС в UI: Validate прочитал RowVersion=10,
+пользователь сохранил изменения → RowVersion=11, Apply послал бы 10 → **409 Conflict**.
+
+```csharp
+// ✅ Свежий read прямо в Apply
+var current = await _crud.GetSiteByIdFullAsync(siteId, ct);
+await _crud.PatchSiteAsync(siteId, new SitePatchRequest
+{
+    RowVersion = current.RowVersion,           // 👈 актуальный
+    ConstructionPermissionNumber = candidate,
+}, ct);
+
+// ❌ Кэш из Validate — RowVersion может устареть
+await _crud.PatchSiteAsync(siteId, new SitePatchRequest
+{
+    RowVersion = siteFromValidate.RowVersion,  // ⚠️ риск 409 Conflict
+    ...
+}, ct);
+```
 
 ---
 
@@ -218,14 +470,15 @@ var kindByTitle = await visaryDb.RoomKinds.AsNoTracking()...;  // вернёт �
 
 | Компонент | Файл | Что делает |
 |-----------|------|-----------|
-| Маппер | `KiloImportService.Api/Domain/Mapping/RoomsFormImportMapper.cs` | Validate + Apply, sheet-группировка, Kind-резолв |
+| Маппер | `KiloImportService.Api/Domain/Mapping/RoomsFormImportMapper.cs` | Validate + Apply, sheet-группировка, Kind-резолв, площадь по `RoomCategory`, формат `UniqueNumber/Title`, обновление РНС в Site |
 | Регистрация типа в UI | `KiloImportService.Api/Controllers/ImportTypesController.cs` | `["rooms"] = ("Помещения", ...)` |
 | DI | `KiloImportService.Api/Program.cs` | `AddSingleton<IImportMapper, RoomsFormImportMapper>()` |
-| Visary CRUD | `Visary.Api.Client/CRUD/CrudClient.cs` | `CreateSection/Room/ShareAgreement`, `PatchRoom/ShareAgreement` |
-| Visary listview | `Visary.Api.Client/ListView/ListViewClient.cs` | `GetSectionsBySite`, `GetRoomsBySection`, `ListRoomKinds`, `GetShareAgreementsByRoom`, `GetOrganizationsByClientId` |
-| Request DTO | `Visary.Api.Client/Dto/VisaryCrudRequests.cs` | `SectionCreateRequest`, `RoomCreateRequest/PatchRequest`, `ShareAgreementCreateRequest/PatchRequest` |
-| Response DTO | `Visary.Api.Client/Dto/VisaryEntities.cs` | `RoomRaw` (с `JsonElement?` полями), `ShareAgreementRaw.ValidityStatus` |
-| Пример файла | `RoomImport/Пример импорта.xlsx` | 2 листа: «Квартиры», «Машиноместа» |
+| Visary CRUD | `Visary.Api.Client/CRUD/CrudClient.cs` | `CreateSection/Room/ShareAgreement`, `PatchRoom/ShareAgreement`, `PatchSiteAsync` |
+| Visary listview | `Visary.Api.Client/ListView/ListViewClient.cs` | `GetSectionsBySite`, `GetRoomsBySection`, `ListRoomKinds` (с `RoomKindColumns` под `RoomCategory`), `GetShareAgreementsByRoom`, `GetOrganizationsByClientId` |
+| Request DTO | `Visary.Api.Client/Dto/VisaryCrudRequests.cs` | `SectionCreateRequest`, `RoomCreateRequest/PatchRequest` (с `Title`/`UniqueNumber`/`TotalArea`), `ShareAgreementCreateRequest` (с `StageNumber`), `SitePatchRequest` |
+| Response DTO | `Visary.Api.Client/Dto/VisaryEntities.cs` | `RoomRaw` (с `JsonElement?` полями, `Kind: VisaryRef?`, `TotalArea`), `ShareAgreementRaw.ValidityStatus`, `RoomKindRaw.RoomCategory: int?` |
+| Хранение | `StagedRow.Sheet` + `ImportError.Sheet` + миграция `20260512095902_AddSheetToStagedRowAndError` | уникальный индекс `(SessionId, Sheet, SourceRowNumber)` |
+| Пример файла | `RoomImport/Пример импорта.xlsx` | до 4 листов: «Квартиры», «Машиноместа», «Коммерческое помещение», «Кладовая» |
 | Описание методов | `RoomImport/описание методов.txt` | Валидные тела JSON для Section/Room/SA |
 | Сценарий | `RoomImport/room_sa_create.puml` | PlantUML-диаграмма пути исходного «roomsForm» (наследник) |
 

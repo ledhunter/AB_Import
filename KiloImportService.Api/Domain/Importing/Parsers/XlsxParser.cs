@@ -5,7 +5,10 @@ namespace KiloImportService.Api.Domain.Importing.Parsers;
 /// <summary>
 /// Парсер XLSX через ClosedXML.
 /// Поддерживает две раскладки:
-///   • <see cref="Tabular"/> — первый лист, первая строка как заголовки (по умолчанию).
+///   • <see cref="Tabular"/> — обходит ВСЕ листы файла, у каждого читает свои
+///     заголовки (первая строка) и эмитит <see cref="ParsedRow"/> с именем листа
+///     в поле <c>Sheet</c>. Маппер сам решает, какие листы фильтровать
+///     (например, «Справочник»). Пустые листы пропускаются без ошибки.
 ///   • <see cref="KeyValueVertical"/> — лист по имени, параметры в столбце-ключе,
 ///     значения в одной или нескольких колонках-этапах справа.
 /// </summary>
@@ -39,56 +42,88 @@ public sealed class XlsxParser : IFileParser
 
     private static ParseResult ParseTabular(XLWorkbook workbook, CancellationToken ct)
     {
-        var headers = new List<string>();
+        // Объединённые заголовки по всем листам (для совместимости с UI/маппером —
+        // у каждого листа может быть свой набор колонок, например в файле помещений
+        // лист «Квартиры» имеет «Колич. комнат», а «Машиноместа» — нет).
+        var allHeaders = new List<string>();
         var rows = new List<ParsedRow>();
         var errors = new List<ParseError>();
 
-        var sheet = workbook.Worksheets.FirstOrDefault();
-        if (sheet is null)
+        var sheets = workbook.Worksheets.ToList();
+        if (sheets.Count == 0)
         {
             errors.Add(new ParseError(null, "Файл не содержит ни одного листа."));
-            return new ParseResult(headers, rows, errors);
+            return new ParseResult(allHeaders, rows, errors);
         }
 
-        var range = sheet.RangeUsed();
-        if (range is null)
-        {
-            errors.Add(new ParseError(null, "Лист пустой — нет данных для импорта."));
-            return new ParseResult(headers, rows, errors);
-        }
-
-        var sheetName = sheet.Name ?? string.Empty;
-
-        var firstRow = range.FirstRow();
-        foreach (var cell in firstRow.Cells())
-        {
-            headers.Add(cell.GetString().Trim());
-        }
-        if (headers.Count == 0)
-        {
-            errors.Add(new ParseError(1, "Не удалось прочитать заголовки колонок (первая строка пустая)."));
-            return new ParseResult(headers, rows, errors);
-        }
-
-        var totalRows = range.RowCount();
-        for (int rowIndex = 2; rowIndex <= totalRows; rowIndex++)
+        int processedSheets = 0;
+        foreach (var sheet in sheets)
         {
             ct.ThrowIfCancellationRequested();
-            var row = range.Row(rowIndex);
-            var cells = new Dictionary<string, string>(headers.Count, StringComparer.Ordinal);
-            bool isEmpty = true;
-            for (int c = 0; c < headers.Count; c++)
+            var sheetName = sheet.Name ?? string.Empty;
+
+            var range = sheet.RangeUsed();
+            if (range is null)
             {
-                var cell = row.Cell(c + 1);
-                var value = cell.GetString();
-                if (!string.IsNullOrWhiteSpace(value)) isEmpty = false;
-                cells[headers[c]] = value ?? string.Empty;
+                // Пустой лист — например, шаблонный «Справочник» оставленный без данных.
+                // Не считаем ошибкой: в файле могут быть другие листы с данными.
+                continue;
             }
-            if (isEmpty) continue; // пропускаем полностью пустые строки
-            rows.Add(new ParsedRow(rowIndex, sheetName, cells));
+
+            // Заголовки конкретного листа — для корректного маппинга его строк.
+            var sheetHeaders = new List<string>();
+            var firstRow = range.FirstRow();
+            foreach (var cell in firstRow.Cells())
+            {
+                sheetHeaders.Add(cell.GetString().Trim());
+            }
+            if (sheetHeaders.Count == 0)
+            {
+                continue;
+            }
+
+            // Накопительный union заголовков (без дубликатов, case-insensitive).
+            foreach (var h in sheetHeaders)
+            {
+                if (!allHeaders.Contains(h, StringComparer.OrdinalIgnoreCase))
+                    allHeaders.Add(h);
+            }
+
+            var totalRows = range.RowCount();
+            bool anyDataInSheet = false;
+            for (int rowIndex = 2; rowIndex <= totalRows; rowIndex++)
+            {
+                ct.ThrowIfCancellationRequested();
+                var row = range.Row(rowIndex);
+                var cells = new Dictionary<string, string>(sheetHeaders.Count, StringComparer.Ordinal);
+                bool isEmpty = true;
+                for (int c = 0; c < sheetHeaders.Count; c++)
+                {
+                    var cell = row.Cell(c + 1);
+                    var value = cell.GetString();
+                    if (!string.IsNullOrWhiteSpace(value)) isEmpty = false;
+                    cells[sheetHeaders[c]] = value ?? string.Empty;
+                }
+                if (isEmpty) continue; // пропускаем полностью пустые строки
+
+                // ⚠️ SourceRowNumber — индекс строки В ПРЕДЕЛАХ листа (как в Excel).
+                // Между листами возможны коллизии (строка 5 встречается в каждом
+                // листе), но маппер всегда логирует Sheet рядом с SourceRowNumber,
+                // так что неоднозначности в логах нет.
+                rows.Add(new ParsedRow(rowIndex, sheetName, cells));
+                anyDataInSheet = true;
+            }
+
+            if (anyDataInSheet) processedSheets++;
         }
 
-        return new ParseResult(headers, rows, errors);
+        if (processedSheets == 0)
+        {
+            errors.Add(new ParseError(null,
+                "В файле нет ни одного листа с данными для импорта."));
+        }
+
+        return new ParseResult(allHeaders, rows, errors);
     }
 
     private static ParseResult ParseKeyValueVertical(XLWorkbook workbook, KeyValueVertical layout, CancellationToken ct)

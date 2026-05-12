@@ -25,6 +25,8 @@ public sealed class RoomPatchRequest
 {
     public int? ID { get; set; }
     public long? RowVersion { get; set; }
+    public string? Title { get; set; }
+    public string? UniqueNumber { get; set; }
     public VisaryRef? Kind { get; set; }
     public VisaryRef? Section { get; set; }
     public string? ExplicationNumber { get; set; }
@@ -32,6 +34,13 @@ public sealed class RoomPatchRequest
     public string? BuildingSection { get; set; }
     public int? RoomsNumber { get; set; }
     public double? ProjectArea { get; set; }
+    /// <summary>
+    /// Заполняется только для нежилых помещений (Kind.RoomCategory ≠ 0):
+    /// «Машиноместо», «Кладовая», «Коммерческое» и т. п. Для жилых
+    /// (Квартира/Апартамент) Visary берёт TotalArea как сумму
+    /// TotalAreaWithoutSummerRoom + SummerRoomArea; пишем туда сами.
+    /// </summary>
+    public double? TotalArea { get; set; }
     public double? CostForOne { get; set; }
     public double? MarketCostPerM { get; set; }
     public double? ZalogCostPerM { get; set; }
@@ -170,6 +179,11 @@ public sealed class RoomCreateRequest
     public double? ZalogCostPerM { get; set; }
     public int? RoomsNumber { get; set; }
     public double? ProjectArea { get; set; }
+    /// <summary>
+    /// Заполняется для нежилых помещений (Kind.RoomCategory ≠ 0). См.
+    /// <see cref="RoomPatchRequest.TotalArea"/> — там же объяснение.
+    /// </summary>
+    public double? TotalArea { get; set; }
     public double? TotalAreaWithoutSummerRoom { get; set; }
     public double? SummerRoomArea { get; set; }
     public string? UniqueNumber { get; set; }

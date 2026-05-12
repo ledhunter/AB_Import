@@ -90,9 +90,10 @@ export const toUiSession = (api: ApiImportSession): UiSession => ({
   errorRows: api.errorRows,
   errorMessage: api.errorMessage,
   stages: (api.stages ?? []).map(toStage),
-  // stageProgress инициализируется как null — обновляется через SignalR
-  // (`onStageProgress` в useImportSession), а не из REST-снимка сессии.
+  // stageProgress / sheetProgress инициализируются пустыми — обновляются через
+  // SignalR (`onStageProgress` в useImportSession), а не из REST-снимка сессии.
   stageProgress: null,
+  sheetProgress: [],
 });
 
 export const toUiRowError = (e: ApiImportError): UiRowError => ({

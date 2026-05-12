@@ -152,6 +152,7 @@ public sealed class ImportPipeline
             _serviceDb.Errors.Add(new ImportError
             {
                 ImportSessionId = sessionId,
+                Sheet = string.Empty,
                 SourceRowNumber = err.RowNumber ?? 0,
                 ErrorCode = "parse_failure",
                 Message = err.Message,
@@ -188,6 +189,7 @@ public sealed class ImportPipeline
             _serviceDb.Errors.Add(new ImportError
             {
                 ImportSessionId = sessionId,
+                Sheet = string.Empty, // file-level: не привязано к листу
                 SourceRowNumber = 0,
                 ColumnName = fe.ColumnName,
                 ErrorCode = fe.ErrorCode,
@@ -198,6 +200,15 @@ public sealed class ImportPipeline
         // Сохраняем StagedRow + ImportError для каждой строки.
         // Параллельно публикуем StageProgress в SignalR — раз в N строк, чтобы не
         // спамить хаб тысячами событий на больших файлах.
+        // ⚙️ Прогресс считаем В РАЗРЕЗЕ ЛИСТА: для пользователя «строка X из Y»
+        // ассоциируется с конкретным листом Excel, а не с глобальной нумерацией.
+        // Иначе «лист Квартиры: строка 2 из 9» (где 9 — суммарный счётчик
+        // по всем листам) выглядит бессмысленно.
+        var totalsBySheet = parseResult.Rows
+            .GroupBy(r => r.Sheet ?? string.Empty, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
+        var processedBySheet = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
         int successCount = 0, errorCount = 0;
         var totalRowsValidate = validation.Rows.Count;
         var notifyEvery = Math.Max(1, totalRowsValidate / 50); // ≈ 50 апдейтов на файл
@@ -216,6 +227,7 @@ public sealed class ImportPipeline
             _serviceDb.StagedRows.Add(new StagedRow
             {
                 ImportSessionId = sessionId,
+                Sheet = raw.Sheet ?? string.Empty,
                 SourceRowNumber = mr.SourceRowNumber,
                 RawValues = System.Text.Json.JsonSerializer.SerializeToDocument(rawPayload),
                 MappedValues = mr.MappedValues,
@@ -226,6 +238,7 @@ public sealed class ImportPipeline
                 _serviceDb.Errors.Add(new ImportError
                 {
                     ImportSessionId = sessionId,
+                    Sheet = raw.Sheet ?? string.Empty,
                     SourceRowNumber = mr.SourceRowNumber,
                     ColumnName = err.ColumnName,
                     ErrorCode = err.ErrorCode,
@@ -234,18 +247,35 @@ public sealed class ImportPipeline
             }
             if (mr.IsValid) successCount++; else errorCount++;
 
+            // Per-sheet счётчик: «лист X — строка N из Total(X)».
+            var sheetKey = raw.Sheet ?? string.Empty;
+            var sheetProcessed = processedBySheet.GetValueOrDefault(sheetKey) + 1;
+            processedBySheet[sheetKey] = sheetProcessed;
+            var sheetTotal = totalsBySheet.GetValueOrDefault(sheetKey, 1);
+
             var processed = i + 1;
-            if (processed == totalRowsValidate || processed % notifyEvery == 0)
+            // Шлём событие либо на throttle (каждые notifyEvery строк), либо в
+            // ключевые моменты: ПЕРВАЯ и ПОСЛЕДНЯЯ строки В ЛИСТЕ и общий финал.
+            // Первая строка нужна, чтобы лист сразу появился в UI sheetProgress
+            // (иначе при listе из 1-2 строк и notifyEvery>=2 он мог совсем не
+            // получить событие до того, как пайплайн перейдёт к следующему).
+            var isSheetFirstRow = sheetProcessed == 1;
+            var isSheetLastRow  = sheetProcessed == sheetTotal;
+            if (processed == totalRowsValidate || isSheetFirstRow || isSheetLastRow
+                || processed % notifyEvery == 0)
             {
-                var percent = totalRowsValidate == 0 ? 100 : (int)Math.Round((processed * 100.0) / totalRowsValidate);
-                validateStage.ProgressPercent = percent;
+                var sheetPercent = sheetTotal == 0 ? 100 : (int)Math.Round((sheetProcessed * 100.0) / sheetTotal);
+                var overallPercent = totalRowsValidate == 0
+                    ? 100
+                    : (int)Math.Round((processed * 100.0) / totalRowsValidate);
+                validateStage.ProgressPercent = overallPercent;
                 await _hub.Clients.Group(groupName).SendAsync("StageProgress", new
                 {
                     sessionId,
                     stage = "Validate",
-                    currentRow = processed,
-                    totalRows = totalRowsValidate,
-                    percentComplete = percent,
+                    currentRow = sheetProcessed,
+                    totalRows = sheetTotal,
+                    percentComplete = sheetPercent,
                     sheet = raw.Sheet,
                 }, ct);
             }
@@ -316,6 +346,7 @@ public sealed class ImportPipeline
             _serviceDb.Errors.Add(new ImportError
             {
                 ImportSessionId = sessionId,
+                Sheet = string.Empty, // Apply ошибки сейчас file-level, sheet можно достать из mr.MappedValues при необходимости
                 SourceRowNumber = 0,
                 ErrorCode = err.ErrorCode,
                 Message = err.Message,

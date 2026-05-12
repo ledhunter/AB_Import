@@ -77,7 +77,27 @@ export const SessionProgress = ({ session }: Props) => {
         </div>
       </div>
 
-      {live && live.totalRows > 0 && (
+      {/* Построчный прогресс по листам файла (по одной строке на лист).
+          Заполняется при многолистовых XLSX («Квартиры»/«Машиноместа»);
+          для однолистового файла даст одну строку. */}
+      {session.sheetProgress.length > 0 && (
+        <div className="session-progress__sheets" style={{ marginTop: 12 }}>
+          {session.sheetProgress.map((sp) => (
+            <Typography.Text
+              key={sp.sheet}
+              view="primary-small"
+              color="secondary"
+              tag="div"
+              style={{ marginTop: 4 }}
+            >
+              {STAGE_LABELS[sp.stage]} · лист «{sp.sheet}»: строка {sp.currentRow} из {sp.totalRows} · {sp.percentComplete}%
+            </Typography.Text>
+          ))}
+        </div>
+      )}
+
+      {/* Fallback: для событий без `sheet` (общий счётчик) показываем одну строку. */}
+      {session.sheetProgress.length === 0 && live && live.totalRows > 0 && (
         <Typography.Text
           view="primary-small"
           color="secondary"
@@ -89,7 +109,7 @@ export const SessionProgress = ({ session }: Props) => {
         </Typography.Text>
       )}
 
-      {!live && session.totalRows > 0 && (
+      {!live && session.sheetProgress.length === 0 && session.totalRows > 0 && (
         <Typography.Text
           view="primary-small"
           color="secondary"

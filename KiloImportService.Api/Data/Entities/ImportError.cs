@@ -9,6 +9,14 @@ public class ImportError
     public Guid ImportSessionId { get; set; }
     public ImportSession Session { get; set; } = null!;
 
+    /// <summary>
+    /// Имя листа Excel, к которому относится ошибка. Пустая строка — ошибка не
+    /// привязана к конкретному листу (например, file-level parse error).
+    /// Для многолистовых файлов нужно для разрешения коллизий
+    /// <see cref="SourceRowNumber"/> между листами.
+    /// </summary>
+    public string Sheet { get; set; } = string.Empty;
+
     /// <summary>Номер строки источника (как в <see cref="StagedRow.SourceRowNumber"/>). 0 = ошибка уровня файла.</summary>
     public int SourceRowNumber { get; set; }
 
