@@ -37,6 +37,18 @@ public sealed class RoomsFormImportMapper : IImportMapper
 {
     public string ImportTypeCode => "rooms";
 
+    /// <summary>
+    /// Значение <c>RoomKindRaw.RoomCategory</c>, означающее «Жилое» (Residential).
+    /// Справочник Visary RoomCategory (нумерация с нуля):
+    ///   0 = Residential (Квартира, Апартамент — единственная «жилая» категория)
+    ///   1 = NonResidential
+    ///   2 = ParkingPlace (Машиноместо)
+    ///   3 = OtherNonResidential (Кладовая и т. п.)
+    /// От значения зависит, какое поле площади заполняет маппер: для жилых —
+    /// <c>ProjectArea</c>, для нежилых — <c>TotalArea</c> + <c>ProjectArea=0</c>.
+    /// </summary>
+    private const int ResidentialRoomCategory = 0;
+
     private static readonly HashSet<string> SkippedSheets =
         new(StringComparer.OrdinalIgnoreCase) { "Справочник" };
 
@@ -127,9 +139,17 @@ public sealed class RoomsFormImportMapper : IImportMapper
             .Where(k => !string.IsNullOrWhiteSpace(k.Title))
             .GroupBy(k => k.Title!.Trim(), StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.First().ID, StringComparer.OrdinalIgnoreCase);
+        // Карта kindId → RoomCategory. Нужна на Apply, чтобы для нежилых
+        // помещений положить площадь в TotalArea и обнулить ProjectArea.
+        var categoryByKindId = roomKindList.Data
+            .ToDictionary(k => k.ID, k => k.RoomCategory);
         _log.LogInformation(
             "RoomsForm.Validate: загружен справочник RoomKind из Visary — {Count} записей: {Titles}",
             kindByTitle.Count, string.Join(", ", kindByTitle.Select(kv => $"{kv.Key}={kv.Value}")));
+        _log.LogInformation(
+            "RoomsForm.Validate: RoomCategory по Kind: {Categories}",
+            string.Join(", ", roomKindList.Data
+                .Select(k => $"{k.Title}={k.RoomCategory?.ToString() ?? "null"}")));
 
         var dataRows = rows.Where(r => !SkippedSheets.Contains(r.Sheet)).ToList();
         if (dataRows.Count == 0)
@@ -174,8 +194,15 @@ public sealed class RoomsFormImportMapper : IImportMapper
             bool projectOk = string.Equals(rowProjectNum, siteProjectNumber, StringComparison.OrdinalIgnoreCase);
             bool stageOk   = rowStageNum.HasValue && siteStageNumber.HasValue
                           && rowStageNum.Value == siteStageNumber.Value;
+            // РНС считаем совпадающим в трёх случаях:
+            //   1) в файле РНС пустой — пропускаем проверку;
+            //   2) равно тому, что уже стоит в Site;
+            //   3) в самом Site РНС пустой — тогда непустой РНС из файла НЕ блокирует
+            //      строку: после Validate в Apply мы один раз заполним РНС в ОКСе через
+            //      PatchSiteAsync (см. шаг "Обновление РНС в Site" в room_sa_create.puml).
             bool permissionOk = string.IsNullOrWhiteSpace(rowPermission)
-                          || string.Equals(rowPermission, sitePermissionNumber, StringComparison.OrdinalIgnoreCase);
+                          || string.Equals(rowPermission, sitePermissionNumber, StringComparison.OrdinalIgnoreCase)
+                          || string.IsNullOrWhiteSpace(sitePermissionNumber);
 
             if (!projectOk || !stageOk || !permissionOk)
             {
@@ -266,6 +293,12 @@ public sealed class RoomsFormImportMapper : IImportMapper
             double? zalogCost  = TryParseNullableDouble(ReadString(row, ZalogCostAliases), out var zErr);
             if (zErr != null) rowErrors.Add(new RowError(string.Join(" / ", ZalogCostAliases), "invalid_number", zErr));
 
+            // Категория Kind (residential/non-residential) — нужна Apply, чтобы
+            // решить, в какое поле положить площадь.
+            int? roomCategory = (kindId != 0 && categoryByKindId.TryGetValue(kindId, out var cat))
+                ? cat
+                : null;
+
             var mapped = new Dictionary<string, object?>
             {
                 ["Sheet"]                = row.Sheet,
@@ -277,6 +310,7 @@ public sealed class RoomsFormImportMapper : IImportMapper
                 ["RoomNumber"]           = roomNumber,
                 ["RoomKindTitle"]        = roomKindTitle,
                 ["RoomKindId"]           = kindId == 0 ? null : (int?)kindId,
+                ["RoomCategory"]         = roomCategory,
                 ["SectionTitle"]         = sectionTitle,
                 ["SectionTitleNumeric"] = ExtractNumericPart(sectionTitle),
                 ["Floor"]                = floor,
@@ -333,6 +367,12 @@ public sealed class RoomsFormImportMapper : IImportMapper
             .GroupBy(mr => GetStringOrNull(mr.MappedValues.RootElement, "Sheet") ?? "<unknown>",
                      StringComparer.OrdinalIgnoreCase)
             .ToList();
+
+        // ── 0. Обновление РНС в Site, если в ОКСе он пустой ────────────────
+        // Шаг из room_sa_create.puml: «Если в Объекте нет РНС → обновить значение
+        // РНС в Объекте строительства». Делаем один раз на сессию: берём первое
+        // непустое значение из валидных строк, читаем свежий RowVersion и PATCH-аем.
+        await TryUpdateSitePermissionNumberAsync(siteId, rows, ct);
 
         foreach (var sheetGroup in rowsBySheet)
         {
@@ -415,33 +455,67 @@ public sealed class RoomsFormImportMapper : IImportMapper
                 }
 
                 // ── 3. Room: найти/создать ──────────────────────────────────
+                // Уникальность Room — в разрезе Section × Kind × Number. В одной
+                // секции могут одновременно жить квартира №3, машиноместо №3,
+                // кладовая №3 — это РАЗНЫЕ помещения. Поэтому матч идёт только
+                // среди помещений с тем же Kind, что и в текущей строке файла,
+                // иначе квартиры PATCH-или бы машиноместа с теми же номерами и
+                // 3 квартиры из 6 «терялись» бы.
                 var roomNumber = GetStringOrNull(v, "RoomNumber") ?? string.Empty;
+                var kindId = GetIntOrNull(v, "RoomKindId");
                 int? roomId = null;
                 if (sectionId is not null)
                 {
                     var roomsInSection = await _listView.GetRoomsBySectionAsync(sectionId.Value, null, ct);
                     var match = roomsInSection.Data.FirstOrDefault(r =>
-                        string.Equals(r.ExplicationNumber, roomNumber, StringComparison.OrdinalIgnoreCase) ||
-                        string.Equals(r.Number,            roomNumber, StringComparison.OrdinalIgnoreCase));
+                        (kindId is null || r.Kind?.ID == kindId.Value)
+                        && (string.Equals(r.ExplicationNumber, roomNumber, StringComparison.OrdinalIgnoreCase) ||
+                            string.Equals(r.Number,            roomNumber, StringComparison.OrdinalIgnoreCase)));
                     roomId = match?.ID;
                 }
+                // Формат UniqueNumber / Title по контракту импорта:
+                //   UniqueNumber = ExplicationNumber + "_" + Section.Title + "_" + BuildingSection
+                //                  → «15/16_1.1_1»
+                //   Title        = Kind.Title + " " + UniqueNumber
+                //                  → «Машиноместо 15/16_1.1_1»
+                // Пустые сегменты могут давать «висящие» подчёркивания/пробелы, но
+                // схема выдержки чисел сохраняется: пользователь хочет видеть позицию
+                // секции/корпуса даже когда её нет в источнике (это будет сигналом
+                // о неполных входных данных).
+                var buildingSection = GetStringOrNull(v, "BuildingSection") ?? string.Empty;
+                var roomKindTitle = GetStringOrNull(v, "RoomKindTitle") ?? string.Empty;
+                var uniqueNumber = $"{roomNumber}_{sectionTitle ?? string.Empty}_{buildingSection}";
+                var roomTitle = string.IsNullOrWhiteSpace(roomKindTitle)
+                    ? uniqueNumber
+                    : $"{roomKindTitle} {uniqueNumber}";
 
-                var kindId = GetIntOrNull(v, "RoomKindId");
+                // Площадь: для жилых (RoomCategory == 1) — в ProjectArea, как раньше.
+                // Для нежилых (Машиноместо / Кладовая / Коммерческое / …) —
+                // площадь в TotalArea, а ProjectArea = 0. Если категория Kind не
+                // пришла (null), оставляем дефолт «как для жилого», чтобы случайно
+                // не перенести площадь в неправильное поле на незнакомых Kind.
+                var areaFromFile = GetDoubleOrNull(v, "ProjectArea");
+                var roomCategory = GetIntOrNull(v, "RoomCategory");
+                var isNonResidential = roomCategory.HasValue && roomCategory.Value != ResidentialRoomCategory;
+                double? projectAreaForCrud = isNonResidential ? 0d : areaFromFile;
+                double? totalAreaForCrud   = isNonResidential ? areaFromFile : null;
+
                 if (roomId is null)
                 {
                     var created = await _crud.CreateRoomAsync(new RoomCreateRequest
                     {
                         SiteID            = siteId,
                         Site              = new VisaryRef { ID = siteId },
-                        Title             = roomNumber,
+                        Title             = roomTitle,
                         ExplicationNumber = roomNumber,
-                        UniqueNumber      = roomNumber, // та же колонка «Номер помещения»
+                        UniqueNumber      = uniqueNumber,
                         Section           = sectionId is null ? null : new VisaryRef { ID = sectionId.Value },
                         Kind              = kindId    is null ? null : new VisaryRef { ID = kindId.Value },
                         Floor             = GetStringOrNull(v, "Floor"),
-                        BuildingSection   = GetStringOrNull(v, "BuildingSection"),
+                        BuildingSection   = buildingSection,
                         RoomsNumber       = GetIntOrNull(v, "RoomsCount"),
-                        ProjectArea       = GetDoubleOrNull(v, "ProjectArea"),
+                        ProjectArea       = projectAreaForCrud,
+                        TotalArea         = totalAreaForCrud,
                         CostForOne        = GetDoubleOrNull(v, "CostForOne"),
                         MarketCostPerM    = GetDoubleOrNull(v, "MarketCostPerM"),
                         ZalogCostPerM     = GetDoubleOrNull(v, "ZalogCostPerM"),
@@ -452,12 +526,15 @@ public sealed class RoomsFormImportMapper : IImportMapper
                 {
                     await _crud.PatchRoomAsync(roomId.Value, new RoomPatchRequest
                     {
+                        Title           = roomTitle,
+                        UniqueNumber    = uniqueNumber,
                         Section         = sectionId is null ? null : new VisaryRef { ID = sectionId.Value },
                         Kind            = kindId    is null ? null : new VisaryRef { ID = kindId.Value },
                         Floor           = GetStringOrNull(v, "Floor"),
-                        BuildingSection = GetStringOrNull(v, "BuildingSection"),
+                        BuildingSection = buildingSection,
                         RoomsNumber     = GetIntOrNull(v, "RoomsCount"),
-                        ProjectArea     = GetDoubleOrNull(v, "ProjectArea"),
+                        ProjectArea     = projectAreaForCrud,
+                        TotalArea       = totalAreaForCrud,
                         CostForOne      = GetDoubleOrNull(v, "CostForOne"),
                         MarketCostPerM  = GetDoubleOrNull(v, "MarketCostPerM"),
                         ZalogCostPerM   = GetDoubleOrNull(v, "ZalogCostPerM"),
@@ -473,6 +550,16 @@ public sealed class RoomsFormImportMapper : IImportMapper
                         string.Equals(a.Number, saNumber, StringComparison.OrdinalIgnoreCase));
                     if (saMatch is null)
                     {
+                        // StageNumber берём как строку из файла («Этап» = "1", "2"…).
+                        // Если в файле было число — StageNumberRaw содержит его исходное
+                        // представление; если строка была пустая — оставляем null.
+                        var stageNumberForSa = GetStringOrNull(v, "StageNumberRaw");
+                        if (string.IsNullOrWhiteSpace(stageNumberForSa))
+                        {
+                            var stageInt = GetIntOrNull(v, "StageNumber");
+                            stageNumberForSa = stageInt?.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                        }
+
                         await _crud.CreateShareAgreementAsync(new ShareAgreementCreateRequest
                         {
                             RoomID            = roomId.Value,
@@ -485,6 +572,7 @@ public sealed class RoomsFormImportMapper : IImportMapper
                             Number            = saNumber,
                             Title             = saNumber,
                             ProjectNumber     = GetStringOrNull(v, "ProjectNumber"),
+                            StageNumber       = stageNumberForSa,
                             ConditionalNumber = roomNumber,
                         }, ct);
                     }
@@ -526,6 +614,88 @@ public sealed class RoomsFormImportMapper : IImportMapper
             applied, rowsBySheet.Count, errors.Count);
 
         return new ApplyResult(applied, errors);
+    }
+
+    /// <summary>
+    /// Если в Site (выбранном ОКСе) поле <c>ConstructionPermissionNumber</c> пустое,
+    /// а в одной из валидных строк файла РНС указан — заполняем его в Visary через
+    /// <see cref="ICrudClient.PatchSiteAsync"/>. Выполняется один раз на сессию.
+    ///
+    /// Используется свежий RowVersion (повторный <c>GetSiteByIdFullAsync</c>), а не тот,
+    /// что был получен в Validate, — между Validate и Apply Site могли поменять извне.
+    /// При расхождении РНС между строками — берём первый и логируем warn.
+    /// </summary>
+    private async Task TryUpdateSitePermissionNumberAsync(
+        int siteId, IReadOnlyList<MappedRow> rows, CancellationToken ct)
+    {
+        var permissionsInFile = rows
+            .Where(mr => mr.IsValid)
+            .Select(mr => GetStringOrNull(mr.MappedValues.RootElement, "PermissionNumber"))
+            .Where(p => !string.IsNullOrWhiteSpace(p))
+            .Select(p => p!.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (permissionsInFile.Count == 0) return;
+
+        ConstructionSiteFull current;
+        try
+        {
+            current = await _crud.GetSiteByIdFullAsync(siteId, ct);
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex,
+                "RoomsForm.Apply: не удалось перечитать Site {SiteId} для проверки РНС: {Msg}",
+                siteId, ex.Message);
+            return;
+        }
+
+        var sitePermission = (current.ConstructionPermissionNumber ?? string.Empty).Trim();
+        if (!string.IsNullOrWhiteSpace(sitePermission))
+        {
+            // Уже не пустой — значит либо был с самого начала, либо кто-то заполнил
+            // параллельно. В этом случае ничего не делаем; рассинхрон со строкой файла
+            // (если значения отличаются) — на совести пользователя, лог-предупреждение.
+            var divergent = permissionsInFile
+                .Where(p => !string.Equals(p, sitePermission, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            if (divergent.Count > 0)
+            {
+                _log.LogWarning(
+                    "RoomsForm.Apply: РНС в Site уже задан '{Site}', но в файле встречаются другие значения: {Divergent}. PATCH не выполняется.",
+                    sitePermission, string.Join(", ", divergent));
+            }
+            return;
+        }
+
+        var candidate = permissionsInFile[0];
+        if (permissionsInFile.Count > 1)
+        {
+            _log.LogWarning(
+                "RoomsForm.Apply: в файле встретилось несколько разных РНС: {All}. Будет применён первый — '{Pick}'.",
+                string.Join(", ", permissionsInFile), candidate);
+        }
+
+        try
+        {
+            await _crud.PatchSiteAsync(siteId, new SitePatchRequest
+            {
+                RowVersion                   = current.RowVersion,
+                ConstructionPermissionNumber = candidate,
+            }, ct);
+            _log.LogInformation(
+                "RoomsForm.Apply: РНС обновлён в Site {SiteId}: '' → '{New}'",
+                siteId, candidate);
+        }
+        catch (Exception ex)
+        {
+            // Не блокируем импорт: помещения создавать всё равно можно. Visary
+            // optimistic-locking может вернуть 409, если RowVersion устарел; в этом
+            // случае пользователь может перезапустить импорт.
+            _log.LogWarning(ex,
+                "RoomsForm.Apply: PATCH Site {SiteId} (РНС='{New}') не удался: {Msg}",
+                siteId, candidate, ex.Message);
+        }
     }
 
     // ──────────────────────────── Helpers ──────────────────────────────────

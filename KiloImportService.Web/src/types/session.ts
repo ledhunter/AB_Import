@@ -47,6 +47,15 @@ export interface UiStageProgress {
   sheet: string | null;
 }
 
+/** Live-прогресс по каждому листу многолистового файла. */
+export interface UiSheetProgress {
+  sheet: string;            // имя листа («Квартиры», «Машиноместа», …)
+  stage: StageKind;         // на какой стадии прилетело событие
+  currentRow: number;
+  totalRows: number;
+  percentComplete: number;
+}
+
 /** Состояние сессии (без подробных строк). */
 export interface UiSession {
   sessionId: string;
@@ -63,8 +72,14 @@ export interface UiSession {
   errorRows: number;
   errorMessage: string | null;
   stages: UiSessionStage[];
-  /** Live-прогресс из последнего SignalR-события `StageProgress`. */
+  /** Live-прогресс из последнего SignalR-события `StageProgress` (общий счётчик). */
   stageProgress: UiStageProgress | null;
+  /**
+   * Прогресс по каждому листу — обновляется при каждом `StageProgress` событии
+   * с непустым `sheet`. Ключ — имя листа, порядок появления сохраняется
+   * (используется `Map` под капотом). Один лист = одна строка в UI.
+   */
+  sheetProgress: UiSheetProgress[];
 }
 
 export interface UiRowError {

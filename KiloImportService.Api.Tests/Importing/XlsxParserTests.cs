@@ -353,23 +353,91 @@ public class XlsxParserTests
     }
 
     [SkippableFact]
-    public async Task UsesFirstSheet_WhenMultipleSheets()
+    public async Task ReadsAllSheets_WhenMultipleSheets()
     {
+        // Регрессия: раньше парсер читал только первый лист, и многолистовые
+        // шаблоны (например, «Пример импорта.xlsx» с листами «Квартиры»/«Машиноместа»)
+        // импортировались только частично. Теперь обходим все листы; маппер
+        // фильтрует служебные («Справочник») сам.
         Skip.IfNot(SkipReason is null, SkipReason);
         using var wb = new XLWorkbook();
-        var ws1 = wb.Worksheets.Add("Первый");
-        ws1.Cell(1, 1).Value = "Header1";
-        ws1.Cell(2, 1).Value = "FromFirst";
-        var ws2 = wb.Worksheets.Add("Второй");
-        ws2.Cell(1, 1).Value = "Header2";
-        ws2.Cell(2, 1).Value = "FromSecond";
+        var ws1 = wb.Worksheets.Add("Квартиры");
+        ws1.Cell(1, 1).Value = "Номер";
+        ws1.Cell(1, 2).Value = "Тип";
+        ws1.Cell(2, 1).Value = "101";
+        ws1.Cell(2, 2).Value = "Квартира";
+        var ws2 = wb.Worksheets.Add("Машиноместа");
+        ws2.Cell(1, 1).Value = "Номер";
+        ws2.Cell(1, 2).Value = "Тип";
+        ws2.Cell(2, 1).Value = "M-1";
+        ws2.Cell(2, 2).Value = "Машиноместо";
         var ms = new MemoryStream();
         wb.SaveAs(ms);
         ms.Position = 0;
 
         var result = await _parser.ParseAsync(ms);
+
+        Assert.Empty(result.Errors);
+        Assert.Equal(2, result.Rows.Count);
+        Assert.Equal("Квартиры", result.Rows[0].Sheet);
+        Assert.Equal("Квартира", result.Rows[0].Cells["Тип"]);
+        Assert.Equal("Машиноместа", result.Rows[1].Sheet);
+        Assert.Equal("Машиноместо", result.Rows[1].Cells["Тип"]);
+        Assert.Equal(new[] { "Номер", "Тип" }, result.Headers);
+    }
+
+    [SkippableFact]
+    public async Task ReadsSecondSheet_WhenFirstIsEmpty()
+    {
+        // Пустой первый лист (например, «Справочник») не должен блокировать
+        // импорт из последующих листов.
+        Skip.IfNot(SkipReason is null, SkipReason);
+        using var wb = new XLWorkbook();
+        wb.Worksheets.Add("Справочник"); // пустой
+        var ws = wb.Worksheets.Add("Квартиры");
+        ws.Cell(1, 1).Value = "Номер";
+        ws.Cell(2, 1).Value = "101";
+        var ms = new MemoryStream();
+        wb.SaveAs(ms);
+        ms.Position = 0;
+
+        var result = await _parser.ParseAsync(ms);
+
+        Assert.Empty(result.Errors);
         Assert.Single(result.Rows);
-        Assert.Equal("Первый", result.Rows[0].Sheet);
-        Assert.Equal("FromFirst", result.Rows[0].Cells["Header1"]);
+        Assert.Equal("Квартиры", result.Rows[0].Sheet);
+    }
+
+    [SkippableFact]
+    public async Task MultipleSheets_DifferentHeaders_UnionInResultHeaders()
+    {
+        // Колонки у листов разные («Квартиры» имеет «Колич. комнат», «Машиноместа» — нет).
+        // В Result.Headers должен попасть объединённый набор, у каждой ParsedRow.Cells —
+        // только те ключи, которые есть в её листе.
+        Skip.IfNot(SkipReason is null, SkipReason);
+        using var wb = new XLWorkbook();
+        var ws1 = wb.Worksheets.Add("Квартиры");
+        ws1.Cell(1, 1).Value = "Номер";
+        ws1.Cell(1, 2).Value = "Колич. комнат";
+        ws1.Cell(2, 1).Value = "101";
+        ws1.Cell(2, 2).Value = "2";
+        var ws2 = wb.Worksheets.Add("Машиноместа");
+        ws2.Cell(1, 1).Value = "Номер";
+        ws2.Cell(1, 2).Value = "Этаж";
+        ws2.Cell(2, 1).Value = "M-1";
+        ws2.Cell(2, 2).Value = "-1";
+        var ms = new MemoryStream();
+        wb.SaveAs(ms);
+        ms.Position = 0;
+
+        var result = await _parser.ParseAsync(ms);
+
+        Assert.Empty(result.Errors);
+        Assert.Equal(2, result.Rows.Count);
+        Assert.Equal(new[] { "Номер", "Колич. комнат", "Этаж" }, result.Headers);
+        Assert.True(result.Rows[0].Cells.ContainsKey("Колич. комнат"));
+        Assert.False(result.Rows[0].Cells.ContainsKey("Этаж")); // листа Машиноместа колонок нет в строке Квартир
+        Assert.True(result.Rows[1].Cells.ContainsKey("Этаж"));
+        Assert.False(result.Rows[1].Cells.ContainsKey("Колич. комнат"));
     }
 }

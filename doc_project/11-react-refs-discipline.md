@@ -133,6 +133,37 @@ return <div>...</div>;
 
 **Правильно:** перенеси в `useEffect(() => { if (...) myRef.current = ... })`.
 
+### Ошибка 5: `setSession({ ...latestRef.current, ... })` в SignalR-хэндлерах
+
+`latestRef.current` обновляется через `useEffect`, **то есть после коммита
+рендера**. Если в одну micro-task'у приходят два события (SignalR с быстрым
+throttling, batched updates), второй хэндлер прочитает ref ДО эффекта первого
+и перетрёт изменения.
+
+```ts
+// ❌ НЕПРАВИЛЬНО — race condition: второй event теряет данные первого
+onStageProgress: (e) => {
+  const prev = sessionLatestRef.current;
+  setSession({ ...prev, sheetProgress: upsertSheetProgress(prev.sheetProgress, ...) });
+}
+```
+
+**Симптом:** при многолистовом импорте часть листов «исчезает» из UI
+(события для них пришли, но перезаписаны следующим событием).
+
+```ts
+// ✅ ПРАВИЛЬНО — функциональный setState получает свежий prev из очереди React
+onStageProgress: (e) => {
+  setSession((prev) => {
+    if (!prev) return prev;
+    return { ...prev, sheetProgress: upsertSheetProgress(prev.sheetProgress, ...) };
+  });
+}
+```
+
+Правило: **во всех SignalR/WebSocket-хэндлерах используй
+`setState(prev => …)`**, а не `{ ...latestRef.current, … }`.
+
 ---
 
 ## 🧠 Когда `useRef` нужен, а когда — нет

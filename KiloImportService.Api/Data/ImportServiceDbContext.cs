@@ -87,11 +87,15 @@ public class ImportServiceDbContext : DbContext
             }
 
             e.Property(x => x.Status).HasConversion<string>().HasMaxLength(16);
+            e.Property(x => x.Sheet).HasMaxLength(255).IsRequired();
             e.HasOne(x => x.Session)
              .WithMany(s => s.Rows)
              .HasForeignKey(x => x.ImportSessionId)
              .OnDelete(DeleteBehavior.Cascade);
-            e.HasIndex(x => new { x.ImportSessionId, x.SourceRowNumber }).IsUnique();
+            // Включаем Sheet в уникальный ключ: один и тот же Excel-номер строки
+            // встречается на КАЖДОМ листе многолистового файла, без Sheet получаем
+            // 23505 duplicate key violation. См. doc_project/68-rooms-import.md.
+            e.HasIndex(x => new { x.ImportSessionId, x.Sheet, x.SourceRowNumber }).IsUnique();
             e.HasIndex(x => new { x.ImportSessionId, x.Status });
         });
 
@@ -103,11 +107,13 @@ public class ImportServiceDbContext : DbContext
             e.Property(x => x.ErrorCode).HasMaxLength(64).IsRequired();
             e.Property(x => x.Message).HasMaxLength(2000).IsRequired();
             e.Property(x => x.ColumnName).HasMaxLength(255);
+            e.Property(x => x.Sheet).HasMaxLength(255).IsRequired();
             e.HasOne(x => x.Session)
              .WithMany(s => s.Errors)
              .HasForeignKey(x => x.ImportSessionId)
              .OnDelete(DeleteBehavior.Cascade);
-            e.HasIndex(x => new { x.ImportSessionId, x.SourceRowNumber });
+            // Sheet+SourceRowNumber для группировки ошибок по строкам с учётом листа.
+            e.HasIndex(x => new { x.ImportSessionId, x.Sheet, x.SourceRowNumber });
         });
 
         // ─── ImportFileSnapshot ───

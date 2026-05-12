@@ -156,6 +156,11 @@ public sealed class ListViewClient : VisaryHttpBase<ListViewClient>, IListViewCl
     // Если нужен полный DTO — берите через ICrudClient.GetXxxByIdAsync.
     private static readonly string[] DictionaryColumns = ["ID", "Title", "Hidden"];
 
+    // RoomKind дополнительно отдаёт RoomCategory — нужна импортеру помещений,
+    // чтобы решить, в какое поле положить площадь (Жилое: 1 — ProjectArea;
+    // Нежилое: ≠1 — TotalArea, ProjectArea=0). См. RoomsFormImportMapper.
+    private static readonly string[] RoomKindColumns = ["ID", "Title", "Hidden", "RoomCategory"];
+
     private static readonly string[] WbsColumns =
         ["ID", "Title", "Code", "ParentID", "Parent", "ProjectID", "Project",
          "ConstructionSite", "DeclaredSum", "ConfirmedSum"];
@@ -614,7 +619,26 @@ public sealed class ListViewClient : VisaryHttpBase<ListViewClient>, IListViewCl
         => ListDictionaryAsync<FinishingMaterialRaw>(VisaryMnemonics.FinishingMaterial, null, ct);
 
     public Task<ListViewResponse<RoomKindRaw>> ListRoomKindsAsync(CancellationToken ct)
-        => ListDictionaryAsync<RoomKindRaw>(VisaryMnemonics.RoomKind, null, ct);
+    {
+        // Inline вместо ListDictionaryAsync — RoomKind единственный справочник,
+        // которому нужны доп. колонки сверх ["ID", "Title", "Hidden"].
+        var body = new
+        {
+            Mnemonic = VisaryMnemonics.RoomKind,
+            PageSkip = 0,
+            PageSize = Options.LargePageSize,
+            Columns = RoomKindColumns,
+            Filter = (object?)null,
+            SearchPhrase = (string?)null,
+            Sorts = SortsNullSentinel,
+            Hidden = false,
+            Summaries = Array.Empty<object>(),
+        };
+        _log.LogDebug("Visary → GET listview/{Mnemonic} (with RoomCategory)", VisaryMnemonics.RoomKind);
+        return PostListViewAsync<RoomKindRaw>(
+            $"{BaseUrl}/api/visary/listview/{VisaryMnemonics.RoomKind}", body,
+            VisaryMnemonics.RoomKind, ct);
+    }
 
     private Task<ListViewResponse<TEntity>> ListDictionaryAsync<TEntity>(
         string mnemonic, string? titleFilter, CancellationToken ct)

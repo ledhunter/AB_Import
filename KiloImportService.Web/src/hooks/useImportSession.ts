@@ -30,7 +30,24 @@ import {
   toUiReport,
   toUiSession,
 } from '../services/importMappers';
-import type { UiReport, UiSession } from '../types/session';
+import type { UiReport, UiSession, UiSheetProgress } from '../types/session';
+
+/**
+ * Иммутабельный upsert прогресса по листу: если лист уже в массиве — заменяем
+ * запись по индексу (сохраняем порядок появления); если нет — добавляем в конец.
+ */
+function upsertSheetProgress(
+  current: UiSheetProgress[],
+  next: UiSheetProgress,
+): UiSheetProgress[] {
+  const idx = current.findIndex(
+    (p) => p.sheet.toLowerCase() === next.sheet.toLowerCase(),
+  );
+  if (idx === -1) return [...current, next];
+  const copy = current.slice();
+  copy[idx] = next;
+  return copy;
+}
 
 export type ImportPhase =
   | 'idle'
@@ -126,6 +143,13 @@ export function useImportSession(): UseImportSessionState {
     try {
       const apiSession = await getImportSession(sessionId);
       const ui = toUiSession(apiSession);
+      // Сохраняем live-прогресс по листам: он накапливается в UI из SignalR
+      // событий, а REST-снимок про листы ничего не знает.
+      const previous = sessionLatestRef.current;
+      if (previous && previous.sessionId === ui.sessionId) {
+        ui.sheetProgress = previous.sheetProgress;
+        ui.stageProgress = previous.stageProgress;
+      }
       setSession(ui);
       // Если статус финальный — phase=completed.
       if (FINAL_STATUSES.has(ui.status as 'Applied' | 'Failed' | 'Cancelled')) {
@@ -177,16 +201,23 @@ export function useImportSession(): UseImportSessionState {
       // Поднимаем SignalR подключение.
       try {
         const hub = await createImportsHub({
+          // Во ВСЕХ хэндлерах SignalR используем функциональный setSession(prev => ...).
+          // Объяснение: `sessionLatestRef.current` обновляется через useEffect,
+          // т.е. ПОСЛЕ коммита render'а; если два события прилетят в одну
+          // micro-task'у (что для SignalR-троттлинга случается), второй
+          // хэндлер увидит несвежий ref и перетрёт изменения первого.
+          // Функциональный setState получает гарантированно актуальный prev
+          // из очереди React и решает race condition.
           onSessionStatus: (e) => {
             if (e.sessionId !== sessionIdRef.current) return;
-            const prev = sessionLatestRef.current;
-            if (!prev) return;
-            const next: UiSession = {
-              ...prev,
-              status: e.status,
-              variant: toSessionVariant(e.status),
-            };
-            setSession(next);
+            setSession((prev) => {
+              if (!prev) return prev;
+              return {
+                ...prev,
+                status: e.status,
+                variant: toSessionVariant(e.status),
+              };
+            });
 
             // Финальный статус — переходим в completed + дёргаем отчёт.
             const isFinal = FINAL_STATUSES.has(
@@ -209,25 +240,43 @@ export function useImportSession(): UseImportSessionState {
             if (e.sessionId !== sessionIdRef.current) return;
             console.info(`${LOG_TAG} stage completed: ${e.stage}`);
             // Очищаем live-прогресс при завершении стадии — следующая стадия
-            // запустится с чистым счётчиком.
-            const prev = sessionLatestRef.current;
-            if (prev && prev.sessionId === e.sessionId && prev.stageProgress) {
-              setSession({ ...prev, stageProgress: null });
-            }
+            // запустится с чистым счётчиком. sheetProgress НЕ сбрасываем —
+            // он должен показать финальную картину по листам.
+            setSession((prev) => {
+              if (!prev || prev.sessionId !== e.sessionId || !prev.stageProgress) {
+                return prev;
+              }
+              return { ...prev, stageProgress: null };
+            });
           },
           onStageProgress: (e) => {
             if (e.sessionId !== sessionIdRef.current) return;
-            const prev = sessionLatestRef.current;
-            if (!prev) return;
-            setSession({
-              ...prev,
-              stageProgress: {
-                stage: e.stage,
-                currentRow: e.currentRow,
-                totalRows: e.totalRows,
-                percentComplete: e.percentComplete,
-                sheet: e.sheet ?? null,
-              },
+            setSession((prev) => {
+              if (!prev) return prev;
+              // Накапливаем прогресс по листу: если лист уже встречался —
+              // обновляем его счётчики; если нет — добавляем в конец (порядок
+              // появления листов в файле сохраняется). Без `sheet` — общий
+              // прогресс, в sheetProgress не пишем.
+              const nextSheetProgress = e.sheet
+                ? upsertSheetProgress(prev.sheetProgress, {
+                    sheet: e.sheet,
+                    stage: e.stage,
+                    currentRow: e.currentRow,
+                    totalRows: e.totalRows,
+                    percentComplete: e.percentComplete,
+                  })
+                : prev.sheetProgress;
+              return {
+                ...prev,
+                stageProgress: {
+                  stage: e.stage,
+                  currentRow: e.currentRow,
+                  totalRows: e.totalRows,
+                  percentComplete: e.percentComplete,
+                  sheet: e.sheet ?? null,
+                },
+                sheetProgress: nextSheetProgress,
+              };
             });
           },
         });

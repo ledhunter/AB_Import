@@ -13,6 +13,15 @@ public class StagedRow
     public Guid ImportSessionId { get; set; }
     public ImportSession Session { get; set; } = null!;
 
+    /// <summary>
+    /// Имя листа Excel, к которому относится строка. Для CSV / однолистовых XLS
+    /// может быть пустой строкой. Включён в уникальный индекс
+    /// <c>(ImportSessionId, Sheet, SourceRowNumber)</c>, потому что один и тот же
+    /// Excel-номер строки встречается на каждом листе многолистового шаблона
+    /// (например, «Пример импорта.xlsx» с листами «Квартиры»/«Машиноместа»).
+    /// </summary>
+    public string Sheet { get; set; } = string.Empty;
+
     /// <summary>Номер строки в исходном файле (1-based, как видит пользователь в Excel).</summary>
     public int SourceRowNumber { get; set; }
 
