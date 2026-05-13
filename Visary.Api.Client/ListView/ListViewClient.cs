@@ -51,6 +51,30 @@ public interface IListViewClient
     Task<ListViewResponse<OrganizationRaw>> GetOrganizationsByClientIdAsync(
         string clientId, CancellationToken ct = default);
 
+    /// <summary>
+    /// Список <c>projectmanagement</c>-записей, привязанных к объекту строительства
+    /// через manytomany (POST <c>/api/visary/listview/constructionsite/manytomany/projectmanagement?associationId={siteId}</c>).
+    /// Возвращает все роли (Застройщик, Технический заказчик, …); фильтрация по
+    /// <see cref="ProjectManagementRaw.Role"/> и <see cref="ProjectManagementRaw.Organization"/>
+    /// делается на стороне вызывающего.
+    /// </summary>
+    Task<ListViewResponse<ProjectManagementRaw>> GetProjectManagementsBySiteAsync(
+        int siteId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Список <c>projectmanagement</c>-записей в рамках проекта (onetomany).
+    /// POST <c>/api/visary/listview/projectmanagement/onetomany/Project?associationId={projectId}</c>.
+    /// <para>
+    /// Используется в импорте Помещений, чтобы переиспользовать существующий PM из
+    /// другого объекта того же проекта (не плодить дубликаты <see cref="ProjectManagementRaw"/>
+    /// между сайтами). Фильтры по <paramref name="organizationId"/>/<paramref name="roleId"/>
+    /// уходят на сервер как <c>["Organization","contains","ID:{id}"]</c>.
+    /// </para>
+    /// </summary>
+    Task<ListViewResponse<ProjectManagementRaw>> GetProjectManagementsByProjectAsync(
+        int projectId, int? organizationId = null, int? roleId = null,
+        CancellationToken ct = default);
+
     Task<ListViewResponse<RoomRaw>> GetRoomsBySiteAsync(
         int siteId, string? uniqueNumberFilter = null, CancellationToken ct = default);
 
@@ -65,6 +89,21 @@ public interface IListViewClient
 
     Task<ListViewResponse<ShareAgreementRaw>> GetShareAgreementsByRoomAsync(
         int roomId, string? numberFilter = null, CancellationToken ct = default);
+
+    /// <summary>
+    /// Глобальный поиск ДДУ (<c>shareagreement</c>) по комбинации признаков из
+    /// строки файла импорта Помещений — № договора, тип помещения, № квартиры
+    /// (экспликация), этап, НПС. Используется чтобы избежать дубликатов: даже
+    /// если ДДУ есть в системе, но НЕ привязан к комнате, его нужно переиспользовать
+    /// через PATCH вместо CREATE. Не указанные параметры в фильтр не включаются.
+    /// </summary>
+    Task<ListViewResponse<ShareAgreementRaw>> FindShareAgreementsAsync(
+        string? number,
+        int? roomKindId,
+        string? conditionalNumber,
+        string? stageNumber,
+        string? projectNumber,
+        CancellationToken ct = default);
 
     Task<ListViewResponse<CadastralAreaFull>> ListCadastralAreasAsync(
         string? cadastralNumFilter = null, CancellationToken ct = default);
@@ -126,6 +165,9 @@ public sealed class ListViewClient : VisaryHttpBase<ListViewClient>, IListViewCl
         ["ID", "Title", "Status", "INN", "SRO", "ClientID", "Region", "Address",
          "CEO", "Email", "Phone", "AddInfo", "Group", "Town", "Code", "CurrentUser",
          "OGRN", "KPP", "Category", "Hidden"];
+
+    private static readonly string[] ProjectManagementColumns =
+        ["ID", "Project", "Role", "Organization", "DateStart", "DateEnd", "Affiliation", "Title", "Version"];
 
     private static readonly string[] RoomColumns =
         ["ID", "Title", "Site", "Section", "Number", "Floor", "Kind", "RoomsNumber",
@@ -417,6 +459,69 @@ public sealed class ListViewClient : VisaryHttpBase<ListViewClient>, IListViewCl
             body, $"{VisaryMnemonics.Organization} clientId={clientId}", ct);
     }
 
+    // ─── ProjectManagement ──────────────────────────────────────────────────
+    // Manytomany через `constructionsite` — Visary возвращает список ролей-привязок
+    // (Застройщик, Тех.заказчик, …), относящихся к данному объекту строительства.
+
+    public Task<ListViewResponse<ProjectManagementRaw>> GetProjectManagementsBySiteAsync(
+        int siteId, CancellationToken ct)
+    {
+        var body = new
+        {
+            Mnemonic = VisaryMnemonics.ProjectManagement,
+            PageSkip = 0,
+            PageSize = Options.DefaultPageSize,
+            Columns = ProjectManagementColumns,
+            SearchPhrase = (string?)null,
+            Sorts = SortsNullSentinel,
+            Hidden = false,
+            Summaries = Array.Empty<object>(),
+        };
+
+        _log.LogDebug(
+            "Visary → GET {Site}/manytomany/{PM} siteId={SiteId}",
+            VisaryMnemonics.Site, VisaryMnemonics.ProjectManagement, siteId);
+        return PostListViewAsync<ProjectManagementRaw>(
+            $"{BaseUrl}/api/visary/listview/{VisaryMnemonics.Site}/manytomany/{VisaryMnemonics.ProjectManagement}?associationId={siteId}",
+            body, $"{VisaryMnemonics.Site}/manytomany/{VisaryMnemonics.ProjectManagement} siteId={siteId}", ct);
+    }
+
+    public Task<ListViewResponse<ProjectManagementRaw>> GetProjectManagementsByProjectAsync(
+        int projectId, int? organizationId, int? roleId, CancellationToken ct)
+    {
+        // Visary не различает "=" и "contains" для VisaryRef-полей правильно — Postman'ом
+        // подтверждено, что работает только `contains "ID:{id}"`. См. doc 75.
+        string? filter = null;
+        if (organizationId is int orgId && roleId is int rId)
+            filter = FilterAnd(
+                FilterByRefIdContains("Organization", orgId),
+                FilterByRefIdContains("Role", rId));
+        else if (organizationId is int o)
+            filter = FilterByRefIdContains("Organization", o);
+        else if (roleId is int r)
+            filter = FilterByRefIdContains("Role", r);
+
+        var body = new
+        {
+            Mnemonic = VisaryMnemonics.ProjectManagement,
+            PageSkip = 0,
+            PageSize = Options.DefaultPageSize,
+            Columns = ProjectManagementColumns,
+            Filter = filter,
+            SearchPhrase = (string?)null,
+            Sorts = SortsNullSentinel,
+            Hidden = false,
+            Summaries = Array.Empty<object>(),
+        };
+
+        _log.LogDebug(
+            "Visary → GET {PM}/onetomany/Project projectId={ProjectId} orgId={OrgId} roleId={RoleId}",
+            VisaryMnemonics.ProjectManagement, projectId, organizationId, roleId);
+        return PostListViewAsync<ProjectManagementRaw>(
+            $"{BaseUrl}/api/visary/listview/{VisaryMnemonics.ProjectManagement}/onetomany/Project?associationId={projectId}",
+            body, $"{VisaryMnemonics.ProjectManagement}/onetomany/Project projectId={projectId}", ct);
+    }
+
     // ─── Rooms ───────────────────────────────────────────────────────────────
 
     public Task<ListViewResponse<RoomRaw>> GetRoomsBySiteAsync(
@@ -545,6 +650,50 @@ public sealed class ListViewClient : VisaryHttpBase<ListViewClient>, IListViewCl
         return PostListViewAsync<ShareAgreementRaw>(
             $"{BaseUrl}/api/visary/listview/{VisaryMnemonics.ShareAgreement}/onetomany/Room?associationId={roomId}",
             body, $"{VisaryMnemonics.ShareAgreement} roomId={roomId}", ct);
+    }
+
+    public Task<ListViewResponse<ShareAgreementRaw>> FindShareAgreementsAsync(
+        string? number, int? roomKindId, string? conditionalNumber,
+        string? stageNumber, string? projectNumber, CancellationToken ct)
+    {
+        // Собираем AND-фильтр только из ненулевых параметров (см. паттерн FindSitesAsync).
+        var parts = new List<string>(5);
+        if (!string.IsNullOrWhiteSpace(number))
+            parts.Add(FilterByString("Number", number));
+        if (roomKindId is int kid)
+            parts.Add(FilterByRefIdContains("RoomKindRef", kid));
+        if (!string.IsNullOrWhiteSpace(conditionalNumber))
+            parts.Add(FilterByString("ConditionalNumber", conditionalNumber));
+        if (!string.IsNullOrWhiteSpace(stageNumber))
+            parts.Add(FilterByString("StageNumber", stageNumber));
+        if (!string.IsNullOrWhiteSpace(projectNumber))
+            parts.Add(FilterByString("ProjectNumber", projectNumber));
+
+        if (parts.Count == 0)
+            throw new ArgumentException(
+                "FindShareAgreementsAsync: нужно указать хотя бы один параметр для фильтра.");
+
+        var filter = parts.Aggregate((a, b) => FilterAnd(a, b));
+
+        var body = new
+        {
+            Mnemonic = VisaryMnemonics.ShareAgreement,
+            PageSkip = 0,
+            PageSize = Options.DefaultPageSize,
+            Columns = ShareAgreementColumns,
+            Filter = filter,
+            SearchPhrase = (string?)null,
+            Sorts = SortsNullSentinel,
+            Hidden = false,
+            Summaries = Array.Empty<object>(),
+        };
+
+        _log.LogDebug(
+            "Visary → GET {Mnemonic} number='{Number}' kindId={Kind} cond='{Cond}' stage='{Stage}' projectNum='{Proj}'",
+            VisaryMnemonics.ShareAgreement, number, roomKindId, conditionalNumber, stageNumber, projectNumber);
+        return PostListViewAsync<ShareAgreementRaw>(
+            $"{BaseUrl}/api/visary/listview/{VisaryMnemonics.ShareAgreement}",
+            body, $"{VisaryMnemonics.ShareAgreement} find", ct);
     }
 
     // ─── CadastralAreas list ─────────────────────────────────────────────────
@@ -698,6 +847,15 @@ public sealed class ListViewClient : VisaryHttpBase<ListViewClient>, IListViewCl
 
     private static string FilterByRefId(string field, int id)
         => JsonSerializer.Serialize(new object[] { field, "=", $"ID:{id}" });
+
+    /// <summary>
+    /// Visary listview-фильтр для ссылочного поля через <c>contains "ID:{id}"</c>.
+    /// Используется там, где точное "=" не работает (например, поле приходит
+    /// объектом {ID, Title} и Visary матчит подстроку). Подсмотрено в реальном
+    /// запросе: <c>["Organization","contains","ID:4500"]</c>.
+    /// </summary>
+    private static string FilterByRefIdContains(string field, int id)
+        => JsonSerializer.Serialize(new object[] { field, "contains", $"ID:{id}" });
 
     // Visary ожидает, что вложенные фильтры — это уже-сериализованные JSON-массивы,
     // которые надо встроить «как есть» в внешний массив. Поэтому склейка через строку,

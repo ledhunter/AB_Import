@@ -58,6 +58,16 @@ public sealed class ShareAgreementPatchRequest
     public string? Title { get; set; }
     public VisaryRef? Site { get; set; }
     public VisaryRef? Project { get; set; }
+
+    // Поля для «реанимации» орфанного ДДУ — когда нашли в Visary запись по
+    // (Number, Kind, ConditionalNumber, Stage, ProjectNumber), но она не привязана
+    // к новой комнате текущей сессии импорта. См. doc 76-share-agreement-dedup.md.
+    public int? RoomID { get; set; }
+    public VisaryRef? Room { get; set; }
+    public VisaryRef? RoomKindRef { get; set; }
+    public string? ConditionalNumber { get; set; }
+    public string? StageNumber { get; set; }
+    public string? ProjectNumber { get; set; }
 }
 
 public sealed class SiteCreateRequest
