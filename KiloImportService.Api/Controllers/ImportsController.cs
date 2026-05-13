@@ -1,3 +1,4 @@
+using KiloImportService.Api.Budget;
 using KiloImportService.Api.Data;
 using KiloImportService.Api.Data.Entities;
 using KiloImportService.Api.Domain.Importing;
@@ -174,6 +175,9 @@ public class ImportsController : ControllerBase
             .Include(x => x.Stages)
             .FirstOrDefaultAsync(x => x.Id == id, ct);
         if (s is null) return NotFound();
+
+        var generatedFiles = await BuildGeneratedFilesAsync(s, ct);
+
         return Ok(new
         {
             sessionId = s.Id,
@@ -195,8 +199,48 @@ public class ImportsController : ControllerBase
                 isSuccess = st.IsSuccess,
                 progressPercent = st.ProgressPercent,
                 message = st.Message
-            })
+            }),
+            generatedFiles,
         });
+    }
+
+    /// <summary>
+    /// Собирает список файлов, сгенерированных по результатам сессии: бюджет XLSX для
+    /// «Финмодели» (если найдены бюджетные mapped-строки), в будущем — другие выгрузки.
+    /// Элементы массива описывают «доступный к скачиванию артефакт», а не существующий
+    /// файл на диске: backend генерирует их по запросу через download-эндпоинт.
+    /// </summary>
+    private async Task<List<object>> BuildGeneratedFilesAsync(ImportSession s, CancellationToken ct)
+    {
+        var files = new List<object>();
+
+        if (s.ImportTypeCode == "finmodel")
+        {
+            // Бюджет показываем, только если в staged-таблице есть валидные/применённые
+            // строки Kind='budget' (иначе кнопка «Скачать» сразу дала бы 404).
+            // Дешёвый AnyAsync с фильтром на jsonb — без полного чтения mapped values.
+            var hasBudgetRows = await _db.StagedRows
+                .AsNoTracking()
+                .AnyAsync(r => r.ImportSessionId == s.Id
+                            && (r.Status == StagedRowStatus.Valid
+                                || r.Status == StagedRowStatus.Applied)
+                            && r.MappedValues != null
+                            && EF.Functions.JsonContains(r.MappedValues, "{\"Kind\":\"budget\"}"), ct);
+
+            if (hasBudgetRows)
+            {
+                files.Add(new
+                {
+                    kind = "budget-xlsx",
+                    label = "Бюджет для импорта в Visary",
+                    description = "XLSX по эталону «Бюджет_А4.1» — для ручного импорта на стороне Visary",
+                    downloadUrl = $"/api/imports/{s.Id}/budget-xlsx",
+                    fileName = $"Бюджет_{s.Id}.xlsx",
+                });
+            }
+        }
+
+        return files;
     }
 
     /// <summary>
@@ -308,6 +352,41 @@ public class ImportsController : ControllerBase
     public sealed class ExportPdfRequest
     {
         public List<Guid> SessionIds { get; set; } = [];
+    }
+
+    /// <summary>
+    /// Сгенерировать XLSX-файл бюджета для ручного импорта в Visary (тип «Финмодель»).
+    /// Visary при импорте бюджета чувствительна к структуре файла — поэтому копируем
+    /// эталонный шаблон <c>Бюджет_А4.1.xlsx</c> и подменяем только суммы в колонках C/D
+    /// по агрегации справочника. См. <c>doc_project/78-budget-xlsx-export.md</c>.
+    /// </summary>
+    [HttpGet("{id:guid}/budget-xlsx")]
+    public async Task<IActionResult> ExportBudgetXlsx(
+        Guid id,
+        [FromServices] BudgetXlsxExporter exporter,
+        CancellationToken ct)
+    {
+        var session = await _db.Sessions.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, ct);
+        if (session is null) return NotFound();
+        if (session.ImportTypeCode != "finmodel")
+            return BadRequest(new { error = "Экспорт бюджета доступен только для импорта «Финмодель»." });
+
+        try
+        {
+            var bytes = await exporter.GenerateAsync(id, ct);
+            // RFC 5987: ASP.NET сам кодирует Unicode-имя файла в filename* для совместимости.
+            var fileName = $"Бюджет_{id}.xlsx";
+            return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return NotFound(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _log.LogError(ex, "ExportBudgetXlsx failed for session {SessionId}", id);
+            return StatusCode(500, new { error = $"Не удалось сформировать XLSX: {ex.Message}" });
+        }
     }
 
     /// <summary>

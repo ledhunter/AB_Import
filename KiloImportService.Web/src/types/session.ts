@@ -11,10 +11,14 @@
  */
 
 import type {
+  ApiGeneratedFile,
   ApiImportStageKind,
   ApiImportStatus,
   ApiStagedRowStatus,
 } from './api';
+
+/** Презентационный тип для файла, сгенерированного backend'ом по результатам сессии. */
+export type UiGeneratedFile = ApiGeneratedFile;
 
 export type SessionStatus = ApiImportStatus;
 export type StageKind = ApiImportStageKind;
@@ -80,6 +84,11 @@ export interface UiSession {
    * (используется `Map` под капотом). Один лист = одна строка в UI.
    */
   sheetProgress: UiSheetProgress[];
+  /**
+   * Файлы, доступные для скачивания по этой сессии (backend генерирует их по запросу).
+   * Пустой массив, если артефактов нет.
+   */
+  generatedFiles: UiGeneratedFile[];
 }
 
 export interface UiRowError {

@@ -4,6 +4,7 @@ import { Typography } from '@alfalab/core-components/typography';
 import { SessionProgress } from './SessionProgress';
 import { SessionSummary } from './SessionSummary';
 import { SessionRowsTable } from './SessionRowsTable';
+import { SessionGeneratedFiles } from './SessionGeneratedFiles';
 import type { ImportPhase } from '../../hooks/useImportSession';
 import type { UiReport, UiSession } from '../../types/session';
 
@@ -62,6 +63,14 @@ export const SessionView = ({
                   <Divider />
                 </div>
                 <SessionRowsTable report={report} />
+              </>
+            )}
+            {session.generatedFiles.length > 0 && (
+              <>
+                <div className="section-gap">
+                  <Divider />
+                </div>
+                <SessionGeneratedFiles files={session.generatedFiles} />
               </>
             )}
           </>

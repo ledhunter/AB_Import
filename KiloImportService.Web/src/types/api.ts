@@ -41,6 +41,20 @@ export interface ApiImportSessionStage {
   message: string | null;
 }
 
+/**
+ * Файл, сгенерированный backend'ом по результатам сессии (см. `BuildGeneratedFilesAsync`
+ * в ImportsController). Это «доступный артефакт», а не файл на диске — скачивание идёт
+ * через `downloadUrl`, backend генерирует содержимое по запросу.
+ * Сейчас единственный вид — `budget-xlsx` для «Финмодели», когда в сессии есть бюджетные строки.
+ */
+export interface ApiGeneratedFile {
+  kind: string;
+  label: string;
+  description: string;
+  downloadUrl: string;
+  fileName: string;
+}
+
 /** Ответ `GET /api/imports/{id}` — состояние сессии. */
 export interface ApiImportSession {
   sessionId: string; // GUID
@@ -55,6 +69,8 @@ export interface ApiImportSession {
   errorRows: number;
   errorMessage: string | null;
   stages: ApiImportSessionStage[];
+  /** Файлы, доступные для скачивания (например, бюджет XLSX). Пустой массив если артефактов нет. */
+  generatedFiles: ApiGeneratedFile[];
 }
 
 export interface ApiImportRow {

@@ -96,6 +96,7 @@ export const toUiSession = (api: ApiImportSession): UiSession => ({
   // SignalR (`onStageProgress` в useImportSession), а не из REST-снимка сессии.
   stageProgress: null,
   sheetProgress: [],
+  generatedFiles: api.generatedFiles ?? [],
 });
 
 export const toUiSessionSummary = (api: ApiImportSessionSummary): UiSessionSummary => ({

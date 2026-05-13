@@ -3,6 +3,7 @@ import { Divider } from '@alfalab/core-components/divider';
 import { Typography } from '@alfalab/core-components/typography';
 import { SessionSummary } from '../ImportSession/SessionSummary';
 import { SessionRowsTable } from '../ImportSession/SessionRowsTable';
+import { SessionGeneratedFiles } from '../ImportSession/SessionGeneratedFiles';
 import { useImportSessionDetail } from '../../hooks/useImportSessionDetail';
 import type { ApiImportTypeInfo } from '../../types/api';
 
@@ -80,6 +81,14 @@ export const HistoryDetailView = ({ sessionId, importTypes, onBack }: Props) => 
               >
                 Подробный отчёт по строкам недоступен для этого статуса.
               </Typography.Text>
+            )}
+            {session.generatedFiles.length > 0 && (
+              <>
+                <div className="section-gap">
+                  <Divider />
+                </div>
+                <SessionGeneratedFiles files={session.generatedFiles} />
+              </>
             )}
           </>
         )}

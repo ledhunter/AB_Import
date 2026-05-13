@@ -1,9 +1,19 @@
 # 🏛️ WBS (ИСР) API клиент — фундамент для импорта бюджета
 
+> ⚠️ **Статус на 2026-05-13: подход с CRUD-импортом бюджета через WBS API ОТКЛЮЧЁН.**
+> Visary возвращает 500 на `listview/wbs/onetomany/ConstructionProject` (нет navigation property
+> `ConstructionProject` у сущности `WBS`), а полная иерархия `ProjectRoot → SiteRoot →
+> Глава → Подстатья` сложна для воспроизведения CRUD-ом. Вместо этого бюджет теперь
+> **выгружается XLSX по эталонному шаблону «Бюджет_А4.1»** и импортируется в Visary
+> вручную через её собственный механизм. См. **[78-budget-xlsx-export.md](78-budget-xlsx-export.md)**.
+> Код `CreateWbsAsync` / `PatchWbsAsync` / `GetWbsByProjectAsync` оставлен в репозитории на случай,
+> если Visary в будущем починит соответствующие API, но `FinModelImportMapper.ApplyBudgetAsync`
+> больше не вызывается из `ApplyAsync`.
+
 ## 📋 Описание
 
-**Статус**: 🟢 Фундамент v0.1 готов; встроено в `FinModelImportMapper` в v0.2 — см. [71-finmodel-budget-import.md](71-finmodel-budget-import.md).
-**Дата**: 2026-05-07 (v0.1) → 2026-05-08 (v0.2 интеграция)
+**Статус**: 🟡 Архивирован; см. [78-budget-xlsx-export.md](78-budget-xlsx-export.md).
+**Дата**: 2026-05-07 (v0.1) → 2026-05-08 (v0.2 интеграция) → 2026-05-13 (заменён XLSX-путём)
 
 WBS (ИСР — иерархическая структура работ) в Visary — это **двухуровневая
 самоссылающаяся структура** статей бюджета объекта строительства:

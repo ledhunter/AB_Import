@@ -48,4 +48,13 @@
     <ProjectReference Include="..\Visary.Api.Client\Visary.Api.Client.csproj" />
   </ItemGroup>
 
+  <!-- Эталонный XLSX-шаблон для экспорта бюджета («Бюджет_А4.1»).
+       Visary при импорте бюджета чувствителен к структуре файла (порядок и состав строк
+       строго как в эталоне), поэтому копируем эталон и подменяем только суммы — стили,
+       header, примечания (G), ширины колонок и формулы сохраняются автоматически.
+       См. doc_project/78-budget-xlsx-export.md. -->
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\budget-template-a41.xlsx" />
+  </ItemGroup>
+
 </Project>
