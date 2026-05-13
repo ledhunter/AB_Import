@@ -6,13 +6,17 @@ import { ImportTypePicker } from './components/ImportTypePicker/ImportTypePicker
 import { ImportForm } from './components/ImportForm/ImportForm';
 import { FileUpload } from './components/FileUpload/FileUpload';
 import { SessionView } from './components/ImportSession/SessionView';
+import { ImportHistoryPage } from './components/ImportHistory/ImportHistoryPage';
 import { useImportSession } from './hooks/useImportSession';
 import { useImportTypes } from './hooks/useImportTypes';
 import { detectFileFormat } from './utils/fileFormat';
 import type { ImportType } from './types/import';
 import './App.css';
 
+type AppView = 'import' | 'history';
+
 export default function App() {
+  const [view, setView] = useState<AppView>('import');
   const [importType, setImportType] = useState<ImportType | null>(null);
   const [projectId, setProjectId] = useState<number | null>(null);
   const [siteId, setSiteId] = useState<number | null>(null);
@@ -67,11 +71,29 @@ export default function App() {
           >
             Visary · Альфа Банк — Управление проектами
           </Typography.Text>
+          <nav className="app-nav">
+            <button
+              type="button"
+              className={`app-nav__tab${view === 'import' ? ' app-nav__tab--active' : ''}`}
+              onClick={() => setView('import')}
+            >
+              Импорт
+            </button>
+            <button
+              type="button"
+              className={`app-nav__tab${view === 'history' ? ' app-nav__tab--active' : ''}`}
+              onClick={() => setView('history')}
+            >
+              История импортов
+            </button>
+          </nav>
         </div>
       </header>
 
       <main className="container app-main">
-        {isFormPhase && (
+        {view === 'history' && <ImportHistoryPage />}
+
+        {view === 'import' && isFormPhase && (
           <div className="card">
             <Typography.Title
               view="small"
@@ -118,7 +140,7 @@ export default function App() {
           </div>
         )}
 
-        {!isFormPhase && (
+        {view === 'import' && !isFormPhase && (
           <SessionView
             phase={importSession.phase}
             session={importSession.session}

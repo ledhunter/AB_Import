@@ -2,6 +2,7 @@ using KiloImportService.Api.Data;
 using KiloImportService.Api.Data.Entities;
 using KiloImportService.Api.Domain.Importing;
 using KiloImportService.Api.Domain.Pipeline;
+using KiloImportService.Api.Pdf;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -12,10 +13,12 @@ namespace KiloImportService.Api.Controllers;
 ///
 /// Контракты:
 ///   POST /api/imports                 — загрузить файл (multipart/form-data)
+///   GET  /api/imports                 — список сессий (история импортов) с фильтрами и пагинацией
 ///   GET  /api/imports/{id}            — получить статус сессии (для polling fallback)
 ///   GET  /api/imports/{id}/report     — получить отчёт (распарсенные строки, ошибки)
 ///   POST /api/imports/{id}/apply      — применить валидные строки в visary_db
 ///   POST /api/imports/{id}/cancel     — отменить сессию (только до Apply)
+///   POST /api/imports/export-pdf      — PDF-отчёт по выбранным сессиям
 /// </summary>
 [ApiController]
 [Route("api/imports")]
@@ -104,6 +107,62 @@ public class ImportsController : ControllerBase
         });
 
         return Accepted(new { sessionId, status = session.Status.ToString() });
+    }
+
+    /// <summary>
+    /// Список сессий импорта — история всех загрузок. Отсортирован по StartedAt DESC.
+    /// Опциональные фильтры по статусу и типу импорта; пагинация skip/take.
+    /// Лёгкий ответ без stages/rows/errors — детальное состояние получают через GET {id}.
+    /// </summary>
+    [HttpGet]
+    public async Task<IActionResult> List(
+        [FromQuery] int skip = 0,
+        [FromQuery] int take = 50,
+        [FromQuery] string? status = null,
+        [FromQuery] string? importTypeCode = null,
+        CancellationToken ct = default)
+    {
+        if (skip < 0) skip = 0;
+        take = Math.Clamp(take, 1, 200);
+
+        var q = _db.Sessions.AsNoTracking();
+
+        if (!string.IsNullOrWhiteSpace(status) &&
+            Enum.TryParse<ImportStatus>(status, ignoreCase: true, out var parsedStatus))
+        {
+            q = q.Where(s => s.Status == parsedStatus);
+        }
+        if (!string.IsNullOrWhiteSpace(importTypeCode))
+        {
+            q = q.Where(s => s.ImportTypeCode == importTypeCode);
+        }
+
+        var total = await q.CountAsync(ct);
+        var items = await q
+            .OrderByDescending(s => s.StartedAt)
+            .Skip(skip)
+            .Take(take)
+            .Select(s => new
+            {
+                sessionId = s.Id,
+                importTypeCode = s.ImportTypeCode,
+                fileName = s.FileName,
+                fileFormat = s.FileFormat.ToString(),
+                status = s.Status.ToString(),
+                startedAt = s.StartedAt,
+                completedAt = s.CompletedAt,
+                totalRows = s.TotalRows,
+                successRows = s.SuccessRows,
+                errorRows = s.ErrorRows,
+                errorMessage = s.ErrorMessage,
+            })
+            .ToListAsync(ct);
+
+        return Ok(new
+        {
+            items,
+            pagination = new { skip, take, total }
+        });
     }
 
     /// <summary>Получить состояние сессии (для polling fallback, основной канал — SignalR).</summary>
@@ -212,6 +271,43 @@ public class ImportsController : ControllerBase
             _cancellation.Unregister(id);
         }
         return Ok(new { sessionId = id, status = session.Status.ToString() });
+    }
+
+    /// <summary>
+    /// Сгенерировать PDF-отчёт по выбранным сессиям.
+    /// Тело запроса: <c>{ "sessionIds": ["guid1", "guid2", ...] }</c>.
+    /// Один PDF со всеми сессиями (page-break между ними) — пользователю удобнее, чем zip.
+    /// </summary>
+    [HttpPost("export-pdf")]
+    public async Task<IActionResult> ExportPdf(
+        [FromBody] ExportPdfRequest? request,
+        [FromServices] ImportPdfReportService pdfService,
+        CancellationToken ct)
+    {
+        if (request is null || request.SessionIds is null || request.SessionIds.Count == 0)
+            return BadRequest(new { error = "Не передано ни одного sessionId." });
+
+        // Ограничим число сессий в одном PDF — слишком большой файл генерировать долго.
+        if (request.SessionIds.Count > 100)
+            return BadRequest(new { error = "Можно выгрузить не более 100 сессий за раз." });
+
+        try
+        {
+            var bytes = await pdfService.GenerateAsync(request.SessionIds, ct);
+            var fileName = $"imports-{DateTime.Now:yyyyMMdd-HHmmss}.pdf";
+            return File(bytes, "application/pdf", fileName);
+        }
+        catch (Exception ex)
+        {
+            _log.LogError(ex, "ExportPdf failed for {Count} sessions", request.SessionIds.Count);
+            return StatusCode(500, new { error = $"Не удалось сформировать PDF: {ex.Message}" });
+        }
+    }
+
+    /// <summary>DTO запроса для <see cref="ExportPdf"/>.</summary>
+    public sealed class ExportPdfRequest
+    {
+        public List<Guid> SessionIds { get; set; } = [];
     }
 
     /// <summary>

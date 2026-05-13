@@ -70,6 +70,9 @@ try
     builder.Services.AddSingleton<IFileStorage, LocalFileStorage>();
      builder.Services.AddSingleton<IImportSessionCancellation, ImportSessionCancellation>();
 
+    // ─── PDF-экспорт отчётов по сессиям (PDFsharp + DejaVu Sans для кириллицы) ───
+    builder.Services.AddScoped<KiloImportService.Api.Pdf.ImportPdfReportService>();
+
     // ─── Visary HTTP API клиент + кэш проектов ───
     builder.Services.AddVisaryClient(builder.Configuration.GetSection(VisaryOptions.SectionName));
 

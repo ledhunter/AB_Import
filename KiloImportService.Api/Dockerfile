@@ -17,9 +17,9 @@ RUN dotnet publish KiloImportService.Api/KiloImportService.Api.csproj -c Release
 # ────────────── Runtime stage ──────────────
 FROM mcr.microsoft.com/dotnet/aspnet:10.0-preview-alpine AS runtime
 WORKDIR /app
-# curl нужен для healthcheck в docker-compose. icu-libs — для глобализации.
+# curl — для healthcheck. icu-libs — глобализация. ttf-dejavu + fontconfig — кириллица в PDF-отчётах (PDFsharp).
 # ⚠️ В aspnet:10.0-preview-alpine группа `app` уже создана образом — проверяем наличие.
-RUN apk add --no-cache curl icu-libs && \
+RUN apk add --no-cache curl icu-libs ttf-dejavu fontconfig && \
     (getent group app  >/dev/null || addgroup -S app) && \
     (getent passwd app >/dev/null || adduser  -S app -G app)
 
