@@ -54,6 +54,8 @@
 | [70-wbs-api-foundation.md](./70-wbs-api-foundation.md) | 🏛️ WBS (ИСР) API клиент v0.1: `Wbs` мнемоника, `WbsRaw` / `WbsCreateRequest`, `CreateWbsAsync` + `GetWbsByProjectAsync`, smoke-тесты на проекте 4584. Code присваивается сервером (Глава 1 → 1.1, 1.2…). Маппер бюджета — следующий шаг |
 | [71-finmodel-budget-import.md](./71-finmodel-budget-import.md) | 💰 Импорт «Финмодель → Себестоимость» (WBS v0.2): `BudgetSectionHint` для парсера, `BudgetReferenceProvider` (Title→Code, ~100 статей в коде), идемпотентный `ApplyBudgetAsync` (find/create/patch) + `PatchWbsAsync` `forceUpdate=true`. Повторный импорт не плодит дубликатов; суммы PATCH-аются |
 | [72-multi-sheet-import.md](./72-multi-sheet-import.md) | 🗂️ Сквозной обзор многолистового XLSX-импорта — 5 мест кода (парсер, БД, пайплайн, маппер, UI), которые должны быть согласованы; миграция `(SessionId, Sheet, SourceRowNumber)`, per-sheet прогресс, race condition `setSession(prev =>)` |
+| [73-import-history-page.md](./73-import-history-page.md) | 🗂️ Страница «История импортов»: `GET /api/imports` (skip/take/status/importTypeCode) + read-only детальный просмотр (переиспользует `SessionSummary` + `SessionRowsTable`), отдельный `useImportSessionDetail` без SignalR. Сброс `skip=0` при смене фильтров |
+| [74-import-pdf-export.md](./74-import-pdf-export.md) | 📄 Экспорт сессий в PDF: чекбоксы в `HistorySessionsTable` (Set, не Array), `POST /api/imports/export-pdf` → `PDFsharp` + `PDFsharp-MigraDoc` (MIT). FontResolver регистрируется один раз под lock; в Dockerfile `apk add ttf-dejavu fontconfig` для кириллицы. Frontend: `response.blob()` + `<a download>` + `URL.revokeObjectURL` |
 
 ## 🎯 Контекст проекта
 

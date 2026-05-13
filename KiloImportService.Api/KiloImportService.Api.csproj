@@ -36,6 +36,12 @@
     <!-- Логирование / observability -->
     <PackageReference Include="Serilog.AspNetCore" Version="9.0.0" />
     <PackageReference Include="Serilog.Sinks.Console" Version="6.0.0" />
+
+    <!-- PDF-экспорт отчётов по сессиям импорта (MIT-license, без нативных зависимостей).
+         Шрифт регистрируется через PdfFontResolver — см. Pdf/PdfFontResolver.cs.
+         ⚠️ package id с дефисом: `PDFsharp-MigraDoc`, не точкой. -->
+    <PackageReference Include="PDFsharp" Version="6.2.4" />
+    <PackageReference Include="PDFsharp-MigraDoc" Version="6.2.4" />
   </ItemGroup>
 
   <ItemGroup>

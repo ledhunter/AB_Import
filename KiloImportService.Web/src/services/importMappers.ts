@@ -12,6 +12,7 @@ import type {
   ApiImportRow,
   ApiImportSession,
   ApiImportSessionStage,
+  ApiImportSessionSummary,
   ApiImportStatus,
 } from '../types/api';
 import type {
@@ -21,6 +22,7 @@ import type {
   UiRowError,
   UiSession,
   UiSessionStage,
+  UiSessionSummary,
 } from '../types/session';
 
 export const toSessionVariant = (status: ApiImportStatus): SessionStatusVariant => {
@@ -94,6 +96,22 @@ export const toUiSession = (api: ApiImportSession): UiSession => ({
   // SignalR (`onStageProgress` в useImportSession), а не из REST-снимка сессии.
   stageProgress: null,
   sheetProgress: [],
+});
+
+export const toUiSessionSummary = (api: ApiImportSessionSummary): UiSessionSummary => ({
+  sessionId: api.sessionId,
+  importTypeCode: api.importTypeCode,
+  fileName: api.fileName,
+  fileFormat: (api.fileFormat || '').toLowerCase(),
+  status: api.status,
+  variant: toSessionVariant(api.status),
+  startedAt: api.startedAt,
+  completedAt: api.completedAt,
+  duration: computeDuration(api.startedAt, api.completedAt),
+  totalRows: api.totalRows,
+  successRows: api.successRows,
+  errorRows: api.errorRows,
+  errorMessage: api.errorMessage,
 });
 
 export const toUiRowError = (e: ApiImportError): UiRowError => ({

@@ -91,6 +91,27 @@ export interface ApiUploadResult {
   status: ApiImportStatus;
 }
 
+/** Элемент списка сессий — облегчённое представление (без stages/rows/errors). */
+export interface ApiImportSessionSummary {
+  sessionId: string;
+  importTypeCode: string;
+  fileName: string;
+  fileFormat: ApiFileFormat;
+  status: ApiImportStatus;
+  startedAt: string;
+  completedAt: string | null;
+  totalRows: number;
+  successRows: number;
+  errorRows: number;
+  errorMessage: string | null;
+}
+
+/** Ответ `GET /api/imports` — постранично, отсортированно по StartedAt DESC. */
+export interface ApiImportSessionsListResponse {
+  items: ApiImportSessionSummary[];
+  pagination: { skip: number; take: number; total: number };
+}
+
 /** Ответ `GET /api/import-types` — реестр типов импорта. */
 export interface ApiImportTypeInfo {
   id: string;

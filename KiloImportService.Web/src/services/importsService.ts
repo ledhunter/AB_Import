@@ -12,6 +12,7 @@
 import type {
   ApiImportReport,
   ApiImportSession,
+  ApiImportSessionsListResponse,
   ApiImportTypesResponse,
   ApiUploadResult,
 } from '../types/api';
@@ -158,6 +159,33 @@ export async function uploadImport(
   });
 }
 
+export interface ListImportsOptions extends RequestOptions {
+  skip?: number;
+  take?: number;
+  status?: string;
+  importTypeCode?: string;
+}
+
+/**
+ * Получить список сессий импорта (история) — `GET /api/imports`.
+ * Отсортированы по StartedAt DESC. Фильтры по статусу/типу и пагинация — опциональны.
+ */
+export function listImports(
+  options: ListImportsOptions = {},
+): Promise<ApiImportSessionsListResponse> {
+  const params = new URLSearchParams();
+  if (options.skip != null) params.set('skip', String(options.skip));
+  if (options.take != null) params.set('take', String(options.take));
+  if (options.status) params.set('status', options.status);
+  if (options.importTypeCode) params.set('importTypeCode', options.importTypeCode);
+  const qs = params.toString();
+  const path = `/api/imports${qs ? `?${qs}` : ''}`;
+  return fetchJson<ApiImportSessionsListResponse>(path, {
+    method: 'GET',
+    signal: options.signal,
+  });
+}
+
 /** Получить состояние сессии (для polling fallback). */
 export function getImportSession(
   sessionId: string,
@@ -207,6 +235,72 @@ export function cancelImport(
     method: 'POST',
     signal: options.signal,
   });
+}
+
+/**
+ * Сгенерировать PDF-отчёт по списку сессий — `POST /api/imports/export-pdf`.
+ * Возвращает `Blob` с `application/pdf` для скачивания.
+ *
+ * NB: fetchJson здесь не используем — он парсит ответ как JSON; нам нужен бинарный blob.
+ */
+export async function exportImportsPdf(
+  sessionIds: string[],
+  options: RequestOptions = {},
+): Promise<Blob> {
+  if (sessionIds.length === 0) {
+    throw new Error('Не выбрано ни одной сессии для выгрузки.');
+  }
+
+  const id = nextRequestId();
+  const path = '/api/imports/export-pdf';
+  console.info(`${LOG_TAG} → POST ${path}  #${id}  sessions=${sessionIds.length}`);
+  const start =
+    typeof performance !== 'undefined' && typeof performance.now === 'function'
+      ? performance.now()
+      : Date.now();
+
+  let response: Response;
+  try {
+    response = await fetch(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionIds }),
+      signal: options.signal,
+    });
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') throw err;
+    const message = err instanceof Error ? err.message : String(err);
+    throw new ImportsApiError(`Сетевая ошибка: ${message}`, null, null);
+  }
+
+  const elapsed = Math.round(
+    (typeof performance !== 'undefined' && typeof performance.now === 'function'
+      ? performance.now()
+      : Date.now()) - start,
+  );
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    let serverMessage = '';
+    try {
+      const parsed = text ? JSON.parse(text) : null;
+      if (parsed && typeof parsed === 'object' && 'error' in parsed) {
+        serverMessage = String((parsed as Record<string, unknown>).error);
+      }
+    } catch {
+      /* ignore */
+    }
+    console.error(`${LOG_TAG} ✗ ${response.status} POST ${path} #${id} (${elapsed}ms) —`, text);
+    throw new ImportsApiError(
+      serverMessage || `Backend вернул ${response.status} ${response.statusText}`,
+      response.status,
+      text,
+    );
+  }
+
+  const blob = await response.blob();
+  console.info(`${LOG_TAG} ← ${response.status} POST ${path} #${id} (${elapsed}ms)  bytes=${blob.size}`);
+  return blob;
 }
 
 /** Получить реестр поддерживаемых типов импорта. */

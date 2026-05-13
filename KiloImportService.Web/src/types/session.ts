@@ -101,3 +101,23 @@ export interface UiReport {
   fileLevelErrors: UiRowError[]; // rowNumber === 0
   rowsPagination: { skip: number; take: number; total: number };
 }
+
+/**
+ * Лёгкая сводка сессии для списка истории — без stages/sheetProgress/errors.
+ * Содержит ровно то, что отдаёт `GET /api/imports`, + вычисленный variant и duration.
+ */
+export interface UiSessionSummary {
+  sessionId: string;
+  importTypeCode: string;
+  fileName: string;
+  fileFormat: string;             // lower-case ('csv' | 'xls' | 'xlsx' | 'xlsb')
+  status: SessionStatus;
+  variant: SessionStatusVariant;
+  startedAt: string;
+  completedAt: string | null;
+  duration: string | null;
+  totalRows: number;
+  successRows: number;
+  errorRows: number;
+  errorMessage: string | null;
+}
