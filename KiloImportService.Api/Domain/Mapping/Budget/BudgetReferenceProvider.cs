@@ -77,8 +77,33 @@ public sealed class BudgetReferenceProvider : IBudgetReferenceProvider
     public BudgetReferenceEntry? FindByTitle(string title)
     {
         var key = BudgetReferenceEntry.NormalizeTitle(title);
-        return string.IsNullOrEmpty(key) ? null
-            : _loaded.Value.ByTitle.TryGetValue(key, out var e) ? e : null;
+        if (string.IsNullOrEmpty(key)) return null;
+
+        // 1) Точный матч по нормализованному Title.
+        if (_loaded.Value.ByTitle.TryGetValue(key, out var exact)) return exact;
+
+        // 2) Prefix-fuzzy: Title из файла часто длиннее справочного — содержит подсказку
+        //    («Затраты на изменение ВРИ, комплексное развитие застроенной территории
+        //    (соинвестирование по прочим обязательствам)» → «Затраты на изменение ВРИ»).
+        //    Ищем самую длинную справочную запись, начало которой совпадает с file-title
+        //    с учётом границы слова (за prefix-ом — пробел, запятая, точка, скобка).
+        //    Главы (Depth=1) не fuzzy-матчим — у них в файле обычно полный заголовок,
+        //    а prefix-фолбэк на «Глава 1 …» создаст ложные совпадения для всего что
+        //    начинается с «Глава».
+        BudgetReferenceEntry? best = null;
+        foreach (var entry in _loaded.Value.Entries)
+        {
+            if (entry.IsChapter) continue;
+            var refKey = entry.NormalizedTitle;
+            if (refKey.Length == 0 || refKey.Length >= key.Length) continue;
+            if (!key.StartsWith(refKey, StringComparison.Ordinal)) continue;
+            // Граница слова: после prefix должен быть не-буквенный символ.
+            var boundary = key[refKey.Length];
+            if (char.IsLetterOrDigit(boundary)) continue;
+            if (best is null || refKey.Length > best.NormalizedTitle.Length)
+                best = entry;
+        }
+        return best;
     }
 
     public BudgetReferenceEntry? FindByCode(string code)

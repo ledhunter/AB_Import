@@ -339,18 +339,21 @@ public sealed class FinModelImportMapper : IImportMapper
 
         if (budgetRows.Count > 0)
         {
-            var projectId = await ResolveProjectIdAsync(siteId, context.VisaryProjectId, visaryDb, ct);
-            if (projectId is null)
-            {
-                errors.Add(new RowError(null, "project_required",
-                    $"Не удалось определить проект (ConstructionProject) для объекта siteId={siteId}: " +
-                    "бюджет (главы/подстатьи WBS) привязывается к проекту."));
-            }
-            else
-            {
-                var budgetApply = await ApplyBudgetAsync(projectId.Value, siteId, budgetRows, errors, ct);
-                applied += budgetApply;
-            }
+            // Бюджет в Visary через CRUD WBS не льётся — путь оказался непригодным
+            // (Visary возвращает 500 на listview/wbs/onetomany/ConstructionProject,
+            // а структура WBS-дерева ProjectRoot→SiteRoot→Глава→Подстатья сложна для
+            // воспроизведения CRUD-ом). Вместо этого после Apply мы отдаём пользователю
+            // готовый XLSX по эталонному шаблону «Бюджет_А4.1», который он импортирует
+            // вручную через нативный механизм Visary. См. doc_project/78-budget-xlsx-export.md.
+            //
+            // Сами mapped budget rows уже сохранены в staged_rows на стадии Validate,
+            // и BudgetXlsxExporter читает их оттуда при запросе GET /api/imports/{id}/budget-xlsx.
+            // Здесь только засчитываем их в applied, чтобы сессия пометилась Applied
+            // и в UI стала доступна кнопка скачивания.
+            _log.LogInformation(
+                "FinModelImportMapper: budget rows={Count} → отложены для XLSX-экспорта (siteId={SiteId})",
+                budgetRows.Count, siteId);
+            applied += budgetRows.Count;
         }
 
         return new ApplyResult(applied, errors);

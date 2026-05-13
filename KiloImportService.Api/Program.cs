@@ -73,6 +73,10 @@ try
     // ─── PDF-экспорт отчётов по сессиям (PDFsharp + DejaVu Sans для кириллицы) ───
     builder.Services.AddScoped<KiloImportService.Api.Pdf.ImportPdfReportService>();
 
+    // ─── XLSX-экспорт бюджета по эталонному шаблону «Бюджет_А4.1» ───
+    // (см. doc_project/78-budget-xlsx-export.md)
+    builder.Services.AddScoped<KiloImportService.Api.Budget.BudgetXlsxExporter>();
+
     // ─── Visary HTTP API клиент + кэш проектов ───
     builder.Services.AddVisaryClient(builder.Configuration.GetSection(VisaryOptions.SectionName));
 
