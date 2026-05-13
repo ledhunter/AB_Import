@@ -76,6 +76,21 @@ public interface ICrudClient
     Task<bool> LinkOrganizationToSiteAsync(
         int siteId, int organizationId, CancellationToken ct = default);
 
+    /// <summary>
+    /// Создать запись <c>projectmanagement</c> (связка «Проект ↔ Организация ↔ Роль»).
+    /// Соответствует POST <c>/api/visary/crud/projectmanagement</c>.
+    /// </summary>
+    Task<ProjectManagementRaw> CreateProjectManagementAsync(
+        ProjectManagementCreateRequest request, CancellationToken ct = default);
+
+    /// <summary>
+    /// Привязать существующую запись <c>projectmanagement</c> к объекту строительства
+    /// через manytomany. Соответствует POST
+    /// <c>/api/visary/listview/constructionsite/manytomany/projectmanagement/link?associationId={siteId}&amp;ids={pmId}</c>.
+    /// </summary>
+    Task<bool> LinkProjectManagementToSiteAsync(
+        int siteId, int projectManagementId, CancellationToken ct = default);
+
     // ─── GET by ID (чтение, через /api/visary/crud/{mnemonic}/{id}) ──────────
     // Возвращают *Full DTO с полным набором полей сущности — в отличие от
     // listview-методов, которые возвращают только подмножество, явно перечисленное в Columns[].
@@ -418,6 +433,39 @@ public sealed class CrudClient : VisaryHttpBase<CrudClient>, ICrudClient
         await HandleErrorAsync(response, ct);
         _log.LogInformation("CrudClient.LinkOrganizationToSiteAsync: siteId={SiteId} orgId={OrgId} success",
             siteId, organizationId);
+        return true;
+    }
+
+    // ─── ProjectManagement (создание + manytomany link к Site) ──────────────
+
+    public async Task<ProjectManagementRaw> CreateProjectManagementAsync(
+        ProjectManagementCreateRequest request, CancellationToken ct)
+    {
+        _log.LogDebug(
+            "Visary → POST {Mnemonic} projectId={ProjectId} orgId={OrgId} roleId={RoleId}",
+            VisaryMnemonics.ProjectManagement,
+            request.Project.ID, request.Organization.ID, request.Role.ID);
+        var result = await PostCrudAsync<ProjectManagementRaw>(
+            $"{BaseUrl}/api/visary/crud/{VisaryMnemonics.ProjectManagement}",
+            request, VisaryMnemonics.ProjectManagement, ct);
+        _log.LogInformation("CrudClient.CreateProjectManagementAsync: created id={Id}", result.ID);
+        return result;
+    }
+
+    public async Task<bool> LinkProjectManagementToSiteAsync(
+        int siteId, int projectManagementId, CancellationToken ct)
+    {
+        _log.LogDebug(
+            "Visary → POST {Mnemonic}/manytomany/{Linked}/link siteId={SiteId} pmId={PmId}",
+            VisaryMnemonics.Site, VisaryMnemonics.ProjectManagement, siteId, projectManagementId);
+        using var req = NewRequest(HttpMethod.Post,
+            $"{BaseUrl}/api/visary/listview/{VisaryMnemonics.Site}/manytomany/{VisaryMnemonics.ProjectManagement}/link?associationId={siteId}&ids={projectManagementId}");
+        using var response = await _http.SendAsync(req, ct);
+        await HandleAuthErrorAsync(response, ct);
+        await HandleErrorAsync(response, ct);
+        _log.LogInformation(
+            "CrudClient.LinkProjectManagementToSiteAsync: siteId={SiteId} pmId={PmId} success",
+            siteId, projectManagementId);
         return true;
     }
 
