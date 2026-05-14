@@ -258,16 +258,16 @@ public class ImportsController : ControllerBase
         var rowsQ = _db.StagedRows.AsNoTracking().Where(r => r.ImportSessionId == id);
         var totalRows = await rowsQ.CountAsync(ct);
         var rows = await rowsQ
-            .OrderBy(r => r.SourceRowNumber)
+            .OrderBy(r => r.Sheet).ThenBy(r => r.SourceRowNumber)
             .Skip(skip)
             .Take(take)
-            .Select(r => new { r.SourceRowNumber, status = r.Status.ToString() })
+            .Select(r => new { r.SourceRowNumber, r.Sheet, status = r.Status.ToString() })
             .ToListAsync(ct);
 
         var errors = await _db.Errors.AsNoTracking()
             .Where(e => e.ImportSessionId == id)
-            .OrderBy(e => e.SourceRowNumber)
-            .Select(e => new { e.SourceRowNumber, e.ColumnName, e.ErrorCode, e.Message })
+            .OrderBy(e => e.Sheet).ThenBy(e => e.SourceRowNumber)
+            .Select(e => new { e.SourceRowNumber, e.Sheet, e.ColumnName, e.ErrorCode, e.Message })
             .ToListAsync(ct);
 
         return Ok(new

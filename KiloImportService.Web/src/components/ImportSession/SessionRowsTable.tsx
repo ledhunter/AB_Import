@@ -60,6 +60,31 @@ export const SessionRowsTable = ({ report }: Props) => {
     [report.rows, filter],
   );
 
+  /**
+   * Группируем строки по листу для многолистовых импортов.
+   * Если sheet у всех строк null/пустой — выводим одну плоскую группу без заголовка.
+   * Порядок групп = порядок появления (rows уже отсортированы по (sheet, rowNumber)).
+   */
+  const grouped = useMemo(() => {
+    const groups: { sheet: string | null; rows: UiReportRow[] }[] = [];
+    const indexBySheet = new Map<string, number>();
+    for (const r of filtered) {
+      const key = r.sheet ?? '';
+      const idx = indexBySheet.get(key);
+      if (idx === undefined) {
+        indexBySheet.set(key, groups.length);
+        groups.push({ sheet: r.sheet, rows: [r] });
+      } else {
+        groups[idx].rows.push(r);
+      }
+    }
+    return groups;
+  }, [filtered]);
+
+  // Показывать ли заголовки листов: если есть хотя бы один непустой sheet
+  // или строки разнесены по нескольким группам.
+  const showSheetHeaders = grouped.some((g) => g.sheet && g.sheet.length > 0) || grouped.length > 1;
+
   return (
     <div className="report-table">
       {report.fileLevelErrors.length > 0 && (
@@ -123,8 +148,8 @@ export const SessionRowsTable = ({ report }: Props) => {
               <th>Сообщения</th>
             </tr>
           </thead>
-          <tbody>
-            {filtered.length === 0 ? (
+          {filtered.length === 0 ? (
+            <tbody>
               <tr>
                 <td colSpan={3} style={{ textAlign: 'center', padding: 24 }}>
                   <Typography.Text view="primary-small" color="secondary" tag="span">
@@ -132,37 +157,56 @@ export const SessionRowsTable = ({ report }: Props) => {
                   </Typography.Text>
                 </td>
               </tr>
-            ) : (
-              filtered.map((row) => (
-                <tr key={row.rowNumber} className={rowClassByStatus(row.status)}>
-                  <td>{row.rowNumber}</td>
-                  <td>
-                    <Status color={ROW_STATUS_COLOR[row.status]} view="soft">
-                      {ROW_STATUS_LABEL[row.status]}
-                    </Status>
-                  </td>
-                  <td>
-                    {row.errors.length === 0 ? (
-                      <Typography.Text view="primary-small" color="secondary" tag="span">
-                        —
-                      </Typography.Text>
-                    ) : (
-                      <div className="messages messages--error" style={{ marginTop: 0 }}>
-                        {row.errors.map((e, i) => (
-                          <div className="message-row" key={i}>
-                            <span className="message-field">
-                              {e.columnName ?? e.errorCode}
-                            </span>
-                            <span>{e.message}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
+            </tbody>
+          ) : (
+            grouped.map((group, gi) => (
+              <tbody key={group.sheet ?? `__nosheet__${gi}`}>
+                {showSheetHeaders && (
+                  <tr className="sheet-header-row">
+                    <td colSpan={3}>
+                      <span className="sheet-header-row__title">
+                        Лист: {group.sheet || '— без листа —'}
+                      </span>
+                      <span className="sheet-header-row__count">
+                        {group.rows.length} стр.
+                      </span>
+                    </td>
+                  </tr>
+                )}
+                {group.rows.map((row) => (
+                  <tr
+                    key={`${row.sheet ?? ''}::${row.rowNumber}`}
+                    className={rowClassByStatus(row.status)}
+                  >
+                    <td>{row.rowNumber}</td>
+                    <td>
+                      <Status color={ROW_STATUS_COLOR[row.status]} view="soft">
+                        {ROW_STATUS_LABEL[row.status]}
+                      </Status>
+                    </td>
+                    <td>
+                      {row.errors.length === 0 ? (
+                        <Typography.Text view="primary-small" color="secondary" tag="span">
+                          —
+                        </Typography.Text>
+                      ) : (
+                        <div className="messages messages--error" style={{ marginTop: 0 }}>
+                          {row.errors.map((e, i) => (
+                            <div className="message-row" key={i}>
+                              <span className="message-field">
+                                {e.columnName ?? e.errorCode}
+                              </span>
+                              <span>{e.message}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            ))
+          )}
         </table>
       </div>
 

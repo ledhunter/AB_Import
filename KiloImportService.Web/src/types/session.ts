@@ -93,6 +93,7 @@ export interface UiSession {
 
 export interface UiRowError {
   rowNumber: number;        // 0 — file-level
+  sheet: string | null;     // имя листа (для многолистовых импортов; null для file-level)
   columnName: string | null;
   errorCode: string;
   message: string;
@@ -100,6 +101,7 @@ export interface UiRowError {
 
 export interface UiReportRow {
   rowNumber: number;
+  sheet: string | null;     // имя листа («Квартиры», «Машиноместа», …); null если файл одностраничный
   status: RowStatus;
   errors: UiRowError[];     // ошибки именно этой строки
 }

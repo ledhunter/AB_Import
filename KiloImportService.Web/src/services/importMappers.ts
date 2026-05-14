@@ -117,10 +117,14 @@ export const toUiSessionSummary = (api: ApiImportSessionSummary): UiSessionSumma
 
 export const toUiRowError = (e: ApiImportError): UiRowError => ({
   rowNumber: e.sourceRowNumber,
+  sheet: e.sheet,
   columnName: e.columnName,
   errorCode: e.errorCode,
   message: e.message,
 });
+
+const rowKey = (sheet: string | null | undefined, rowNumber: number): string =>
+  `${sheet ?? ''}::${rowNumber}`;
 
 /**
  * Собирает UI-отчёт из ApiImportReport + текущей UiSession.
@@ -131,8 +135,9 @@ export const toUiRowError = (e: ApiImportError): UiRowError => ({
  * их сюда явно.
  */
 export function toUiReport(api: ApiImportReport, session: UiSession): UiReport {
-  // Сгруппируем ошибки по rowNumber, чтобы прицепить к строкам.
-  const errorsByRow = new Map<number, UiRowError[]>();
+  // Ошибки группируем по (Sheet, RowNumber): уникальность строки в многолистовом
+  // импорте определяется именно этой парой (см. doc_project/72-multi-sheet-import.md).
+  const errorsByRow = new Map<string, UiRowError[]>();
   const fileLevelErrors: UiRowError[] = [];
   for (const apiErr of api.errors ?? []) {
     const ui = toUiRowError(apiErr);
@@ -140,26 +145,37 @@ export function toUiReport(api: ApiImportReport, session: UiSession): UiReport {
       fileLevelErrors.push(ui);
       continue;
     }
-    const list = errorsByRow.get(ui.rowNumber);
+    const key = rowKey(ui.sheet, ui.rowNumber);
+    const list = errorsByRow.get(key);
     if (list) list.push(ui);
-    else errorsByRow.set(ui.rowNumber, [ui]);
+    else errorsByRow.set(key, [ui]);
   }
 
   const rows: UiReportRow[] = (api.rows ?? []).map((r: ApiImportRow) => ({
     rowNumber: r.sourceRowNumber,
+    sheet: r.sheet,
     status: r.status,
-    errors: errorsByRow.get(r.sourceRowNumber) ?? [],
+    errors: errorsByRow.get(rowKey(r.sheet, r.sourceRowNumber)) ?? [],
   }));
 
-  // Если у строк не было записей в `errors`, но есть в errorsByRow по тем же
-  // rowNumber'ам — добавляем «осиротевшие» ошибки как отдельные ряды (на случай,
-  // когда API вернул ошибку с rowNumber > 0, но самой строки в `rows` нет).
-  for (const [rowNumber, errors] of errorsByRow.entries()) {
-    if (!rows.some((r) => r.rowNumber === rowNumber)) {
-      rows.push({ rowNumber, status: 'Invalid', errors });
+  // Подбираем «осиротевшие» ошибки — для пар (sheet, rowNumber), которых нет в rows.
+  const seenKeys = new Set(rows.map((r) => rowKey(r.sheet, r.rowNumber)));
+  for (const [key, errors] of errorsByRow.entries()) {
+    if (!seenKeys.has(key) && errors.length > 0) {
+      rows.push({
+        rowNumber: errors[0].rowNumber,
+        sheet: errors[0].sheet,
+        status: 'Invalid',
+        errors,
+      });
     }
   }
-  rows.sort((a, b) => a.rowNumber - b.rowNumber);
+  rows.sort((a, b) => {
+    const sa = a.sheet ?? '';
+    const sb = b.sheet ?? '';
+    if (sa !== sb) return sa.localeCompare(sb, 'ru');
+    return a.rowNumber - b.rowNumber;
+  });
 
   return {
     session: {
