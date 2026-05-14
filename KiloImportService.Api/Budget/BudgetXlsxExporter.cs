@@ -36,10 +36,6 @@ public sealed class BudgetXlsxExporter
     // Финмодель хранит суммы в ТЫСЯЧАХ рублей, Visary ждёт рубли. См. ТЗ.
     private const double FinmodelToVisaryFactor = 1000d;
 
-    // Эпсилон для «нулевого» сравнения: после ×1000 числа становятся большими,
-    // 1e-3 (рубля) — это копейка. Меньше — считаем нулём.
-    private const double ZeroEpsilon = 1e-3;
-
     private readonly ImportServiceDbContext _db;
     private readonly IBudgetReferenceProvider _budgetRef;
     private readonly ILogger<BudgetXlsxExporter> _log;
@@ -74,19 +70,23 @@ public sealed class BudgetXlsxExporter
             .Select(r => r.MappedValues!)
             .ToListAsync(ct);
 
-        var sums = ExtractBudgetSums(rows);
-        if (sums.Count == 0)
+        var (terminalSums, chapterDirectSums) = ExtractBudgetSums(rows);
+        if (terminalSums.Count == 0 && chapterDirectSums.Count == 0)
         {
             throw new InvalidOperationException(
                 $"В сессии {sessionId} нет бюджетных строк (Kind='budget' среди валидных).");
         }
 
-        // 2) Считаем агрегаты глав/разделов по дереву справочника.
-        var aggregated = AggregateUpwards(sums);
+        // 2) Считаем агрегаты глав/разделов по дереву справочника. ChapterDirectSums
+        //    переписывают агрегат для соответствующих глав — это значения «Итого» главы
+        //    из файла, которые надёжнее, чем сумма children (см. ТЗ 2026-05-14, v1.3):
+        //    в Главах 2/3 строки в файле не совпадают со справочником, поэтому
+        //    aggregated по children = 0, и без override Глава в выгрузке получит 0.
+        var aggregated = AggregateUpwards(terminalSums, chapterDirectSums);
 
         _log.LogInformation(
-            "BudgetXlsxExporter: session={SessionId} terminal-articles={Term} totalRows={Total}",
-            sessionId, sums.Count, aggregated.Count);
+            "BudgetXlsxExporter: session={SessionId} terminal-articles={Term} chapter-direct={Direct} totalRows={Total}",
+            sessionId, terminalSums.Count, chapterDirectSums.Count, aggregated.Count);
 
         // 3) Открываем embedded-шаблон в MemoryStream (ClosedXML модифицирует in-place).
         await using var template = OpenTemplateStream();
@@ -97,25 +97,21 @@ public sealed class BudgetXlsxExporter
         using var workbook = new XLWorkbook(memory);
         var sheet = workbook.Worksheet(SheetName);
 
-        // Чистим defined names (печатные области, именованные диапазоны) — при удалении
-        // строк ClosedXML пытается пересчитать refs у них и падает на пустых ссылках
-        // (ParsingException: "Unexpected token EofSymbolId" — пустая формула в RefersTo).
-        // Visary при импорте бюджета defined names не использует, можно безопасно убрать.
-        if (workbook.NamedRanges.Count() > 0)
-        {
-            foreach (var nr in workbook.NamedRanges.ToList()) nr.Delete();
-        }
-        if (sheet.NamedRanges.Count() > 0)
-        {
-            foreach (var nr in sheet.NamedRanges.ToList()) nr.Delete();
-        }
+        // Чистим defined names — нужны, потому что ниже удаляем строки подстатей Глав 2/3.
+        // ClosedXML при Row.Delete() пересчитывает refs у named ranges и падает с
+        // ParsingException("Unexpected token EofSymbolId") на пустых ссылках. Visary
+        // defined names не использует — можно безопасно убрать.
+        foreach (var nr in workbook.NamedRanges.ToList()) nr.Delete();
+        foreach (var nr in sheet.NamedRanges.ToList()) nr.Delete();
 
-        // 4) Определяем какие Code оставить в файле. Trim-zeros по краям с сохранением
-        //    промежуточных нулевых статей (см. <see cref="BuildKeepSet"/>).
-        var keep = BuildKeepSet(aggregated);
-
-        // 5) Сначала проставляем суммы (× 1000) для строк, которые остаются;
-        //    несохраняемые строки запоминаем, чтобы удалить их одним пакетом в конце.
+        // 4) Прогон строк шаблона:
+        //    • Глава 1 — выгружаем ПОЛНОЕ дерево статей (1., 1.1., …, 1.8.), даже
+        //      отсутствующим в финмодели проставляется 0 (см. ТЗ от 2026-05-14, v1.1).
+        //    • Главы 2 и 3 — выгружаем ТОЛЬКО саму главу (2., 3.) с агрегированным ИТОГО,
+        //      подстатьи (2.1., 2.1.1., …, 3.8.) удаляем из выгрузки (бизнес-правило ТЗ
+        //      от 2026-05-14, v1.2: для Visary нужны только сводные суммы по этим главам).
+        //    Агрегация снизу вверх в AggregateUpwards считает суммы 2. и 3. из терминальных
+        //    подстатей, даже если они не попадают в выгрузку.
         var lastRow = sheet.LastRowUsed()?.RowNumber() ?? 1;
         var rowsToDelete = new List<int>();
         int written = 0;
@@ -125,7 +121,7 @@ public sealed class BudgetXlsxExporter
             if (string.IsNullOrEmpty(codeCell)) continue;
 
             var code = NormalizeCode(codeCell);
-            if (!keep.Contains(code))
+            if (IsCollapsedChapterDescendant(code))
             {
                 rowsToDelete.Add(rownum);
                 continue;
@@ -137,13 +133,12 @@ public sealed class BudgetXlsxExporter
             written++;
         }
 
-        // 6) Удаляем «лишние» строки с конца, чтобы нумерация выше не сдвигалась.
-        //    Стили/нумерация эталона на оставшихся строках сохраняются.
+        // 5) Удаляем подстатьи Глав 2 и 3 (с конца, чтобы номера выше не сдвигались).
         for (int i = rowsToDelete.Count - 1; i >= 0; i--)
             sheet.Row(rowsToDelete[i]).Delete();
 
         _log.LogInformation(
-            "BudgetXlsxExporter: session={SessionId} kept={Written} deleted={Deleted} (× {Factor} factor applied)",
+            "BudgetXlsxExporter: session={SessionId} written={Written} deleted={Deleted} (× {Factor} factor; главы 2/3 свёрнуты до ИТОГО)",
             sessionId, written, rowsToDelete.Count, FinmodelToVisaryFactor);
 
         using var output = new MemoryStream();
@@ -152,90 +147,20 @@ public sealed class BudgetXlsxExporter
     }
 
     /// <summary>
-    /// Строит набор Code, которые нужно оставить в результирующем XLSX.
-    ///
-    /// Правила (см. ТЗ от 2026-05-13):
-    /// • Запись считается «активной», если её собственная сумма ≠ 0 ИЛИ у неё есть
-    ///   активный потомок (рекурсивно).
-    /// • Внутри каждого родителя (главы/раздела) находим первый и последний активный
-    ///   ребёнок по исходному порядку справочника. Дети до первого и после последнего
-    ///   удаляем целиком (с их потомками). Дети МЕЖДУ ними оставляем, даже если они
-    ///   нулевые — Visary при импорте требует, чтобы между непустыми подстатьями не
-    ///   было «пропущенных» промежуточных номеров (1.1 + 1.4 без 1.2, 1.3 ломает импорт).
-    /// • Если у главы НИ ОДНОЙ активной подстатьи — главу удаляем целиком вместе с
-    ///   её subtree.
+    /// Достаёт пары (Code → DeclaredSum/ConfirmedSum) из mapped JSON-строк (только Kind='budget').
+    /// Разделяет на два потока:
+    /// • <c>terminal</c> — обычные подстатьи (<c>ArticleCode != ChapterCode</c>): идут в агрегат.
+    /// • <c>chapterDirect</c> — chapter-total override (<c>ArticleCode == ChapterCode</c>):
+    ///   значение строки «Итого» главы из файла. Используется как override итоговой
+    ///   суммы главы в <see cref="AggregateUpwards"/>.
     /// </summary>
-    private HashSet<string> BuildKeepSet(IReadOnlyDictionary<string, (double Decl, double Conf)> aggregated)
+    private static (
+        Dictionary<string, (double Decl, double Conf)> Terminal,
+        Dictionary<string, (double Decl, double Conf)> ChapterDirect)
+        ExtractBudgetSums(IReadOnlyList<JsonDocument> rows)
     {
-        var entries = _budgetRef.Entries;
-
-        // children по ParentCode (порядок исходный из RawData — он же эталонный).
-        var children = new Dictionary<string, List<BudgetReferenceEntry>>(StringComparer.Ordinal);
-        var roots = new List<BudgetReferenceEntry>();
-        foreach (var e in entries)
-        {
-            if (e.ParentCode is null) roots.Add(e);
-            else
-            {
-                if (!children.TryGetValue(e.ParentCode, out var list))
-                    children[e.ParentCode] = list = new List<BudgetReferenceEntry>();
-                list.Add(e);
-            }
-        }
-
-        // 1) IsActive (рекурсивно): своя сумма ≠ 0 ИЛИ хотя бы один активный потомок.
-        var active = new Dictionary<string, bool>(StringComparer.Ordinal);
-        bool ComputeActive(BudgetReferenceEntry e)
-        {
-            if (active.TryGetValue(e.Code, out var cached)) return cached;
-            bool selfActive = false;
-            if (aggregated.TryGetValue(e.Code, out var v))
-                selfActive = Math.Abs(v.Decl) > ZeroEpsilon || Math.Abs(v.Conf) > ZeroEpsilon;
-            bool descActive = false;
-            if (children.TryGetValue(e.Code, out var kids))
-                foreach (var k in kids)
-                    if (ComputeActive(k)) descActive = true;
-            return active[e.Code] = (selfActive || descActive);
-        }
-        foreach (var e in entries) ComputeActive(e);
-
-        // 2) Обходим дерево: для каждого родителя определяем [firstActiveIdx..lastActiveIdx]
-        //    среди детей, в этот диапазон попадают и нулевые «промежуточные».
-        var keep = new HashSet<string>(StringComparer.Ordinal);
-        void Walk(BudgetReferenceEntry e)
-        {
-            if (!active[e.Code]) return;            // ветка целиком неактивна — пропускаем
-            keep.Add(e.Code);
-            if (!children.TryGetValue(e.Code, out var kids) || kids.Count == 0) return;
-
-            int firstActive = -1, lastActive = -1;
-            for (int i = 0; i < kids.Count; i++)
-                if (active[kids[i].Code]) { if (firstActive < 0) firstActive = i; lastActive = i; }
-            if (firstActive < 0) return;            // никого активного — детей не пишем
-
-            for (int i = firstActive; i <= lastActive; i++)
-            {
-                // В диапазон попали — оставляем даже неактивных (промежуточные нулевые).
-                // Для активных — рекурсивно идём вниз; неактивные «промежуточные» добавляем
-                // только сами, без их детей (если бы были, что для нулевой главы маловероятно).
-                var kid = kids[i];
-                if (active[kid.Code]) Walk(kid);
-                else keep.Add(kid.Code);
-            }
-        }
-        foreach (var root in roots) Walk(root);
-
-        return keep;
-    }
-
-    /// <summary>
-    /// Достаёт пары (Code → DeclaredSum/ConfirmedSum) из mapped JSON-строк
-    /// (только Kind='budget'; остальные параметрические строки игнорируем).
-    /// </summary>
-    private static Dictionary<string, (double Decl, double Conf)> ExtractBudgetSums(
-        IReadOnlyList<JsonDocument> rows)
-    {
-        var sums = new Dictionary<string, (double Decl, double Conf)>(StringComparer.Ordinal);
+        var terminal = new Dictionary<string, (double Decl, double Conf)>(StringComparer.Ordinal);
+        var chapterDirect = new Dictionary<string, (double Decl, double Conf)>(StringComparer.Ordinal);
         foreach (var doc in rows)
         {
             var root = doc.RootElement;
@@ -246,34 +171,50 @@ public sealed class BudgetXlsxExporter
 
             var articleCode = root.GetProperty("ArticleCode").GetString();
             if (string.IsNullOrEmpty(articleCode)) continue;
+            var chapterCode = root.TryGetProperty("ChapterCode", out var cc)
+                              && cc.ValueKind == JsonValueKind.String
+                                  ? cc.GetString()
+                                  : null;
 
             var declared  = root.GetProperty("DeclaredSum").GetDouble();
             var confirmed = root.GetProperty("ConfirmedSum").GetDouble();
 
+            // Sentinel «это ИТОГО главы»: ArticleCode совпадает с ChapterCode.
+            if (string.Equals(articleCode, chapterCode, StringComparison.Ordinal))
+            {
+                chapterDirect[articleCode] = (declared, confirmed);
+                continue;
+            }
+
             // Если в файле одну и ту же подстатью встретили несколько раз —
             // парсер их уже агрегировал. На случай гонок берём максимум,
             // чтобы не «обнулить» сумму отдельной строкой.
-            if (sums.TryGetValue(articleCode, out var prev))
+            if (terminal.TryGetValue(articleCode, out var prev))
             {
-                sums[articleCode] = (
+                terminal[articleCode] = (
                     Math.Max(prev.Decl, declared),
                     Math.Max(prev.Conf, confirmed));
             }
             else
             {
-                sums[articleCode] = (declared, confirmed);
+                terminal[articleCode] = (declared, confirmed);
             }
         }
-        return sums;
+        return (terminal, chapterDirect);
     }
 
     /// <summary>
     /// Считает суммы для глав/разделов: проходит по справочнику в порядке убывания глубины,
     /// для каждой записи прибавляет её сумму к ParentCode. На выходе — словарь Code → суммы,
     /// в котором есть как терминальные подстатьи, так и агрегированные родители.
+    ///
+    /// <paramref name="chapterDirect"/> применяется ПОСЛЕ агрегации и переписывает суммы
+    /// глав значениями из файла (строки «Итого» главы). Это нужно для Глав 2/3, где статьи
+    /// в файле не совпадают со справочником и aggregated by-children == 0.
     /// </summary>
     private Dictionary<string, (double Decl, double Conf)> AggregateUpwards(
-        IReadOnlyDictionary<string, (double Decl, double Conf)> terminal)
+        IReadOnlyDictionary<string, (double Decl, double Conf)> terminal,
+        IReadOnlyDictionary<string, (double Decl, double Conf)> chapterDirect)
     {
         var acc = new Dictionary<string, (double Decl, double Conf)>(StringComparer.Ordinal);
         // 1) Засеваем терминальными суммами.
@@ -293,6 +234,14 @@ public sealed class BudgetXlsxExporter
             acc.TryGetValue(entry.ParentCode, out var parent);
             acc[entry.ParentCode] = (parent.Decl + self.Decl, parent.Conf + self.Conf);
         }
+
+        // 3) Override итоговых сумм глав из файла (строки «Итого»). Если для главы есть
+        //    chapter-direct сумма — берём её, иначе оставляем агрегат по children.
+        foreach (var (code, v) in chapterDirect)
+        {
+            acc[code] = v;
+        }
+
         return acc;
     }
 
@@ -301,6 +250,27 @@ public sealed class BudgetXlsxExporter
         var s = raw.Trim();
         if (s.Length == 0) return s;
         return s.EndsWith('.') ? s : s + ".";
+    }
+
+    /// <summary>
+    /// Главы, у которых в выгрузке оставляем ТОЛЬКО саму строку главы (с ИТОГО) и
+    /// удаляем все подстатьи. Введено по ТЗ 2026-05-14, v1.2: для Глав 2 и 3 в файле для
+    /// Visary нужны только сводные суммы.
+    /// </summary>
+    private static readonly string[] CollapsedChapterCodes = ["2.", "3."];
+
+    /// <summary>
+    /// <c>true</c>, если код — потомок «свёрнутой» главы (т.е. это <c>2.1.</c>,
+    /// <c>2.1.1.</c>, <c>3.5.</c>, …), но не сама глава. Эти строки удаляются из выгрузки.
+    /// </summary>
+    private static bool IsCollapsedChapterDescendant(string code)
+    {
+        foreach (var chapter in CollapsedChapterCodes)
+        {
+            if (string.Equals(code, chapter, StringComparison.Ordinal)) return false; // сама глава остаётся
+            if (code.StartsWith(chapter, StringComparison.Ordinal)) return true;
+        }
+        return false;
     }
 
     private static Stream OpenTemplateStream()

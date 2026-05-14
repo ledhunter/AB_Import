@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using KiloImportService.Api.Data.Visary;
 using KiloImportService.Api.Domain.Importing;
 using KiloImportService.Api.Domain.Mapping.Budget;
@@ -510,8 +511,18 @@ public sealed class FinModelImportMapper : IImportMapper
         var ordered = budgetRows.OrderBy(r => r.SourceRowNumber).ToList();
 
         BudgetReferenceEntry? currentChapter = null;
+        // chapterClosed = true после строки «Итого…» текущей главы. В файле финмодели
+        // после «Итого» обычно идут «фактические» / следующий «Этап» с теми же названиями
+        // статей — их не суммируем (двойной учёт). Сбрасываем на следующей «Глава X».
+        // Раньше всё после «Итого» аккумулировалось → 1.8 вместо 2 222 получал 152 222 (см. ТЗ от 2026-05-14).
+        bool chapterClosed = false;
         // Бакет (chapterCode + articleCode) → суммарный (Sum, ArticleEntry, FirstRowNumber).
         var aggregated = new Dictionary<string, BudgetAggregateBucket>(StringComparer.Ordinal);
+        // Прямой ИТОГО главы из файла (Code → Sum, RowNumber). Override для агрегата
+        // в exporter-е: в файле статьи Глав 2/3 не совпадают со справочником («Стоимость
+        // СМР», «Инфляционное удорожание» и т.п.), поэтому сумма Главы агрегацией из
+        // children получится 0. Берём её из строки «Итого» главы напрямую. См. ТЗ 2026-05-14.
+        var chapterDirectTotals = new Dictionary<string, ChapterTotalBucket>(StringComparer.Ordinal);
         int matchedRows = 0, unmatchedRows = 0;
 
         foreach (var row in ordered)
@@ -520,10 +531,62 @@ public sealed class FinModelImportMapper : IImportMapper
             var title = rawTitle?.Trim();
             if (string.IsNullOrEmpty(title)) continue;
 
-            // Skip-маркеры: «Этап X», «Итого…», «Этапы».
-            if (IsBudgetSkipLine(title)) continue;
+            // «Итого…» — конец сборки данных для currentChapter; всё, что ниже до новой
+            // «Глава X», игнорируем (повторы статей под «Этап 2», «фактические» и т.п.).
+            // Дополнительно: фиксируем ИТОГО главы как chapter-direct сумму.
+            if (title.StartsWith("Итого", StringComparison.OrdinalIgnoreCase))
+            {
+                if (currentChapter is not null && !chapterClosed)
+                {
+                    row.Cells.TryGetValue("E", out var totalStr);
+                    var chapterTotal = ParseSumOrZero(totalStr);
+                    if (chapterTotal > 0
+                        && !chapterDirectTotals.ContainsKey(currentChapter.Code))
+                    {
+                        chapterDirectTotals[currentChapter.Code] = new ChapterTotalBucket(
+                            Chapter: currentChapter, Sum: chapterTotal, RowNumber: row.SourceRowNumber);
+                    }
+                    chapterClosed = true;
+                }
+                continue;
+            }
+            // «Этап 1»/«Этапы» — служебные подписи, не данные.
+            if (title.StartsWith("Этап", StringComparison.OrdinalIgnoreCase)) continue;
 
             var entry = _budgetRef.FindByTitle(title);
+
+            // Fallback 1: главу матчим по «Глава N» префиксу, если полный заголовок
+            // не совпал. В файле финмодели часто другие суффиксы: «Глава 2. Стоимость СМР»
+            // (файл) vs «Глава 2. Стоимость строительства» (справочник). Идентификатор —
+            // номер главы, не описательная часть.
+            if (entry is null)
+            {
+                entry = FindChapterByPrefix(title);
+                if (entry is not null)
+                {
+                    _log.LogDebug(
+                        "Budget row {RowNum}: '{Title}' resolved via chapter-prefix → {Code} '{RefTitle}'",
+                        row.SourceRowNumber, title, entry.Code, entry.Title);
+                }
+            }
+
+            // Fallback 2: глобальный FindByTitle не нашёл — это часто бывает, когда в файле
+            // используется КОРОТКАЯ форма Title, а в справочнике — длинная. Пример:
+            // файл «Прочие затраты» ↔ справочник «Прочие затраты на улучшения и содержание ЗУ» (1.8).
+            // Глобально добавлять reverse-prefix в FindByTitle опасно (одно и то же
+            // «Прочие …» может матчить разные подстатьи в разных главах), а с известной
+            // currentChapter — уже однозначно. Ищем среди потомков текущей главы.
+            if (entry is null && currentChapter is not null)
+            {
+                entry = FindArticleInChapterByPrefix(title, currentChapter);
+                if (entry is not null)
+                {
+                    _log.LogDebug(
+                        "Budget row {RowNum}: '{Title}' resolved via reverse-prefix in chapter '{Chapter}' → {Code} '{RefTitle}'",
+                        row.SourceRowNumber, title, currentChapter.Code, entry.Code, entry.Title);
+                }
+            }
+
             if (entry is null)
             {
                 unmatchedRows++;
@@ -536,8 +599,14 @@ public sealed class FinModelImportMapper : IImportMapper
             if (entry.IsChapter)
             {
                 currentChapter = entry;
+                chapterClosed = false; // новая глава — открываем сбор данных
                 continue;
             }
+
+            // Если текущая глава уже закрыта (видели её «Итого»), повторные article-строки
+            // ниже относятся к другому представлению (Этап 2, фактические и т.д.) — не
+            // дублируем их в агрегат.
+            if (chapterClosed) continue;
 
             // Article: parse sum from column E (если её нет — 0).
             row.Cells.TryGetValue("E", out var sumStr);
@@ -572,7 +641,7 @@ public sealed class FinModelImportMapper : IImportMapper
             }
         }
 
-        if (aggregated.Count == 0 && matchedRows == 0)
+        if (aggregated.Count == 0 && matchedRows == 0 && chapterDirectTotals.Count == 0)
         {
             _log.LogInformation(
                 "FinModelImportMapper: budget block scanned ({BudgetRows} rows), но ни одной подстатьи не сопоставлено со справочником.",
@@ -596,10 +665,109 @@ public sealed class FinModelImportMapper : IImportMapper
                 bucket.FirstRowNumber, true, JsonDocument.Parse(json), Array.Empty<RowError>()));
         }
 
+        // Эмитим chapter-direct итоги отдельным набором строк (ArticleCode == ChapterCode):
+        // exporter их распознаёт и переписывает агрегированную сумму главы.
+        foreach (var total in chapterDirectTotals.Values.OrderBy(t => t.RowNumber))
+        {
+            var json = JsonSerializer.Serialize(new
+            {
+                Kind          = "budget",
+                ChapterCode   = total.Chapter.Code,
+                ChapterTitle  = total.Chapter.Title,
+                ArticleCode   = total.Chapter.Code,   // sentinel: == ChapterCode = «это ИТОГО главы»
+                ArticleTitle  = total.Chapter.Title,
+                DeclaredSum   = total.Sum,
+                ConfirmedSum  = total.Sum,
+            });
+            mapped.Add(new MappedRow(
+                total.RowNumber, true, JsonDocument.Parse(json), Array.Empty<RowError>()));
+        }
+
         _log.LogInformation(
-            "FinModelImportMapper: budget aggregated → {Articles} уникальных подстатей (матчей в справочнике: {Matched}, пропущено: {Skipped})",
-            aggregated.Count, matchedRows, unmatchedRows);
+            "FinModelImportMapper: budget aggregated → {Articles} уникальных подстатей + {ChapterTotals} chapter-direct итогов (матчей в справочнике: {Matched}, пропущено: {Skipped})",
+            aggregated.Count, chapterDirectTotals.Count, matchedRows, unmatchedRows);
         return mapped;
+    }
+
+    private sealed record ChapterTotalBucket(BudgetReferenceEntry Chapter, double Sum, int RowNumber);
+
+    /// <summary>
+    /// Регэкс «Глава N» в начале строки — число главы извлекается в группу 1.
+    /// Терпим к пробелам / точке после номера: «Глава 2», «Глава 2.», «  Глава  2.  ».
+    /// </summary>
+    private static readonly Regex ChapterPrefixRegex = new(
+        @"^\s*Глава\s+(\d+)\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    /// <summary>
+    /// Резолвит главу справочника по префиксу «Глава N» (без учёта описательного суффикса).
+    /// Нужно потому, что в файле финмодели заголовок главы может отличаться от справочного:
+    /// файл «Глава 2. Стоимость СМР» ↔ справочник «Глава 2. Стоимость строительства».
+    /// Идентификатор главы — её номер (Code), не Title.
+    /// </summary>
+    private BudgetReferenceEntry? FindChapterByPrefix(string title)
+    {
+        var m = ChapterPrefixRegex.Match(title);
+        if (!m.Success) return null;
+        var code = m.Groups[1].Value + ".";
+        var entry = _budgetRef.FindByCode(code);
+        return entry is { IsChapter: true } ? entry : null;
+    }
+
+    /// <summary>
+    /// Reverse-prefix матч в пределах главы: ищет среди потомков <paramref name="chapter"/>
+    /// (не-главы) запись, у которой Title начинается с переданного <paramref name="title"/>
+    /// (после нормализации). Используется когда файл финмодели даёт короткую форму
+    /// названия, а справочник — полную (пример: «Прочие затраты» ↔ «Прочие затраты на
+    /// улучшения и содержание ЗУ»). Граница слова за prefix-ом — пробел/запятая/точка/скобка,
+    /// чтобы не зацепить случайное префиксное совпадение «Затраты на» → любая «Затраты на…».
+    ///
+    /// Если кандидатов несколько — берётся самый КОРОТКИЙ Title (он ближе к prefix-у,
+    /// меньше «лишнего» хвоста). Если конкурентов на одну длину — возвращается null
+    /// (не угадываем при двусмысленности).
+    /// </summary>
+    private BudgetReferenceEntry? FindArticleInChapterByPrefix(string title, BudgetReferenceEntry chapter)
+    {
+        var key = BudgetReferenceEntry.NormalizeTitle(title);
+        if (string.IsNullOrEmpty(key)) return null;
+
+        BudgetReferenceEntry? best = null;
+        bool ambiguous = false;
+        foreach (var e in _budgetRef.Entries)
+        {
+            if (e.IsChapter) continue;
+            if (!IsDescendantOf(e, chapter)) continue;
+
+            var refKey = e.NormalizedTitle;
+            if (refKey.Length <= key.Length) continue;
+            if (!refKey.StartsWith(key, StringComparison.Ordinal)) continue;
+            var boundary = refKey[key.Length];
+            if (char.IsLetterOrDigit(boundary)) continue;
+
+            if (best is null || refKey.Length < best.NormalizedTitle.Length)
+            {
+                best = e;
+                ambiguous = false;
+            }
+            else if (refKey.Length == best.NormalizedTitle.Length)
+            {
+                ambiguous = true;
+            }
+        }
+        return ambiguous ? null : best;
+    }
+
+    private bool IsDescendantOf(BudgetReferenceEntry entry, BudgetReferenceEntry chapter)
+    {
+        var cursor = entry.ParentCode;
+        while (cursor is not null)
+        {
+            if (string.Equals(cursor, chapter.Code, StringComparison.Ordinal)) return true;
+            var parent = _budgetRef.FindByCode(cursor);
+            if (parent is null) return false;
+            cursor = parent.ParentCode;
+        }
+        return false;
     }
 
     private BudgetReferenceEntry? ResolveChapterFor(BudgetReferenceEntry entry)
@@ -822,15 +990,6 @@ public sealed class FinModelImportMapper : IImportMapper
     {
         if (a is null) return false;
         return Math.Abs(a.Value - b) < 0.005; // в Visary суммы хранятся с 2 знаками
-    }
-
-    private static bool IsBudgetSkipLine(string title)
-    {
-        // «Этап 1», «Этап 1.», «Этапы», «Итого», «Итого:» — служебные строки.
-        var t = title.Trim();
-        if (t.StartsWith("Этап", StringComparison.OrdinalIgnoreCase)) return true;
-        if (t.StartsWith("Итого", StringComparison.OrdinalIgnoreCase)) return true;
-        return false;
     }
 
     private static double ParseSumOrZero(string? raw)

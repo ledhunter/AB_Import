@@ -1,3 +1,5 @@
+using System.IO.Compression;
+using System.Text.RegularExpressions;
 using ClosedXML.Excel;
 
 namespace KiloImportService.Api.Domain.Importing.Parsers;
@@ -22,12 +24,39 @@ public sealed class XlsxParser : IFileParser
 
         try
         {
-            using var workbook = new XLWorkbook(stream);
-            return Task.FromResult(layout switch
+            // Буферизуем stream, чтобы при необходимости повторить загрузку после
+            // предобработки. ClosedXML после неудачного ctor не позволит перечитать
+            // тот же поток (он мог быть частично прочитан).
+            using var buffered = new MemoryStream();
+            stream.CopyTo(buffered);
+            buffered.Position = 0;
+
+            XLWorkbook workbook;
+            try
             {
-                KeyValueVertical kv => ParseKeyValueVertical(workbook, kv, ct),
-                _ => ParseTabular(workbook, ct),
-            });
+                workbook = new XLWorkbook(buffered);
+            }
+            catch (Exception ex) when (IsExternalLinkError(ex))
+            {
+                // XLSX содержит external workbook references (например, формулы или
+                // defined names со ссылками на другую книгу в SharePoint:
+                // 'https://.../[file.xls]Sheet'!$A$1). ClosedXML не умеет парсить URL
+                // как формульные токены и падает с "Unable to determine token at index 0".
+                // Вырезаем внешние связи на zip-уровне и пробуем снова — кэшированные
+                // значения в ячейках остаются.
+                buffered.Position = 0;
+                using var stripped = StripExternalLinks(buffered);
+                workbook = new XLWorkbook(stripped);
+            }
+
+            using (workbook)
+            {
+                return Task.FromResult(layout switch
+                {
+                    KeyValueVertical kv => ParseKeyValueVertical(workbook, kv, ct),
+                    _ => ParseTabular(workbook, ct),
+                });
+            }
         }
         catch (OperationCanceledException)
         {
@@ -38,6 +67,97 @@ public sealed class XlsxParser : IFileParser
             return Task.FromResult(new ParseResult(
                 [], [], [new ParseError(null, $"Не удалось прочитать XLSX: {ex.Message}")]));
         }
+    }
+
+    /// <summary>
+    /// Признак «формула ссылается на внешнюю книгу, которую ClosedXML не умеет распарсить».
+    /// Сообщение от ClosedXML вида: "Unable to determine token for '…URL…' at index N".
+    /// Под этот случай попадают и формулы в ячейках, и defined names с external refs.
+    /// </summary>
+    private static bool IsExternalLinkError(Exception ex)
+    {
+        var msg = ex.Message ?? string.Empty;
+        return msg.Contains("Unable to determine token", StringComparison.OrdinalIgnoreCase)
+               || msg.Contains("ExternalLink", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Удаляет из XLSX-архива части, описывающие внешние связи (external workbook links),
+    /// чтобы ClosedXML смог открыть файл. Содержимое ячеек (кэшированные значения)
+    /// остаётся нетронутым; формулы со ссылками на внешние книги превратятся в
+    /// «оторванные» ссылки `[N]`, но их кэш в `&lt;v&gt;` всё равно прочитается через GetString().
+    ///
+    /// Что вырезаем:
+    /// 1) Все части `xl/externalLinks/*.xml` (и их `_rels/`).
+    /// 2) Из `xl/workbook.xml` — секцию `&lt;externalReferences&gt;` и `&lt;definedName&gt;`,
+    ///    у которых RefersTo содержит URL или `[file]` (т.е. ссылается во вне).
+    /// 3) Из `xl/_rels/workbook.xml.rels` — Relationship с типом `…/externalLink`.
+    /// </summary>
+    private static MemoryStream StripExternalLinks(Stream source)
+    {
+        var copy = new MemoryStream();
+        source.CopyTo(copy);
+        copy.Position = 0;
+
+        using (var zip = new ZipArchive(copy, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            // 1) Целиком удаляем external link parts + их _rels.
+            var toDelete = zip.Entries
+                .Where(e =>
+                    e.FullName.StartsWith("xl/externalLinks/", StringComparison.Ordinal)
+                    || e.FullName.StartsWith("xl/_rels/externalLink", StringComparison.Ordinal))
+                .ToList();
+            foreach (var e in toDelete) e.Delete();
+
+            // 2) Чистим workbook.xml: <externalReferences> и defined names с URL/[file].
+            ReplaceXmlEntry(zip, "xl/workbook.xml", xml =>
+            {
+                xml = Regex.Replace(xml,
+                    "<externalReferences>.*?</externalReferences>", "",
+                    RegexOptions.Singleline);
+                // <definedName name="...">'https://.../[file]Sheet'!$A$1</definedName>
+                xml = Regex.Replace(xml,
+                    "<definedName[^>]*>[^<]*(https?://|\\[)[^<]*</definedName>", "",
+                    RegexOptions.Singleline | RegexOptions.IgnoreCase);
+                return xml;
+            });
+
+            // 3) Чистим _rels/workbook.xml.rels: Relationship Type="…/externalLink".
+            ReplaceXmlEntry(zip, "xl/_rels/workbook.xml.rels", xml =>
+                Regex.Replace(xml,
+                    "<Relationship[^>]*externalLink[^>]*/>", "",
+                    RegexOptions.IgnoreCase));
+        }
+
+        copy.Position = 0;
+        return copy;
+    }
+
+    /// <summary>
+    /// Перезаписывает XML-часть в zip-архиве. Если содержимое не изменилось — no-op.
+    /// Прямой `Open()` для перезаписи в `ZipArchiveMode.Update` ненадёжен: удаление
+    /// + создание гарантирует, что новая длина не сохранит хвост старого файла.
+    /// </summary>
+    private static void ReplaceXmlEntry(ZipArchive zip, string name, Func<string, string> transform)
+    {
+        var entry = zip.GetEntry(name);
+        if (entry is null) return;
+
+        string content;
+        using (var s = entry.Open())
+        using (var r = new StreamReader(s))
+        {
+            content = r.ReadToEnd();
+        }
+
+        var cleaned = transform(content);
+        if (cleaned == content) return;
+
+        entry.Delete();
+        var newEntry = zip.CreateEntry(name);
+        using var ws = newEntry.Open();
+        using var w = new StreamWriter(ws);
+        w.Write(cleaned);
     }
 
     private static ParseResult ParseTabular(XLWorkbook workbook, CancellationToken ct)

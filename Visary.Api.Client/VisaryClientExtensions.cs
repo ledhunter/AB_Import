@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Visary.Api.CRUD;
 using Visary.Api.Dto;
+using Visary.Api.FileStorage;
 using Visary.Api.ListView;
 
 namespace Visary.Api;
@@ -29,6 +30,7 @@ public static class VisaryClientExtensions
     {
         services.AddHttpClient<IListViewClient, ListViewClient>(ConfigureHttpClient);
         services.AddHttpClient<ICrudClient, CrudClient>(ConfigureHttpClient);
+        services.AddHttpClient<IFileStorageClient, FileStorageClient>(ConfigureHttpClient);
         return services;
     }
 

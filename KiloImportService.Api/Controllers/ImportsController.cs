@@ -235,6 +235,20 @@ public class ImportsController : ControllerBase
                     label = "Бюджет для импорта в Visary",
                     description = "XLSX по эталону «Бюджет_А4.1» — для ручного импорта на стороне Visary",
                     downloadUrl = $"/api/imports/{s.Id}/budget-xlsx",
+                    actionUrl = (string?)null,
+                    fileName = $"Бюджет_{s.Id}.xlsx",
+                });
+                // Action-кнопка: автоматически залить XLSX в файловое хранилище Visary
+                // и создать typedimportwbs (TypedJournal-импорт). Показываем рядом с
+                // кнопкой «Скачать» — пользователь сам решает: вручную или одной кнопкой.
+                // См. doc_project/82-visary-file-storage-upload.md.
+                files.Add(new
+                {
+                    kind = "budget-upload",
+                    label = "Загрузить бюджет в Visary",
+                    description = "XLSX уходит в файловое хранилище Visary и стартует импорт через typedimportwbs",
+                    downloadUrl = (string?)null,
+                    actionUrl = $"/api/imports/{s.Id}/budget-upload",
                     fileName = $"Бюджет_{s.Id}.xlsx",
                 });
             }
@@ -386,6 +400,48 @@ public class ImportsController : ControllerBase
         {
             _log.LogError(ex, "ExportBudgetXlsx failed for session {SessionId}", id);
             return StatusCode(500, new { error = $"Не удалось сформировать XLSX: {ex.Message}" });
+        }
+    }
+
+    /// <summary>
+    /// Загрузить сгенерированный XLSX бюджета в файловое хранилище Visary и создать
+    /// задание импорта через <c>typedimportwbs</c> (TypedJournal). После успешного вызова
+    /// бэк Visary запускает фоновую обработку импорта; возвращаем ID файла в ФХ и ID
+    /// созданной записи импорта. См. <c>doc_project/82-visary-file-storage-upload.md</c>.
+    /// </summary>
+    [HttpPost("{id:guid}/budget-upload")]
+    public async Task<IActionResult> UploadBudgetToVisary(
+        Guid id,
+        [FromServices] BudgetVisaryUploader uploader,
+        CancellationToken ct)
+    {
+        var session = await _db.Sessions.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, ct);
+        if (session is null) return NotFound();
+        if (session.ImportTypeCode != "finmodel")
+            return BadRequest(new { error = "Загрузка бюджета в Visary доступна только для импорта «Финмодель»." });
+
+        try
+        {
+            var result = await uploader.UploadAsync(id, ct);
+            return Ok(new
+            {
+                fileStorageItemId = result.FileStorageItemId,
+                typedImportWbsId = result.TypedImportWbsId,
+                fileName = result.FileName,
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _log.LogError(ex, "UploadBudgetToVisary failed for session {SessionId}", id);
+            return StatusCode(500, new { error = $"Не удалось загрузить бюджет в Visary: {ex.Message}" });
         }
     }
 

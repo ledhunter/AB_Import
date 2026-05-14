@@ -67,6 +67,17 @@ public interface ICrudClient
         int wbsId, WbsPatchRequest request, CancellationToken ct = default);
 
     /// <summary>
+    /// Создать запись <c>typedimportwbs</c> — TypedJournal-задание импорта бюджета (XLSX)
+    /// из файла, уже загруженного в файловое хранилище. Поле <c>File</c> в request — это
+    /// link-токен, возвращённый <see cref="FileStorage.IFileStorageClient.GetFileLinkAsync"/>.
+    /// Visary триггерит фоновую джобу импорта; статус можно опрашивать через
+    /// <c>GET /api/visary/crud/typedimportwbs/{id}</c> (этой методики пока нет — добавить
+    /// при необходимости, по аналогии с GetWbsByIdAsync).
+    /// </summary>
+    Task<TypedImportWbsRaw> CreateTypedImportWbsAsync(
+        TypedImportWbsCreateRequest request, CancellationToken ct = default);
+
+    /// <summary>
     /// Привязывает Organization участником Site. Соответствует шагу из puml
     /// «Добавить в Участники Объекта найденную Организацию с ролью Застройщик».
     /// Реализован через manytomany-link, как и <see cref="LinkCadastralAreaToSiteAsync"/>.
@@ -418,6 +429,25 @@ public sealed class CrudClient : VisaryHttpBase<CrudClient>, ICrudClient
             $"{BaseUrl}/api/visary/crud/{VisaryMnemonics.Wbs}/{wbsId}?forceUpdate=true",
             request, $"{VisaryMnemonics.Wbs}/{wbsId}", wbsId, ct,
             $"CrudClient.PatchWbsAsync: wbsId={{Id}} success");
+    }
+
+    // ─── TypedImportWbs (TypedJournal-импорт бюджета) ────────────────────────
+
+    public async Task<TypedImportWbsRaw> CreateTypedImportWbsAsync(
+        TypedImportWbsCreateRequest request, CancellationToken ct)
+    {
+        // POST /api/visary/crud/typedimportwbs — тело по HAR (Context/har импорт бюджета.txt).
+        // Visary при создании записи триггерит фоновую обработку импорта бюджета.
+        // Ответ — короткий (~11 байт): JSON с ID созданной записи (иногда — голый int).
+        _log.LogDebug("Visary → POST {Mnemonic} (projectId={ProjectId}, siteId={SiteId}, importType={ImportType})",
+            VisaryMnemonics.TypedImportWbs, request.ProjectID, request.ConstructionSiteID, request.ImportType);
+        var result = await PostCrudAsync<TypedImportWbsRaw>(
+            $"{BaseUrl}/api/visary/crud/{VisaryMnemonics.TypedImportWbs}",
+            request, VisaryMnemonics.TypedImportWbs, ct);
+        _log.LogInformation(
+            "CrudClient.CreateTypedImportWbsAsync: created id={Id} (siteId={SiteId})",
+            result.ID, request.ConstructionSiteID);
+        return result;
     }
 
     // ─── Organization ↔ Site link ────────────────────────────────────────────

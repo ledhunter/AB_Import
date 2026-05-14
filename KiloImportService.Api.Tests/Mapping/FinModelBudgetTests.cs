@@ -91,9 +91,12 @@ public class FinModelBudgetTests : IDisposable
     }
 
     [Fact]
-    public async Task ValidateAsync_BudgetRowsAggregateAcrossStages()
+    public async Task ValidateAsync_BudgetRows_IgnoresRepeatsAfterChapterTotal()
     {
-        // Глава 1 + одна и та же подстатья на двух «этапах» (E=300, E=138) → сумма 438.
+        // В файле финмодели после «Итого» главы 1 идут повторы тех же статей —
+        // «Этап 2» или фактические значения (та же таблица для другого среза). Учитываем
+        // только данные до «Итого»: одно значение на статью в главе (см. ТЗ от 2026-05-14:
+        // 1.8 «Прочие затраты на улучшения и содержание ЗУ» = E483, а не сумма всех вхождений).
         var rows = new[]
         {
             BudgetRow(475, c: "Глава 1. Стоимость земельного участка и расходы по его содержанию"),
@@ -107,7 +110,6 @@ public class FinModelBudgetTests : IDisposable
 
         var result = await _mapper.ValidateAsync(Ctx(), rows, _dbContext, default);
 
-        // Должна получиться ровно одна валидная mapped-строка: подстатья «Затраты на приобретение прав на ЗУ» (1.1.).
         Assert.Single(result.Rows);
         Assert.True(result.Rows[0].IsValid);
 
@@ -115,9 +117,33 @@ public class FinModelBudgetTests : IDisposable
         Assert.Equal("budget", root.GetProperty("Kind").GetString());
         Assert.Equal("1.", root.GetProperty("ChapterCode").GetString());
         Assert.Equal("1.1.", root.GetProperty("ArticleCode").GetString());
-        Assert.Equal("Затраты на приобретение прав на ЗУ", root.GetProperty("ArticleTitle").GetString());
-        Assert.Equal(438.0, root.GetProperty("DeclaredSum").GetDouble(), precision: 4);
-        Assert.Equal(438.0, root.GetProperty("ConfirmedSum").GetDouble(), precision: 4);
+        // 300, а не 438 — повтор после «Итого» проигнорирован.
+        Assert.Equal(300.0, root.GetProperty("DeclaredSum").GetDouble(), precision: 4);
+        Assert.Equal(300.0, root.GetProperty("ConfirmedSum").GetDouble(), precision: 4);
+    }
+
+    [Fact]
+    public async Task ValidateAsync_BudgetRows_ResolvesShortTitleAgainstLongerReference()
+    {
+        // Короткая форма «Прочие затраты» в файле ↔ длинная «Прочие затраты на улучшения
+        // и содержание ЗУ» (1.8) в справочнике. Резолвится через reverse-prefix в пределах
+        // текущей главы (см. ТЗ от 2026-05-14).
+        var rows = new[]
+        {
+            BudgetRow(475, c: "Глава 1. Стоимость земельного участка и расходы по его содержанию"),
+            BudgetRow(479, c: "Этап 1"),
+            BudgetRow(483, c: "Прочие затраты", e: "2222"),
+            BudgetRow(484, c: "Итого", e: "2222"),
+        };
+
+        var result = await _mapper.ValidateAsync(Ctx(), rows, _dbContext, default);
+
+        Assert.Single(result.Rows);
+        var root = result.Rows[0].MappedValues.RootElement;
+        Assert.Equal("1.8.", root.GetProperty("ArticleCode").GetString());
+        Assert.Equal("Прочие затраты на улучшения и содержание ЗУ",
+            root.GetProperty("ArticleTitle").GetString());
+        Assert.Equal(2222.0, root.GetProperty("DeclaredSum").GetDouble(), precision: 4);
     }
 
     [Fact]
