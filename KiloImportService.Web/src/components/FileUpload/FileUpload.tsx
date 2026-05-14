@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { FileUploadItem } from '@alfalab/core-components/file-upload-item';
 import { Typography } from '@alfalab/core-components/typography';
 import { Status } from '@alfalab/core-components/status';
+import { Button } from '@alfalab/core-components/button';
 import { ACCEPT_ALL_SUPPORTED, detectFileFormat } from '../../utils/fileFormat';
 import type { FileFormat } from '../../types/import';
 
@@ -29,6 +30,11 @@ export const FileUpload = ({ file, detectedFormat, onFileSelect }: Props) => {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => validateAndSelect(e.target.files?.[0]);
   const handleClick = () => inputRef.current?.click();
+  const handleRemove = () => {
+    setError(null);
+    if (inputRef.current) inputRef.current.value = '';
+    onFileSelect(null);
+  };
 
   return (
     <div className="field">
@@ -36,12 +42,20 @@ export const FileUpload = ({ file, detectedFormat, onFileSelect }: Props) => {
         Загрузите файл
       </Typography.Text>
 
+      <input
+        ref={inputRef}
+        type="file"
+        accept={ACCEPT_ALL_SUPPORTED}
+        onChange={handleChange}
+        style={{ display: 'none' }}
+      />
+
       {!file ? (
         <>
-          <div style={{ 
-            border: '2px dashed #d8d8d8', 
-            borderRadius: '12px', 
-            padding: '40px 20px', 
+          <div style={{
+            border: '2px dashed #d8d8d8',
+            borderRadius: '12px',
+            padding: '40px 20px',
             textAlign: 'center',
             backgroundColor: error ? '#fef4f4' : '#fafbfc',
             cursor: 'pointer',
@@ -53,13 +67,6 @@ export const FileUpload = ({ file, detectedFormat, onFileSelect }: Props) => {
               Поддерживаются: CSV, XLS, XLSB, XLSX · Макс. размер: 50 МБ
             </Typography.Text>
           </div>
-          <input
-            ref={inputRef}
-            type="file"
-            accept={ACCEPT_ALL_SUPPORTED}
-            onChange={handleChange}
-            style={{ display: 'none' }}
-          />
           {error && (
             <Typography.Text view="primary-small" color="negative" tag="div" style={{ marginTop: 8 }}>
               {error}
@@ -73,7 +80,7 @@ export const FileUpload = ({ file, detectedFormat, onFileSelect }: Props) => {
             size={file.size}
             uploadStatus="UPLOADED"
             showDelete
-            onDelete={() => onFileSelect(null)}
+            onDelete={handleRemove}
           />
           {detectedFormat && (
             <div className="file-uploaded__format">
@@ -85,6 +92,14 @@ export const FileUpload = ({ file, detectedFormat, onFileSelect }: Props) => {
               </Status>
             </div>
           )}
+          <div className="file-uploaded__actions">
+            <Button view="secondary" size={40} onClick={handleRemove}>
+              Удалить файл
+            </Button>
+            <Button view="tertiary" size={40} onClick={handleClick}>
+              Выбрать другой
+            </Button>
+          </div>
         </div>
       )}
     </div>

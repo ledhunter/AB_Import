@@ -430,6 +430,33 @@ html, body, #root {
   padding-left: 4px;
 }
 
+.file-uploaded__actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+/* === Заголовок группы листа в таблице отчёта импорта === */
+.sheet-header-row > td {
+  background: #f3f4f6;
+  border-top: 1px solid #d8d8d8;
+  border-bottom: 1px solid #d8d8d8;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: #374151;
+}
+
+.sheet-header-row__title {
+  font-weight: 600;
+  margin-right: 12px;
+}
+
+.sheet-header-row__count {
+  color: #6b7280;
+  font-size: 12px;
+}
+
 /* === Навигация (вкладки) === */
 .app-nav {
   display: flex;

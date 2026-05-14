@@ -75,11 +75,13 @@ export interface ApiImportSession {
 
 export interface ApiImportRow {
   sourceRowNumber: number;
+  sheet: string | null;
   status: ApiStagedRowStatus;
 }
 
 export interface ApiImportError {
   sourceRowNumber: number;
+  sheet: string | null;
   columnName: string | null;
   errorCode: string;
   message: string;

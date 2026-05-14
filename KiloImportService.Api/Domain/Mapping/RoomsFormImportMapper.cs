@@ -224,11 +224,20 @@ public sealed class RoomsFormImportMapper : IImportMapper
             }
 
             // ── Поля поиска Room ────────────────────────────────────────────
-            var roomNumber = ReadString(row, RoomNumberAliases);
+            // Из значения извлекаем только цифры: «п1» → «1», «12А» → «12».
+            // Если в файле остался текст вокруг числа, фиксируем в логе.
+            var roomNumberRaw = ReadString(row, RoomNumberAliases);
+            var roomNumber = ExtractDigitsOnly(roomNumberRaw);
             if (string.IsNullOrWhiteSpace(roomNumber))
             {
                 rowErrors.Add(new RowError(string.Join(" / ", RoomNumberAliases), "required_missing",
                     "Не указан номер помещения."));
+            }
+            else if (!string.Equals(roomNumberRaw, roomNumber, StringComparison.Ordinal))
+            {
+                _log.LogDebug(
+                    "RoomsForm.Validate: row {Row} — номер помещения '{Raw}' нормализован в '{Numeric}' (удалены не-цифры).",
+                    row.SourceRowNumber, roomNumberRaw, roomNumber);
             }
 
             // ── Вид помещения: row.Cells["Тип/Название/Вид"] (приоритет) или sheet name (fallback)
@@ -275,8 +284,17 @@ public sealed class RoomsFormImportMapper : IImportMapper
             var developerPin    = ReadString(row, DeveloperPinAliases);
             var shareAgreement  = ReadString(row, ShareAgreementAliases);
 
-            int? roomsCount = TryParseNullableInt(ReadString(row, RoomsCountAliases), out var rcErr);
+            var roomsCountRaw = ReadString(row, RoomsCountAliases);
+            int? roomsCount = TryParseNullableInt(roomsCountRaw, out var rcErr);
             if (rcErr != null) rowErrors.Add(new RowError(string.Join(" / ", RoomsCountAliases), "invalid_number", rcErr));
+            // Если вид помещения «Квартира» — «Количество комнат» обязательно.
+            else if (roomsCount is null
+                     && !string.IsNullOrWhiteSpace(roomKindTitle)
+                     && string.Equals(roomKindTitle.Trim(), "Квартира", StringComparison.OrdinalIgnoreCase))
+            {
+                rowErrors.Add(new RowError(string.Join(" / ", RoomsCountAliases), "required_missing",
+                    "Не указано количество комнат для квартиры."));
+            }
 
             double? projectArea = TryParseNullableDouble(ReadString(row, ProjectAreaAliases), out var paErr);
             if (paErr != null) rowErrors.Add(new RowError(string.Join(" / ", ProjectAreaAliases), "invalid_number", paErr));
@@ -946,6 +964,14 @@ public sealed class RoomsFormImportMapper : IImportMapper
         foreach (var k in kindByTitle.Keys)
             if (string.Equals(k, title, StringComparison.OrdinalIgnoreCase)) return k;
         return title;
+    }
+
+    /// <summary>«п1» → «1»; «12А» → «12»; «кв. 7» → «7»; «—» → <c>""</c>.
+    /// Игнорирует все символы кроме цифр (включая точки/запятые).</summary>
+    private static string ExtractDigitsOnly(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return string.Empty;
+        return new string(raw.Where(char.IsDigit).ToArray());
     }
 
     /// <summary>«Лит 1.1» → «1.1»; «корп 2» → «2»; «3.А» → «3»; «лит. 1» → «1».</summary>
