@@ -253,3 +253,41 @@ public sealed class WbsPatchRequest
     public double? DeclaredSum { get; set; }
     public double? ConfirmedSum { get; set; }
 }
+
+/// <summary>
+/// POST <c>/api/visary/crud/typedimportwbs</c> — создание задания TypedJournal-импорта
+/// бюджета (WBS) из XLSX, предварительно загруженного в файловое хранилище.
+/// Тело сформировано по HAR-файлу <c>Context/har импорт бюджета.txt</c>.
+///
+/// <para>
+/// Ключевое поле — <see cref="File"/>: это <b>link-токен</b>, полученный через
+/// <c>POST /api/files/link/file_link/by_id</c> (см. <c>IFileStorageClient.GetFileLinkAsync</c>).
+/// </para>
+/// <para>
+/// <see cref="ImportType"/> = 10 в test-окружении — внутренний код Visary для
+/// «Бюджет/WBS». При перевозке на другие стенды сверять со справочником.
+/// </para>
+/// </summary>
+public sealed class TypedImportWbsCreateRequest
+{
+    public int ProjectID { get; set; }
+    public VisaryRef? Project { get; set; }
+    public int ConstructionSiteID { get; set; }
+    public VisaryRef? ConstructionSite { get; set; }
+    /// <summary>Код типа импорта в Visary; 10 = «Бюджет/WBS».</summary>
+    public int ImportType { get; set; } = 10;
+    /// <summary>С какой строки XLSX начинать парсинг (0 = с первой строки данных).</summary>
+    public int StartLine { get; set; } = 0;
+    /// <summary>Имя листа. Пустая строка = первый лист книги (Visary сам подхватывает).</summary>
+    public string SheetName { get; set; } = string.Empty;
+    /// <summary>Link-токен файла из ФХ (НЕ URL, НЕ ID — opaque-строка).</summary>
+    public string File { get; set; } = string.Empty;
+}
+
+public sealed class TypedImportWbsRaw
+{
+    public int ID { get; set; }
+    public int? ImportType { get; set; }
+    public string? File { get; set; }
+    public string? Status { get; set; }
+}

@@ -14,6 +14,7 @@ public static class VisaryMnemonics
     public const string CadastralArea = "cadastralarea";
     public const string ShareAgreement = "shareagreement";
     public const string Wbs = "wbs";
+    public const string TypedImportWbs = "typedimportwbs";
     public const string ProjectManagement = "projectmanagement";
 
     // ─── Справочники ────────────────────────────────────────────────────

@@ -76,6 +76,9 @@ try
     // ─── XLSX-экспорт бюджета по эталонному шаблону «Бюджет_А4.1» ───
     // (см. doc_project/78-budget-xlsx-export.md)
     builder.Services.AddScoped<KiloImportService.Api.Budget.BudgetXlsxExporter>();
+    // Pipeline загрузки бюджета в Visary FileStorage + создание typedimportwbs
+    // (см. doc_project/82-visary-file-storage-upload.md).
+    builder.Services.AddScoped<KiloImportService.Api.Budget.BudgetVisaryUploader>();
 
     // ─── Visary HTTP API клиент + кэш проектов ───
     builder.Services.AddVisaryClient(builder.Configuration.GetSection(VisaryOptions.SectionName));
