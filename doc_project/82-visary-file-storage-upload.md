@@ -2,10 +2,21 @@
 
 ## 📋 Описание
 
-**Статус**: 🟢 v1.0 — программная заливка XLSX-бюджета в ФХ Visary + создание `typedimportwbs`.
-**Дата**: 2026-05-14
+**Статус**: 🟢 v1.2 — папка из проекта **+** case-insensitive парсинг link-токена.
+**Дата**: 2026-05-15 (v1.1/v1.2), 2026-05-14 (v1.0).
 **Зависит от**: [78-budget-xlsx-export.md](78-budget-xlsx-export.md) (генерация XLSX).
 **Источники API**: `Context/har файл по загрузке бюджета в папку ФХ.txt`, `Context/har импорт бюджета.txt`.
+
+### 📌 История версий
+
+| | v1.0 (2026-05-14) | v1.1 (2026-05-15) | v1.2 (2026-05-15) |
+|---|---|---|---|
+| `drive_id` / `directory_id` | константы из `Visary:BudgetUpload:DriveId/DirectoryId` | парсятся из `ConstructionProject.ProjectFolder` (`«32,40110»`) | то же |
+| Кол-во HTTP-вызовов в `UploadAsync` | 3 | **4** (+`GET constructionproject/{id}`) | 4 |
+| `BudgetUploadOptions` | `DriveId`/`DirectoryId`/`ImportType` | только `ImportType` | только `ImportType` |
+| Парсинг ответа `/file_link/by_id` | `link/result/value/token` через `TryGetProperty` (case-sensitive) | то же | **case-insensitive** (`Link`/`Result`/…) |
+
+⚠️ **Регрессия v1.1→v1.2**: Visary вернул JSON `{"Link":"…"}` в **PascalCase**, `TryGetProperty("link")` его не нашёл, `ExtractLinkToken` свалился в fallback `return raw` и отдал backend-у сериализованный JSON-объект целиком. Это уехало в Visary как `File` → Visary распарсил как Base-64 → 500 «not a valid Base-64 string». Фикс — итерация `EnumerateObject()` + `OrdinalIgnoreCase`.
 
 После Apply сессии «Финмодель» backend умеет **двумя кнопками** в разделе «Сформированные файлы»:
 - **Скачать** — отдаёт `Бюджет_{id}.xlsx` для ручного импорта (старое поведение, v1.1).
@@ -16,6 +27,27 @@
 ## 🌐 API Visary, который мы вызываем
 
 Все запросы — `Authorization: Bearer <JWT>` (тот же токен из корневого `.env`).
+
+### 0) Получение папки проекта *(новое в v1.1)*
+
+```http
+GET {visary}/api/visary/crud/constructionproject/{projectId}
+```
+
+Из ответа нас интересует **строковое** поле `ProjectFolder`:
+
+```json
+{
+  "ID": 4584,
+  "Title": "...",
+  "ProjectFolder": "32,40110",
+  ...
+}
+```
+
+- Формат — `"<driveId>,<directoryId>"` (две положительных целых через запятую).
+- В `ICrudClient` уже есть `GetProjectByIdFullAsync(id)` → `ConstructionProjectFull` со строковым `ProjectFolder` (см. [Dto/Generated/ConstructionProjectFull.cs](../Visary.Api.Client/Dto/Generated/ConstructionProjectFull.cs)).
+- Парсинг и валидация — `BudgetVisaryUploader.ParseProjectFolder`. Fallback на конфиг **отсутствует**: пустое/невалидное значение — это конфигурационная ошибка в карточке проекта, а не повод заливать в случайную папку.
 
 ### 1) Загрузка файла в ФХ
 
@@ -47,8 +79,8 @@ POST {visary}/api/files/link/file_link/by_id?drive_id={drive}&item_id={item}&che
 ```
 
 - Тело пустое.
-- Ответ — `string` (либо в кавычках, либо в JSON-обёртке `{"link":"…"}`). `IFileStorageClient.GetFileLinkAsync` обрабатывает оба варианта (см. `ExtractLinkToken`).
-- Этот opaque-токен идёт в поле `File` запроса typedimportwbs.
+- Ответ — `string` (либо в кавычках, либо в JSON-обёртке `{"Link":"…"}` — **PascalCase**). `IFileStorageClient.GetFileLinkAsync` обрабатывает оба варианта (см. `ExtractLinkToken`); поиск свойства идёт **case-insensitive**, иначе токен «уезжает» в Visary как сериализованный JSON и валит импорт.
+- Этот opaque-токен (Base-64-URL-safe, обычно 200+ символов) идёт в поле `File` запроса typedimportwbs.
 
 ### 3) Создание задания импорта
 
@@ -68,7 +100,7 @@ Content-Type: application/json
 }
 ```
 
-- **ImportType=10** — внутренний код Visary для «Бюджет/WBS» (в test-окружении). Hardcoded в `BudgetUploadOptions.ImportType` и конфигурируется через `Visary:BudgetUpload:ImportType`.
+- **ImportType=10** — внутренний код Visary для «Бюджет/WBS» (в test-окружении). Конфигурируется через `Visary:BudgetUpload:ImportType` (`BudgetUploadOptions.ImportType`). Это **единственное** значение, оставшееся в `BudgetUploadOptions` после v1.1 — диск/папка теперь приходят из проекта.
 - **Ответ** — короткий JSON с `ID` созданной записи.
 
 ---
@@ -82,8 +114,10 @@ POST /api/imports/{id}/budget-upload
         │
         ▼
 BudgetVisaryUploader.UploadAsync(sessionId)
+   ├─ 0. CrudClient.GetProjectByIdFullAsync(projectId)      → ProjectFolder="d,dir"  (v1.1)
+   ├─ 0.5 ParseProjectFolder("32,40110")                    → (driveId=32, directoryId=40110)
    ├─ 1. BudgetXlsxExporter.GenerateAsync(sessionId)        → byte[] xlsx
-   ├─ 2. FileStorageClient.UploadAsync(...)                 → int itemId
+   ├─ 2. FileStorageClient.UploadAsync(drive, dir, ...)     → int itemId
    ├─ 3. FileStorageClient.GetFileLinkAsync(drive, itemId)  → string linkToken
    └─ 4. CrudClient.CreateTypedImportWbsAsync(...)          → int importId
    ⇒ { fileStorageItemId, typedImportWbsId, fileName }
@@ -97,7 +131,8 @@ BudgetVisaryUploader.UploadAsync(sessionId)
 | `ICrudClient.CreateTypedImportWbsAsync` | [CrudClient.cs](../Visary.Api.Client/CRUD/CrudClient.cs) | POST `/api/visary/crud/typedimportwbs` |
 | DTO запроса | [VisaryCrudRequests.cs](../Visary.Api.Client/Dto/VisaryCrudRequests.cs) | `TypedImportWbsCreateRequest`, `TypedImportWbsRaw` |
 | Мнемоника | [VisaryMnemonics.cs](../Visary.Api.Client/Common/VisaryMnemonics.cs) | `TypedImportWbs = "typedimportwbs"` |
-| Конфиг drive/dir/importType | [VisaryOptions.cs](../Visary.Api.Client/VisaryOptions.cs) | `BudgetUploadOptions` (дефолты для test-окружения: 65/40870/10) |
+| Конфиг importType | [VisaryOptions.cs](../Visary.Api.Client/VisaryOptions.cs) | `BudgetUploadOptions.ImportType` (дефолт `10`); поля диска/папки удалены в v1.1 |
+| Источник drive/dir | [ConstructionProjectFull.cs](../Visary.Api.Client/Dto/Generated/ConstructionProjectFull.cs) → `ProjectFolder` | парсинг — `BudgetVisaryUploader.ParseProjectFolder` |
 | DI Visary client | [VisaryClientExtensions.cs](../Visary.Api.Client/VisaryClientExtensions.cs) | `AddHttpClient<IFileStorageClient, FileStorageClient>` |
 | Pipeline | [BudgetVisaryUploader.cs](../KiloImportService.Api/Budget/BudgetVisaryUploader.cs) | `UploadAsync` оркестрирует все 4 шага |
 | Endpoint | [ImportsController.cs](../KiloImportService.Api/Controllers/ImportsController.cs) | `POST /api/imports/{id}/budget-upload` (200 → `{fileStorageItemId, typedImportWbsId, fileName}`) |
@@ -183,23 +218,46 @@ request.File = await _fileStorage.GetFileLinkAsync(driveId, itemId, true, ct);
 form.Add(fileContent, "file", fileName);
 ```
 
-### 3. Hardcoded `drive_id`/`directory_id` в коде
+### 3. Hardcoded или конфиговый `drive_id`/`directory_id`
 
 ```csharp
-// НЕПРАВИЛЬНО — на проде ID других папок, требуется пересборка.
-const int DriveId = 65;
-const int DirId = 40870;
-```
-
-```csharp
-// ПРАВИЛЬНО — в BudgetUploadOptions, конфигурируются через
-// Visary:BudgetUpload:DriveId / DirectoryId / ImportType в appsettings или .env.
+// НЕПРАВИЛЬНО (v1.0, deprecated) — все проекты льются в одну и ту же папку.
+// Бизнес-процесс: каждый проект имеет свою папку ФХ, заданную в карточке.
 var opt = _visaryOptions.CurrentValue.BudgetUpload;
+await _fileStorage.UploadAsync(bytes, name, mime, opt.DriveId, opt.DirectoryId, ct);
 ```
+
+```csharp
+// ПРАВИЛЬНО (v1.1) — drive/dir берём из ProjectFolder выбранного проекта.
+var project = await _crud.GetProjectByIdFullAsync(projectId, ct);
+var (driveId, directoryId) = ParseProjectFolder(project.ProjectFolder, projectId);
+await _fileStorage.UploadAsync(bytes, name, mime, driveId, directoryId, ct);
+```
+
+⚠️ Парсер `ParseProjectFolder` не имеет fallback: на пустом/невалидном `ProjectFolder`
+бросаем `InvalidOperationException` с указанием `projectId` и ожидаемого формата
+(«32,40110»). Это сознательно — лучше явная ошибка, чем заливка в случайную папку.
 
 ### 4. Парсить ответ link-эндпоинта как только raw-строку
 
-Visary может вернуть либо `"abc..."`, либо `{"link":"abc..."}` (зависит от версии). `ExtractLinkToken` пробует обе формы — fallback не должен ломаться.
+Visary возвращает либо `"abc..."` (quoted-string), либо `{"Link":"abc..."}` (**PascalCase!**) — зависит от версии/типа диска. `ExtractLinkToken` должен пробовать обе формы И искать свойство объекта **case-insensitive**.
+
+```csharp
+// ❌ НЕПРАВИЛЬНО (regress 2026-05-15): TryGetProperty чувствителен к регистру.
+//    Ответ {"Link":"abc..."} → не находим "link" → fallback `return raw` отдаёт
+//    весь JSON-объект как строку → Visary падает «not valid Base-64».
+foreach (var name in new[] { "link", "result", "value", "token" })
+    if (root.TryGetProperty(name, out var el) ...) return ...;
+
+// ✅ ПРАВИЛЬНО: итерируем свойства и сравниваем имя case-insensitive.
+foreach (var prop in root.EnumerateObject())
+{
+    if (prop.Value.ValueKind != JsonValueKind.String) continue;
+    foreach (var w in wanted)
+        if (string.Equals(prop.Name, w, StringComparison.OrdinalIgnoreCase))
+            return prop.Value.GetString();
+}
+```
 
 ### 5. Считать ответ upload голым числом (regression 2026-05-14)
 
@@ -236,8 +294,9 @@ var itemId = ExtractItemId(raw) ?? throw …;
 ## 🎯 Чек-лист
 
 - [ ] При обновлении Visary — повторно проверить формат ответа `POST /api/files/files/upload` (видели: bare-int, quoted-int, `[id]`-массив). Если появится новый вариант — расширить `ExtractItemId` в [FileStorageClient.cs](../Visary.Api.Client/FileStorage/FileStorageClient.cs).
-- [ ] При переходе на prod-окружение: сверить `BudgetUploadOptions.DriveId`, `DirectoryId`, `ImportType` со справочниками Visary; переопределить через `Visary:BudgetUpload:*` в `appsettings.json` или env-переменными `Visary__BudgetUpload__DriveId` и т.д.
-- [ ] Token из `.env` имеет права на запись в выбранную папку ФХ (`check_permission=true` — Visary проверит).
+- [ ] При переходе на prod-окружение: сверить только `BudgetUploadOptions.ImportType` со справочниками Visary (`Visary:BudgetUpload:ImportType` / env `Visary__BudgetUpload__ImportType`). Папка диска **не настраивается** — она приходит из `ConstructionProject.ProjectFolder` (поэтому в каждом проекте оно должно быть заполнено корректно).
+- [ ] Token из `.env` имеет права на запись в папку из `ProjectFolder` (`check_permission=true` — Visary проверит).
 - [ ] Не использовать `kind="budget-upload"` для сессий, у которых `visaryProjectId`/`visarySiteId` пустые — `BudgetVisaryUploader.UploadAsync` бросит `InvalidOperationException` (endpoint вернёт 400).
+- [ ] Если у выбранного проекта `ProjectFolder` пустой / не парсится в `«driveId,directoryId»` — endpoint вернёт 400 с указанием `projectId`. Это **не баг сервиса импорта**, а конфиг карточки проекта в Visary (поправить в Visary UI или через `PATCH /api/visary/crud/constructionproject/{id}`).
 - [ ] Для отладки: статус задания доступен через `GET /api/visary/crud/typedimportwbs/{id}` — пока этот метод не обёрнут в `ICrudClient`; при необходимости добавить по аналогии с `GetWbsByIdAsync`.
 - [ ] Поллинг статуса импорта (если потребуется в UI) — отдельная задача; сейчас при успешном создании показываем toast с ID и не отслеживаем дальнейший статус.

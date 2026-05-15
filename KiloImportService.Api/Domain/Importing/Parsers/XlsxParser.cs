@@ -1,6 +1,8 @@
 using System.IO.Compression;
 using System.Text.RegularExpressions;
 using ClosedXML.Excel;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace KiloImportService.Api.Domain.Importing.Parsers;
 
@@ -16,6 +18,11 @@ namespace KiloImportService.Api.Domain.Importing.Parsers;
 /// </summary>
 public sealed class XlsxParser : IFileParser
 {
+    private readonly ILogger<XlsxParser> _log;
+
+    public XlsxParser(ILogger<XlsxParser>? log = null)
+        => _log = log ?? NullLogger<XlsxParser>.Instance;
+
     public FileFormat Format => FileFormat.Xlsx;
 
     public Task<ParseResult> ParseAsync(Stream stream, FileLayoutHint? layout = null, CancellationToken ct = default)
@@ -24,38 +31,31 @@ public sealed class XlsxParser : IFileParser
 
         try
         {
-            // Буферизуем stream, чтобы при необходимости повторить загрузку после
-            // предобработки. ClosedXML после неудачного ctor не позволит перечитать
-            // тот же поток (он мог быть частично прочитан).
-            using var buffered = new MemoryStream();
-            stream.CopyTo(buffered);
-            buffered.Position = 0;
+            // Читаем входной stream В МАССИВ БАЙТ один раз. ClosedXML после неудачи
+            // в ctor закрывает переданный Stream, поэтому для retry повторно
+            // переиспользовать тот же MemoryStream нельзя — `CopyTo` упадёт с
+            // ObjectDisposedException. Каждая попытка получает свежий MemoryStream
+            // поверх неизменяемого byte[].
+            byte[] bytes;
+            using (var ms = new MemoryStream())
+            {
+                stream.CopyTo(ms);
+                bytes = ms.ToArray();
+            }
 
-            XLWorkbook workbook;
             try
             {
-                workbook = new XLWorkbook(buffered);
+                return Task.FromResult(ParseFromBytes(bytes, layout, ct));
             }
             catch (Exception ex) when (IsExternalLinkError(ex))
             {
-                // XLSX содержит external workbook references (например, формулы или
-                // defined names со ссылками на другую книгу в SharePoint:
-                // 'https://.../[file.xls]Sheet'!$A$1). ClosedXML не умеет парсить URL
-                // как формульные токены и падает с "Unable to determine token at index 0".
-                // Вырезаем внешние связи на zip-уровне и пробуем снова — кэшированные
-                // значения в ячейках остаются.
-                buffered.Position = 0;
-                using var stripped = StripExternalLinks(buffered);
-                workbook = new XLWorkbook(stripped);
-            }
-
-            using (workbook)
-            {
-                return Task.FromResult(layout switch
-                {
-                    KeyValueVertical kv => ParseKeyValueVertical(workbook, kv, ct),
-                    _ => ParseTabular(workbook, ct),
-                });
+                // Известный кейс: external workbook references. Чистим zip и пробуем
+                // ещё раз. Warn — чтобы было видно в логах, что cleanup сработал.
+                _log.LogWarning(
+                    "XlsxParser: external-link parsing error ({ExType}), running StripExternalLinks + retry. File size: {Bytes} bytes.",
+                    ex.GetType().Name, bytes.Length);
+                var cleaned = StripExternalLinks(bytes);
+                return Task.FromResult(ParseFromBytes(cleaned, layout, ct));
             }
         }
         catch (OperationCanceledException)
@@ -67,6 +67,23 @@ public sealed class XlsxParser : IFileParser
             return Task.FromResult(new ParseResult(
                 [], [], [new ParseError(null, $"Не удалось прочитать XLSX: {ex.Message}")]));
         }
+    }
+
+    /// <summary>
+    /// Открывает <see cref="XLWorkbook"/> и применяет нужную раскладку. Любая ошибка
+    /// (включая отложенные «Unable to determine token» при `RangeUsed`/`GetString`)
+    /// летит наружу — ловит внешний retry в <see cref="ParseAsync"/>.
+    /// </summary>
+    private static ParseResult ParseFromBytes(byte[] bytes, FileLayoutHint layout, CancellationToken ct)
+    {
+        // writable: false — ClosedXML гарантированно не испортит байты для retry.
+        using var ms = new MemoryStream(bytes, writable: false);
+        using var workbook = new XLWorkbook(ms);
+        return layout switch
+        {
+            KeyValueVertical kv => ParseKeyValueVertical(workbook, kv, ct),
+            _ => ParseTabular(workbook, ct),
+        };
     }
 
     /// <summary>
@@ -93,10 +110,13 @@ public sealed class XlsxParser : IFileParser
     ///    у которых RefersTo содержит URL или `[file]` (т.е. ссылается во вне).
     /// 3) Из `xl/_rels/workbook.xml.rels` — Relationship с типом `…/externalLink`.
     /// </summary>
-    private static MemoryStream StripExternalLinks(Stream source)
+    private static byte[] StripExternalLinks(byte[] source)
     {
+        // Копию байтов кладём в writable MemoryStream — ZipArchiveMode.Update
+        // требует возможности расширять/перезаписывать поток. По завершении
+        // блока ZipArchive диспозится → буфер содержит готовый zip.
         var copy = new MemoryStream();
-        source.CopyTo(copy);
+        copy.Write(source, 0, source.Length);
         copy.Position = 0;
 
         using (var zip = new ZipArchive(copy, ZipArchiveMode.Update, leaveOpen: true))
@@ -127,10 +147,28 @@ public sealed class XlsxParser : IFileParser
                 Regex.Replace(xml,
                     "<Relationship[^>]*externalLink[^>]*/>", "",
                     RegexOptions.IgnoreCase));
+
+            // 4) Чистим <f>...</f> с URL / [file] во ВСЕХ листах книги.
+            //    URL встречаются не только в defined names, но и прямо в формулах
+            //    ячеек: =VLOOKUP('https://.../[CAPRAPSCHED.xls]Sheet'!$A$1:$M$65536, …).
+            //    Кэшированное значение <v> рядом остаётся — данные читаются как и раньше.
+            //    Перечисляем имена ДО Delete()/CreateEntry(), т.к. итерация Entries во
+            //    время мутации zip ненадёжна.
+            var sheetEntries = zip.Entries
+                .Where(e => e.FullName.StartsWith("xl/worksheets/sheet", StringComparison.Ordinal)
+                            && e.FullName.EndsWith(".xml", StringComparison.Ordinal))
+                .Select(e => e.FullName)
+                .ToList();
+            foreach (var name in sheetEntries)
+            {
+                ReplaceXmlEntry(zip, name, xml =>
+                    Regex.Replace(xml,
+                        "<f\\b[^>]*>[^<]*(?:https?://|\\[)[^<]*</f>", "",
+                        RegexOptions.IgnoreCase | RegexOptions.Singleline));
+            }
         }
 
-        copy.Position = 0;
-        return copy;
+        return copy.ToArray();
     }
 
     /// <summary>

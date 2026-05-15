@@ -143,6 +143,11 @@ public sealed class FileStorageClient : VisaryHttpBase<FileStorageClient>, IFile
         // Visary возвращает либо голую строку с кавычками, либо JSON {"link":"…"}/{"result":"…"}.
         // Защищаемся от обоих вариантов: если raw — quoted-строка, снимаем кавычки;
         // если JSON-объект — пробуем выдрать поле "link" / "result".
+        _log.LogInformation(
+            "Visary FileStorage ← 200 POST /link/file_link/by_id (drive={DriveId}, item={ItemId}) raw='{Raw}' rawLen={RawLen}",
+            driveId, itemId,
+            raw.Length > 240 ? raw.Substring(0, 240) + "…" : raw,
+            raw.Length);
         var token = ExtractLinkToken(raw);
         if (string.IsNullOrWhiteSpace(token))
         {
@@ -150,8 +155,9 @@ public sealed class FileStorageClient : VisaryHttpBase<FileStorageClient>, IFile
                 $"FileStorage file_link: пустой ответ или неожиданный формат: '{raw}'.");
         }
         _log.LogInformation(
-            "Visary FileStorage ← 200 POST /link/file_link/by_id (drive={DriveId}, item={ItemId}) → link length={Len}",
-            driveId, itemId, token.Length);
+            "Visary FileStorage: parsed link token length={Len} preview='{Preview}'",
+            token.Length,
+            token.Length > 80 ? token.Substring(0, 80) + "…" : token);
         return token;
     }
 
@@ -163,18 +169,25 @@ public sealed class FileStorageClient : VisaryHttpBase<FileStorageClient>, IFile
         {
             return System.Text.Json.JsonSerializer.Deserialize<string>(raw) ?? string.Empty;
         }
-        // JSON-объект: пытаемся выдрать link/result.
+        // JSON-объект: Visary возвращает {"Link":"<token>"} (PascalCase).
+        // TryGetProperty case-sensitive — итерируем все свойства и сравниваем
+        // имя case-insensitive, иначе на PascalCase «Link» fallback вернёт ВЕСЬ JSON
+        // как строку, и его дальше воспримут как нерасшифровываемый Base-64.
         if (raw.StartsWith('{'))
         {
             try
             {
                 using var doc = System.Text.Json.JsonDocument.Parse(raw);
                 var root = doc.RootElement;
-                foreach (var name in new[] { "link", "result", "value", "token" })
+                var wanted = new[] { "link", "result", "value", "token" };
+                foreach (var prop in root.EnumerateObject())
                 {
-                    if (root.TryGetProperty(name, out var el)
-                        && el.ValueKind == System.Text.Json.JsonValueKind.String)
-                        return el.GetString() ?? string.Empty;
+                    if (prop.Value.ValueKind != System.Text.Json.JsonValueKind.String) continue;
+                    foreach (var w in wanted)
+                    {
+                        if (string.Equals(prop.Name, w, StringComparison.OrdinalIgnoreCase))
+                            return prop.Value.GetString() ?? string.Empty;
+                    }
                 }
             }
             catch { /* fallthrough */ }

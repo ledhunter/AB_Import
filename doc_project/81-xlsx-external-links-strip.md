@@ -2,8 +2,19 @@
 
 ## 📋 Описание
 
-**Статус**: 🟢 v1.0 — устойчивость `XlsxParser` к файлам с external workbook references.
-**Дата**: 2026-05-14
+**Статус**: 🟢 v1.3 — переход на `byte[]` как иммутабельный источник для retry.
+**Дата**: 2026-05-15 (v1.1/v1.2/v1.3), 2026-05-14 (v1.0).
+
+### 📌 Что изменилось
+
+- **v1.1** — strip распространён на `xl/worksheets/sheet*.xml` (формулы `<f>` в ячейках, а не только `<definedName>`).
+- **v1.2** — `catch IsExternalLinkError` поднят с уровня `new XLWorkbook(...)` на уровень всего парсинга (`ParseFromBytes` = ctor + `ParseTabular`/`ParseKeyValueVertical`). ClosedXML парсит формулы **лениво**: ошибка «Unable to determine token» прилетает не из ctor, а из `RangeUsed`/`cell.GetString()`.
+- **v1.3** — внутреннее состояние парсера переведено с `MemoryStream` на `byte[]`. ClosedXML после неудачного `new XLWorkbook(stream)` **закрывает переданный поток**, поэтому в v1.0-v1.2 retry получал уже-disposed `MemoryStream` и cleanup падал на `CopyTo` с `ObjectDisposedException` → внешний catch возвращал исходное сообщение «Unable to determine token» и пользователь видел его как `parse_failure`. После v1.3 каждая попытка читает из свежего `new MemoryStream(bytes, writable: false)` поверх неизменяемого `byte[]` — закрытие потока ClosedXML'ом безвредно.
+
+Регрессии:
+- v1.0→v1.1: файл с `=VLOOKUP('https://.../[CAPRAPSCHED.xls]Sheet'!$A$1:$M$65536, …)` — URL в `<f>` ячейки, не в `<definedName>`.
+- v1.1→v1.2: тот же файл, ClosedXML открывал workbook без ошибки, но падал позже при `RangeUsed`/`GetString`.
+- v1.2→v1.3: «Параметры к переносу в АБ.xlsx» (~12 МБ, 27 982 `<definedName>`, 35 со ссылками на SharePoint) — после первой неудачной попытки `XLWorkbook` Stream закрывался, второй вызов парсинга так и не происходил, потому что cleanup падал.
 **Контекст**: Регрессия при импорте «Параметры к переносу в АБ.xlsx» — файл содержит формулы / defined names со ссылками на чужую книгу в SharePoint (`'https://spo-global.kpmg.com/.../[CAPRAPSCHED.xls]THREE VARIABLES'!$A$1:$M$65536`). ClosedXML падает при открытии книги:
 
 ```
@@ -19,21 +30,30 @@ ClosedXML парсит формулы при загрузке (включая `R
 
 Предобработка XLSX-zip с удалением внешних связей. Кэшированные значения ячеек (`<v>` в sheet XML) при этом сохраняются — а нам нужны только они, не формулы.
 
-### Поток
+### Поток *(v1.3)*
 
 ```
 ParseAsync(stream)
    │
-   ├─ buffered := MemoryStream(stream)                      // буферизуем для retry
+   ├─ bytes := stream → byte[]                                    // иммутабельный источник
    │
-   ├─ try  new XLWorkbook(buffered)                          // ⓿ как обычно
+   ├─ try  ParseFromBytes(bytes)                                  // ⓿ ctor + Parse*
+   │         = new XLWorkbook(new MemoryStream(bytes, writable:false))
+   │           → ParseTabular / ParseKeyValueVertical
    │
-   ├─ catch ex when IsExternalLinkError(ex):
-   │       stripped := StripExternalLinks(buffered)          // ① zip-уровень
-   │       workbook := new XLWorkbook(stripped)              // ② повторная попытка
-   │
-   └─ ParseTabular / ParseKeyValueVertical → ParseResult
+   └─ catch ex when IsExternalLinkError(ex):                      // ← покрывает и ctor,
+           cleaned := StripExternalLinks(bytes)                   //   и Range/GetString
+           ParseFromBytes(cleaned)                                // ② повтор на свежем MS
 ```
+
+⚠️ Ключевые отличия:
+- **byte[] вместо MemoryStream**: ClosedXML после неудачного `new XLWorkbook(stream)`
+  закрывает переданный Stream. В v1.0-v1.2 второй вызов получал disposed-`MemoryStream`,
+  и cleanup падал на `CopyTo` → retry фактически не выполнялся. С `byte[]` каждый
+  attempt получает свежий MS, закрытие безвредно.
+- **catch обёрнут вокруг всего парсинга**, а не только ctor. ClosedXML парсит формулы
+  лениво — «Unable to determine token» может прилететь при `RangeUsed()`/`cell.GetString()`
+  уже после удачного `new XLWorkbook`.
 
 ### Что вырезаем в zip ([XlsxParser.cs:StripExternalLinks](../KiloImportService.Api/Domain/Importing/Parsers/XlsxParser.cs))
 
@@ -44,6 +64,7 @@ ParseAsync(stream)
 | `xl/workbook.xml` → `<externalReferences>` | regex-Replace | Регистрация external book index `[1]`, `[2]`, … |
 | `xl/workbook.xml` → `<definedName>` с URL или `[file]` в RefersTo | regex-Replace | Именованные диапазоны, ссылающиеся на внешнюю книгу |
 | `xl/_rels/workbook.xml.rels` → `Relationship` с `externalLink` в Type | regex-Replace | Связь workbook → externalLinks |
+| `xl/worksheets/sheet*.xml` → `<f ...>...URL/[file]...</f>` *(v1.1)* | regex-Replace | Формулы ячеек со ссылкой во вне; `<v>` рядом сохраняется |
 
 ### Ключевая идея
 

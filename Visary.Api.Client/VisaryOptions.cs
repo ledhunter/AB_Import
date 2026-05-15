@@ -23,10 +23,13 @@ public sealed class VisaryOptions
 
 public sealed class BudgetUploadOptions
 {
-    /// <summary>ID диска ФХ Visary, в который льётся бюджет. Test-окружение: 65.</summary>
-    public int DriveId { get; set; } = 65;
-    /// <summary>ID папки внутри диска. Test-окружение: 40870.</summary>
-    public int DirectoryId { get; set; } = 40870;
-    /// <summary>Внутренний код Visary для типа импорта «Бюджет/WBS». Test: 10.</summary>
+    /// <summary>
+    /// Внутренний код Visary для типа импорта «Бюджет/WBS». Test: 10.
+    /// </summary>
+    /// <remarks>
+    /// Целевой диск/папка ФХ берутся из поля <c>ProjectFolder</c> выбранного
+    /// <c>ConstructionProject</c> (формат «<c>driveId,directoryId</c>», например «32,40110»),
+    /// а не из конфига — см. doc_project/82-visary-file-storage-upload.md.
+    /// </remarks>
     public int ImportType { get; set; } = 10;
 }
