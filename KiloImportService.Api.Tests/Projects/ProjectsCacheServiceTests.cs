@@ -331,5 +331,15 @@ public class ProjectsCacheServiceTests
         public Task<ListViewResponse<BuildingMaterialRaw>>    ListBuildingMaterialsAsync(CancellationToken ct) => throw new NotImplementedException();
         public Task<ListViewResponse<FinishingMaterialRaw>>   ListFinishingMaterialsAsync(CancellationToken ct) => throw new NotImplementedException();
         public Task<ListViewResponse<RoomKindRaw>>            ListRoomKindsAsync(CancellationToken ct) => throw new NotImplementedException();
+
+        public Task<ListViewResponse<ProjectManagementRaw>> GetProjectManagementsBySiteAsync(int siteId, CancellationToken ct)
+            => throw new NotImplementedException();
+
+        public Task<ListViewResponse<ProjectManagementRaw>> GetProjectManagementsByProjectAsync(int projectId, int? organizationId, int? siteId, CancellationToken ct)
+            => throw new NotImplementedException();
+
+        public Task<ListViewResponse<ShareAgreementRaw>> FindShareAgreementsAsync(
+            string? number, int? roomKindId, string? conditionalNumber, string? stageNumber, string? projectNumber, CancellationToken ct)
+            => throw new NotImplementedException();
     }
 }

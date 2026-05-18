@@ -104,6 +104,13 @@ export interface UiReportRow {
   sheet: string | null;     // имя листа («Квартиры», «Машиноместа», …); null если файл одностраничный
   status: RowStatus;
   errors: UiRowError[];     // ошибки именно этой строки
+  /**
+   * Журнал реально выполненных по этой строке действий («Корпус создан»,
+   * «Помещение обновлено», «ДДУ найден (не создан)»). Пустой массив для
+   * pending/invalid строк, для applied — отражает то, что мапер сделал
+   * в Visary. Источник — `apiRow.actions ?? []`.
+   */
+  actions: string[];
 }
 
 export interface UiReport {

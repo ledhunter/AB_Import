@@ -149,6 +149,7 @@ export default function App() {
             onApply={importSession.apply}
             onCancel={importSession.cancel}
             onReset={handleReset}
+            onReportPageChange={importSession.loadReportPage}
           />
         )}
       </main>

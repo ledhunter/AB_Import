@@ -38,6 +38,25 @@ public sealed class RoomsFormImportMapper : IImportMapper
     public string ImportTypeCode => "rooms";
 
     /// <summary>
+    /// Шапка файла помещений может стоять не в первой строке (например, в
+    /// «Ежевика короткая 1.xlsx» строки 1–4 заняты заголовком «Реестр вывода КВАРТИР»,
+    /// коэффициентами Кб=0,3/Кл=0,5 и подсказками; настоящие имена колонок —
+    /// в строке 5, данные — с 8-й). Передаём парсеру список «опорных» заголовков:
+    /// он просканирует первые ~30 строк и выберет ту, где найдётся ≥2 анкоров.
+    /// </summary>
+    public FileLayoutHint LayoutHint { get; } = new Tabular(HeaderAnchors: new[]
+    {
+        "ПИН застройщика",
+        "Номер разрешения",
+        "Номер проекта",
+        "Этап",
+        "Номер помещения/Квартира/Номер квартиры",
+        "Тип/Название/Вид",
+        "№ стр/корп",
+        "Подъезд/Секция",
+    });
+
+    /// <summary>
     /// Значение <c>RoomKindRaw.RoomCategory</c>, означающее «Жилое» (Residential).
     /// Справочник Visary RoomCategory (нумерация с нуля):
     ///   0 = Residential (Квартира, Апартамент — единственная «жилая» категория)
@@ -66,7 +85,11 @@ public sealed class RoomsFormImportMapper : IImportMapper
     private static readonly string[] SectionTitleAliases     = ["№ стр/корп", "Section", "Строение"];
     private static readonly string[] FloorAliases            = ["Этаж", "Floor"];
     private static readonly string[] BuildingSectionAliases  = ["Подъезд/Секция", "BuildingSection"];
-    private static readonly string[] RoomsCountAliases       = ["Колич. комнат", "Количество комнат", "RoomsNumber"];
+    private static readonly string[] RoomsCountAliases       = [
+        "Колич. комнат", "Колич комнат",       // встречается в реальных файлах (с точкой и без)
+        "Количество комнат", "Кол-во комнат", "Кол. комнат",
+        "Количество",                            // короткий заголовок
+        "RoomsNumber"];
     private static readonly string[] ProjectAreaAliases      = [
         "Площадь (для квартир с балконами и лоджиями с Кб=0,3; Кл=0,5), кв.м.",
         "Площадь", "ProjectArea"];
@@ -184,6 +207,24 @@ public sealed class RoomsFormImportMapper : IImportMapper
             var projectNum  = ReadString(row, ProjectNumberAliases);
             var stageNumRaw = ReadString(row, StageNumberAliases);
 
+            // ── Тихий пропуск сводных/служебных строк ──────────────────────
+            // Внутри листа «Квартира» (как в «Ежевика короткая 1.xlsx») сразу под
+            // шапкой попадаются строки агрегатов: «ИТОГО», «Сумма с учетом вывода»,
+            // «План», «Факт» — в первой колонке текст, остальные ячейки заполняются
+            // формулами SUBTOTAL/SUMIF. Не считаем их данными: если ВСЕ три
+            // идентификационных поля (НПС/РНС/Этап) пустые, строка не может
+            // относиться к ОКС-у. Молча пропускаем — не порождая site_mismatch,
+            // которым иначе захлёбывается отчёт.
+            if (string.IsNullOrWhiteSpace(permission)
+                && string.IsNullOrWhiteSpace(projectNum)
+                && string.IsNullOrWhiteSpace(stageNumRaw))
+            {
+                _log.LogDebug(
+                    "RoomsForm.Validate: row {Row} (sheet '{Sheet}') пропущена — нет НПС/РНС/Этапа (служебная/сводная строка).",
+                    row.SourceRowNumber, row.Sheet);
+                continue;
+            }
+
             // ── Per-row сверка Site (НЕ ИЩЕМ Site, а ВАЛИДИРУЕМ выбранный) ─
             // Жёсткие проверки: НПС и Этап должны совпадать. Опционально РНС
             // (если пустой в файле — пропускаем эту проверку, как описано в задаче).
@@ -284,13 +325,28 @@ public sealed class RoomsFormImportMapper : IImportMapper
             var developerPin    = ReadString(row, DeveloperPinAliases);
             var shareAgreement  = ReadString(row, ShareAgreementAliases);
 
+            // «Колич. комнат» нередко приходит в свободной форме: «1 к.», «1 к», «п1»,
+            // «1п», «2-к», «3 ком.», «студия». Берём ПЕРВУЮ непрерывную группу цифр —
+            // это и есть число комнат. «студия»/прочерк/пусто → null. Жёсткое
+            // int.TryParse тут не годится: пользователю не должно прилетать
+            // invalid_number на «1 к.» — это валидная однушка в реальных реестрах.
             var roomsCountRaw = ReadString(row, RoomsCountAliases);
-            int? roomsCount = TryParseNullableInt(roomsCountRaw, out var rcErr);
-            if (rcErr != null) rowErrors.Add(new RowError(string.Join(" / ", RoomsCountAliases), "invalid_number", rcErr));
+            int? roomsCount = ExtractFirstRunOfDigits(roomsCountRaw);
+            if (roomsCount.HasValue
+                && !string.Equals(roomsCountRaw, roomsCount.Value.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal))
+            {
+                _log.LogDebug(
+                    "RoomsForm.Validate: row {Row} — «Колич. комнат» '{Raw}' нормализовано в {N} (вытащена ведущая цифровая группа).",
+                    row.SourceRowNumber, roomsCountRaw, roomsCount.Value);
+            }
+            // Если raw непустой, но числа нет — пользователь написал «студия»/«—» и т.п.
+            // Не считаем ошибкой числа: оставляем null. required_missing-проверка ниже
+            // (только если Kind=Квартира) подскажет, если для квартиры реально нужна цифра.
+
             // Если вид помещения «Квартира» — «Количество комнат» обязательно.
-            else if (roomsCount is null
-                     && !string.IsNullOrWhiteSpace(roomKindTitle)
-                     && string.Equals(roomKindTitle.Trim(), "Квартира", StringComparison.OrdinalIgnoreCase))
+            if (roomsCount is null
+                && !string.IsNullOrWhiteSpace(roomKindTitle)
+                && string.Equals(roomKindTitle.Trim(), "Квартира", StringComparison.OrdinalIgnoreCase))
             {
                 rowErrors.Add(new RowError(string.Join(" / ", RoomsCountAliases), "required_missing",
                     "Не указано количество комнат для квартиры."));
@@ -364,6 +420,19 @@ public sealed class RoomsFormImportMapper : IImportMapper
         var errors  = new List<RowError>();
         var applied = 0;
 
+        // Журнал действий per-row: ключ (Sheet, SourceRowNumber). Записываем сюда
+        // человекочитаемые метки («Корпус создан», «Помещение обновлено»,
+        // «ДДУ найден (не создан)», …) по ходу Apply. На выходе превращаем в
+        // RowActionLog-список для ApplyResult; Pipeline сохранит как StagedRow.Actions.
+        var actionsByRow = new Dictionary<(string Sheet, int Row), List<string>>();
+        void Log(string sheet, int row, string action)
+        {
+            var key = (sheet, row);
+            if (!actionsByRow.TryGetValue(key, out var list))
+                actionsByRow[key] = list = new List<string>(4);
+            list.Add(action);
+        }
+
         if (context.VisarySiteId is null)
         {
             errors.Add(new RowError(null, "site_required",
@@ -411,6 +480,7 @@ public sealed class RoomsFormImportMapper : IImportMapper
         {
             ct.ThrowIfCancellationRequested();
             var v = mr.MappedValues.RootElement;
+            var sheetForRow = sheetGroup.Key;
 
             try
             {
@@ -531,6 +601,7 @@ public sealed class RoomsFormImportMapper : IImportMapper
                                         _log.LogInformation(
                                             "RoomsForm.Apply: переиспользуем projectmanagement id={PmId} из projectId={ProjectId} для siteId={SiteId} (orgId={OrgId})",
                                             existingPmId, projectId.Value, siteId, orgId.Value);
+                                        Log(sheetForRow, mr.SourceRowNumber, "Застройщик переиспользован");
                                     }
                                     else
                                     {
@@ -551,11 +622,13 @@ public sealed class RoomsFormImportMapper : IImportMapper
                                         _log.LogInformation(
                                             "RoomsForm.Apply: создан новый Застройщик projectmanagement id={PmId} (orgId={OrgId}, projectId={ProjectId})",
                                             created.ID, orgId.Value, projectId.Value);
+                                        Log(sheetForRow, mr.SourceRowNumber, "Застройщик создан");
                                     }
 
                                     // (d) Линкуем найденную/созданную PM с сайтом.
                                     await _crud.LinkProjectManagementToSiteAsync(siteId, pmIdToLink, ct);
                                     developerPmByOrg[orgId.Value] = pmIdToLink;
+                                    Log(sheetForRow, mr.SourceRowNumber, "Застройщик привязан к объекту");
                                 }
                                 catch (Exception pmEx)
                                 {
@@ -576,12 +649,19 @@ public sealed class RoomsFormImportMapper : IImportMapper
                 {
                     if (!sectionCache.TryGetValue(sectionTitle, out var cached))
                     {
+                        // PRE-CHECK дубликатов корпуса: ищем по Title с Trim()+OrdinalIgnoreCase.
+                        // Без Trim «1.1» из файла и «1.1 » в БД считались разными — на второй
+                        // импорт создавался дубликат. Visary listview-фильтр уже использует
+                        // `contains`, локальный фильтр приводит набор к точному совпадению.
                         var existing = await _listView.GetSectionsBySiteAsync(siteId, sectionTitle, ct);
+                        var sectionTitleTrim = sectionTitle.Trim();
                         var match = existing.Data.FirstOrDefault(x =>
-                            string.Equals(x.Title, sectionTitle, StringComparison.OrdinalIgnoreCase));
+                            string.Equals((x.Title ?? string.Empty).Trim(), sectionTitleTrim,
+                                StringComparison.OrdinalIgnoreCase));
                         if (match is not null)
                         {
                             cached = match.ID;
+                            Log(sheetForRow, mr.SourceRowNumber, $"Корпус найден ({sectionTitle})");
                         }
                         else
                         {
@@ -602,8 +682,16 @@ public sealed class RoomsFormImportMapper : IImportMapper
                                 Type               = new VisaryRef { ID = 3, Title = "МЖД" },
                             }, ct);
                             cached = created.ID;
+                            Log(sheetForRow, mr.SourceRowNumber, $"Корпус создан ({sectionTitle})");
                         }
                         sectionCache[sectionTitle] = cached;
+                    }
+                    else
+                    {
+                        // Корпус уже встречался в этой сессии — кэш-хит, реального
+                        // вызова Visary не было, но из перспективы пользователя
+                        // строка всё равно «привязалась к корпусу».
+                        Log(sheetForRow, mr.SourceRowNumber, $"Корпус найден ({sectionTitle})");
                     }
                     sectionId = cached;
                 }
@@ -622,14 +710,19 @@ public sealed class RoomsFormImportMapper : IImportMapper
                 int? roomId = null;
                 if (sectionId is not null)
                 {
+                    // PRE-CHECK дубликатов помещения: Section × Kind × Number × BuildingSection.
+                    // Все строковые поля нормализуем через Trim()+OrdinalIgnoreCase — пробелы
+                    // в Excel-ячейках и хвостовые символы в Visary иначе обходят дедуп.
                     var roomsInSection = await _listView.GetRoomsBySectionAsync(sectionId.Value, null, ct);
+                    var roomNumberTrim = roomNumber.Trim();
+                    var buildingSectionTrim = buildingSection.Trim();
                     var match = roomsInSection.Data.FirstOrDefault(r =>
                         (kindId is null || r.Kind?.ID == kindId.Value)
-                        && (string.Equals(r.ExplicationNumber, roomNumber, StringComparison.OrdinalIgnoreCase) ||
-                            string.Equals(r.Number,            roomNumber, StringComparison.OrdinalIgnoreCase))
+                        && (string.Equals((r.ExplicationNumber ?? string.Empty).Trim(), roomNumberTrim, StringComparison.OrdinalIgnoreCase) ||
+                            string.Equals((r.Number            ?? string.Empty).Trim(), roomNumberTrim, StringComparison.OrdinalIgnoreCase))
                         && string.Equals(
                                 (r.BuildingSection ?? string.Empty).Trim(),
-                                buildingSection.Trim(),
+                                buildingSectionTrim,
                                 StringComparison.OrdinalIgnoreCase));
                     roomId = match?.ID;
                 }
@@ -680,6 +773,7 @@ public sealed class RoomsFormImportMapper : IImportMapper
                         ZalogCostPerM     = GetDoubleOrNull(v, "ZalogCostPerM"),
                     }, ct);
                     roomId = created.ID;
+                    Log(sheetForRow, mr.SourceRowNumber, $"Помещение создано (№{roomNumber})");
                 }
                 else
                 {
@@ -698,6 +792,7 @@ public sealed class RoomsFormImportMapper : IImportMapper
                         MarketCostPerM  = GetDoubleOrNull(v, "MarketCostPerM"),
                         ZalogCostPerM   = GetDoubleOrNull(v, "ZalogCostPerM"),
                     }, ct);
+                    Log(sheetForRow, mr.SourceRowNumber, $"Помещение обновлено (№{roomNumber})");
                 }
 
                 // ── 4. ShareAgreement: глобально найти / реанимировать / создать ──
@@ -723,34 +818,67 @@ public sealed class RoomsFormImportMapper : IImportMapper
                     }
                     var projectNumberForSa = GetStringOrNull(v, "ProjectNumber");
 
+                    var saNumberTrim = saNumber.Trim();
                     ShareAgreementRaw? saMatch = null;
+                    bool matchedInRoom = false;
+
+                    // (1) PRE-CHECK В КОМНАТЕ — самая частая причина дубликатов:
+                    //     повторный импорт того же файла или похожих строк в ту же
+                    //     комнату. Тянем ВСЕ ДДУ комнаты (без серверного фильтра по
+                    //     Number — Visary `=` чувствителен к whitespace/case), затем
+                    //     локально сравниваем Number с Trim()+OrdinalIgnoreCase.
+                    //     Это надёжнее серверного фильтра и спасает от дубликатов
+                    //     вроде «№ маш 2 -1-3» / «№ маш 2 -1-3 » (хвостовой пробел).
                     try
                     {
-                        var found = await _listView.FindShareAgreementsAsync(
-                            number:            saNumber,
-                            roomKindId:        kindId,
-                            conditionalNumber: roomNumber,
-                            stageNumber:       stageNumberForSa,
-                            projectNumber:     projectNumberForSa,
-                            ct);
-
-                        // Локальный пост-фильтр: Visary `contains` для VisaryRef может матчить
-                        // подстроку шире нужного — отстрахуем себя по точным значениям.
-                        saMatch = found.Data
-                            .Where(a => string.Equals(a.Number, saNumber, StringComparison.OrdinalIgnoreCase))
-                            .Where(a => kindId is null || a.RoomKindRef?.ID == kindId)
-                            .OrderByDescending(a => a.ID)   // max(ID) при нескольких подходящих
+                        var byRoom = await _listView.GetShareAgreementsByRoomAsync(roomId.Value, null, ct);
+                        saMatch = byRoom.Data
+                            .Where(a => string.Equals(
+                                (a.Number ?? string.Empty).Trim(), saNumberTrim,
+                                StringComparison.OrdinalIgnoreCase))
+                            .OrderByDescending(a => a.ID)
                             .FirstOrDefault();
+                        if (saMatch is not null) matchedInRoom = true;
                     }
-                    catch (Exception findEx)
+                    catch (Exception roomFindEx)
                     {
-                        _log.LogWarning(findEx,
-                            "RoomsForm.Apply: глобальный поиск ДДУ '{Number}' не удался: {Msg} — пробуем fallback по комнате.",
-                            saNumber, findEx.Message);
-                        // Fallback на старое поведение — поиск в пределах комнаты.
-                        var sas = await _listView.GetShareAgreementsByRoomAsync(roomId.Value, saNumber, ct);
-                        saMatch = sas.Data.FirstOrDefault(a =>
-                            string.Equals(a.Number, saNumber, StringComparison.OrdinalIgnoreCase));
+                        _log.LogWarning(roomFindEx,
+                            "RoomsForm.Apply: pre-check ДДУ в комнате roomId={RoomId} не удался: {Msg} — попробуем глобальный поиск.",
+                            roomId.Value, roomFindEx.Message);
+                    }
+
+                    // (2) Если в комнате нет — глобальный поиск по бизнес-ключу.
+                    //     Так находим orphan-ДДУ (созданные где-то ещё с тем же
+                    //     номером/проектом/этапом/комнатой-условной) и привязываем
+                    //     к нашей комнате вместо плодения нового.
+                    if (saMatch is null)
+                    {
+                        try
+                        {
+                            var found = await _listView.FindShareAgreementsAsync(
+                                number:            saNumber,
+                                roomKindId:        kindId,
+                                conditionalNumber: roomNumber,
+                                stageNumber:       stageNumberForSa,
+                                projectNumber:     projectNumberForSa,
+                                ct);
+
+                            // Локальный пост-фильтр: Visary `contains` для VisaryRef может матчить
+                            // подстроку шире нужного — отстрахуем себя по точным значениям с Trim().
+                            saMatch = found.Data
+                                .Where(a => string.Equals(
+                                    (a.Number ?? string.Empty).Trim(), saNumberTrim,
+                                    StringComparison.OrdinalIgnoreCase))
+                                .Where(a => kindId is null || a.RoomKindRef?.ID == kindId)
+                                .OrderByDescending(a => a.ID)   // max(ID) при нескольких подходящих
+                                .FirstOrDefault();
+                        }
+                        catch (Exception findEx)
+                        {
+                            _log.LogWarning(findEx,
+                                "RoomsForm.Apply: глобальный поиск ДДУ '{Number}' не удался: {Msg} — будет создан новый.",
+                                saNumber, findEx.Message);
+                        }
                     }
 
                     if (saMatch is null)
@@ -770,15 +898,27 @@ public sealed class RoomsFormImportMapper : IImportMapper
                             StageNumber       = stageNumberForSa,
                             ConditionalNumber = roomNumber,
                         }, ct);
+                        Log(sheetForRow, mr.SourceRowNumber, $"ДДУ создан (№{saNumber})");
                     }
                     else
                     {
                         var isOrphan = saMatch.Room?.ID is null || saMatch.Room.ID != roomId.Value;
-                        if (isOrphan)
+                        if (matchedInRoom)
+                        {
+                            // Pre-check в комнате попал — это самый частый кейс:
+                            // повторный импорт того же файла. Просто PATCH-им поля.
+                            Log(sheetForRow, mr.SourceRowNumber, $"ДДУ найден в помещении (не создан, №{saNumber})");
+                        }
+                        else if (isOrphan)
                         {
                             _log.LogInformation(
                                 "RoomsForm.Apply: найден орфанный/несоответствующий ДДУ id={SaId} number='{Num}' (Room={ExistingRoom}) — привязываем к roomId={NewRoom}",
                                 saMatch.ID, saNumber, saMatch.Room?.ID, roomId.Value);
+                            Log(sheetForRow, mr.SourceRowNumber, $"ДДУ найден глобально (привязан к новому помещению, №{saNumber})");
+                        }
+                        else
+                        {
+                            Log(sheetForRow, mr.SourceRowNumber, $"ДДУ найден (не создан, №{saNumber})");
                         }
 
                         await _crud.PatchShareAgreementAsync(saMatch.ID, new ShareAgreementPatchRequest
@@ -826,7 +966,10 @@ public sealed class RoomsFormImportMapper : IImportMapper
             "RoomsForm.Apply: всего применено {Applied} строк из {Sheets} листов, ошибок: {Errors}",
             applied, rowsBySheet.Count, errors.Count);
 
-        return new ApplyResult(applied, errors);
+        var rowActions = actionsByRow
+            .Select(kv => new RowActionLog(kv.Key.Row, kv.Key.Sheet, kv.Value))
+            .ToList();
+        return new ApplyResult(applied, errors, rowActions);
     }
 
     /// <summary>
@@ -964,6 +1107,28 @@ public sealed class RoomsFormImportMapper : IImportMapper
         foreach (var k in kindByTitle.Keys)
             if (string.Equals(k, title, StringComparison.OrdinalIgnoreCase)) return k;
         return title;
+    }
+
+    /// <summary>
+    /// Возвращает первую непрерывную последовательность цифр как <c>int</c>.
+    /// Поведение на примерах: «1 к.» → 1; «п1» → 1; «1п» → 1; «10 к» → 10;
+    /// «студия» → <c>null</c>; пусто → <c>null</c>; «1 к. 2» → 1 (берём
+    /// ПЕРВЫЙ run, не клеим разрозненные цифры).
+    /// Используется для «Колич. комнат», чтобы значения вроде «1 к.» / «п1»
+    /// корректно превращались в 1, а не отвергались как «не число».
+    /// </summary>
+    internal static int? ExtractFirstRunOfDigits(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return null;
+        var sb = new System.Text.StringBuilder();
+        foreach (var ch in raw)
+        {
+            if (char.IsDigit(ch)) sb.Append(ch);
+            else if (sb.Length > 0) break;
+        }
+        if (sb.Length == 0) return null;
+        return int.TryParse(sb.ToString(),
+            NumberStyles.Integer, CultureInfo.InvariantCulture, out var n) ? n : (int?)null;
     }
 
     /// <summary>«п1» → «1»; «12А» → «12»; «кв. 7» → «7»; «—» → <c>""</c>.

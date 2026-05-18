@@ -79,11 +79,13 @@ public class ImportServiceDbContext : DbContext
             {
                 e.Property(x => x.RawValues).HasColumnType("jsonb").IsRequired();
                 e.Property(x => x.MappedValues).HasColumnType("jsonb");
+                e.Property(x => x.Actions).HasColumnType("jsonb");
             }
             else
             {
                 e.Property(x => x.RawValues).HasConversion(JsonDocConverter).IsRequired();
                 e.Property(x => x.MappedValues).HasConversion(JsonDocConverter);
+                e.Property(x => x.Actions).HasConversion(JsonDocConverter);
             }
 
             e.Property(x => x.Status).HasConversion<string>().HasMaxLength(16);

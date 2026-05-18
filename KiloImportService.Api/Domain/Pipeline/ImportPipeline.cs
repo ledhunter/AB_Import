@@ -335,12 +335,23 @@ public sealed class ImportPipeline
         var ctx = new ImportContext(sessionId, session.VisaryProjectId, session.VisarySiteId, session.UserId);
         var applyResult = await mapper.ApplyAsync(ctx, _visaryDb, mappedRows, ct);
 
-        // Обновляем статусы StagedRow.
-        if (applyResult.AppliedCount > 0)
+        // Обновляем статусы StagedRow + переносим per-row actions из маппера.
+        // Actions сохраняем ВСЕГДА, даже если массово apply не удался: журнал
+        // частичных действий (создан корпус → упал room) сам по себе диагностически
+        // ценный артефакт. Ключ — (Sheet, SourceRowNumber), он совпадает с
+        // уникальным индексом таблицы.
+        var actionsByKey = (applyResult.RowActions ?? [])
+            .ToDictionary(a => (a.Sheet, a.SourceRowNumber));
+        foreach (var r in staged)
         {
-            foreach (var r in staged) r.Status = StagedRowStatus.Applied;
-            await _serviceDb.SaveChangesAsync(ct);
+            if (applyResult.AppliedCount > 0)
+                r.Status = StagedRowStatus.Applied;
+            if (actionsByKey.TryGetValue((r.Sheet, r.SourceRowNumber), out var log))
+            {
+                r.Actions = System.Text.Json.JsonSerializer.SerializeToDocument(log.Actions);
+            }
         }
+        await _serviceDb.SaveChangesAsync(ct);
         foreach (var err in applyResult.Errors)
         {
             _serviceDb.Errors.Add(new ImportError

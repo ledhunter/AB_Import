@@ -19,7 +19,7 @@ interface Props {
  * импорт — но без apply/cancel и без SignalR-подписки.
  */
 export const HistoryDetailView = ({ sessionId, importTypes, onBack }: Props) => {
-  const { session, report, loading, error, reload } = useImportSessionDetail(sessionId);
+  const { session, report, loading, error, reload, loadReportPage } = useImportSessionDetail(sessionId);
 
   const importTypeLabel = session
     ? (importTypes.find((t) => t.id === session.importTypeCode)?.label ?? undefined)
@@ -69,7 +69,7 @@ export const HistoryDetailView = ({ sessionId, importTypes, onBack }: Props) => 
                 <div className="section-gap">
                   <Divider />
                 </div>
-                <SessionRowsTable report={report} />
+                <SessionRowsTable report={report} onPageChange={loadReportPage} />
               </>
             )}
             {!report && session.variant !== 'pending' && session.variant !== 'progress' && (

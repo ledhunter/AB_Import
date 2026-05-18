@@ -156,6 +156,7 @@ export function toUiReport(api: ApiImportReport, session: UiSession): UiReport {
     sheet: r.sheet,
     status: r.status,
     errors: errorsByRow.get(rowKey(r.sheet, r.sourceRowNumber)) ?? [],
+    actions: r.actions ?? [],
   }));
 
   // Подбираем «осиротевшие» ошибки — для пар (sheet, rowNumber), которых нет в rows.
@@ -167,6 +168,7 @@ export function toUiReport(api: ApiImportReport, session: UiSession): UiReport {
         sheet: errors[0].sheet,
         status: 'Invalid',
         errors,
+        actions: [],
       });
     }
   }

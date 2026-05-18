@@ -16,6 +16,8 @@ interface Props {
   onApply: () => void;
   onCancel: () => void;
   onReset: () => void;
+  /** Пагинация построчного отчёта (см. useImportSession.loadReportPage). */
+  onReportPageChange?: (skip: number) => void;
 }
 
 /**
@@ -30,6 +32,7 @@ export const SessionView = ({
   onApply,
   onCancel,
   onReset,
+  onReportPageChange,
 }: Props) => {
   if (!session) {
     return (
@@ -62,7 +65,7 @@ export const SessionView = ({
                 <div className="section-gap">
                   <Divider />
                 </div>
-                <SessionRowsTable report={report} />
+                <SessionRowsTable report={report} onPageChange={onReportPageChange} />
               </>
             )}
             {session.generatedFiles.length > 0 && (

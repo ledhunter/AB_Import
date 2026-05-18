@@ -275,7 +275,7 @@ public class ImportsController : ControllerBase
             .OrderBy(r => r.Sheet).ThenBy(r => r.SourceRowNumber)
             .Skip(skip)
             .Take(take)
-            .Select(r => new { r.SourceRowNumber, r.Sheet, status = r.Status.ToString() })
+            .Select(r => new { r.SourceRowNumber, r.Sheet, status = r.Status.ToString(), actions = r.Actions })
             .ToListAsync(ct);
 
         var errors = await _db.Errors.AsNoTracking()

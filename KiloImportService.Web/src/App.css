@@ -397,6 +397,11 @@ html, body, #root {
   border: 1px solid #fab9b3;
 }
 
+.messages--success {
+  background: #e8f7ec;
+  border: 1px solid #bce3c6;
+}
+
 .message-row {
   display: flex;
   gap: 12px;

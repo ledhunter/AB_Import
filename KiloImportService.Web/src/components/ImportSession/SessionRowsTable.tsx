@@ -1,10 +1,17 @@
 import { useMemo, useState } from 'react';
 import { Status } from '@alfalab/core-components/status';
 import { Typography } from '@alfalab/core-components/typography';
+import { Pagination } from '@alfalab/core-components/pagination';
 import type { RowStatus, UiReport, UiReportRow } from '../../types/session';
 
 interface Props {
   report: UiReport;
+  /**
+   * Колбэк пагинации: вызывается при клике пользователя на номер страницы
+   * (0-based — как в Alfa Pagination). Если не передан — пагинация
+   * отображается, но в read-only режиме (без кликов).
+   */
+  onPageChange?: (skip: number) => void;
 }
 
 type Filter = 'all' | 'invalid' | 'valid' | 'applied' | 'failed';
@@ -34,7 +41,7 @@ function matchesFilter(row: UiReportRow, filter: Filter): boolean {
   return false;
 }
 
-export const SessionRowsTable = ({ report }: Props) => {
+export const SessionRowsTable = ({ report, onPageChange }: Props) => {
   const [filter, setFilter] = useState<Filter>('all');
 
   const counts = useMemo(() => {
@@ -185,12 +192,8 @@ export const SessionRowsTable = ({ report }: Props) => {
                       </Status>
                     </td>
                     <td>
-                      {row.errors.length === 0 ? (
-                        <Typography.Text view="primary-small" color="secondary" tag="span">
-                          —
-                        </Typography.Text>
-                      ) : (
-                        <div className="messages messages--error" style={{ marginTop: 0 }}>
+                      {row.errors.length > 0 && (
+                        <div className="messages messages--error" style={{ marginTop: 0, marginBottom: row.actions.length > 0 ? 8 : 0 }}>
                           {row.errors.map((e, i) => (
                             <div className="message-row" key={i}>
                               <span className="message-field">
@@ -201,6 +204,21 @@ export const SessionRowsTable = ({ report }: Props) => {
                           ))}
                         </div>
                       )}
+                      {row.actions.length > 0 && (
+                        <div className="messages messages--success" style={{ marginTop: 0 }}>
+                          {row.actions.map((a, i) => (
+                            <div className="message-row" key={i}>
+                              <span className="message-field">Действие</span>
+                              <span>{a}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {row.errors.length === 0 && row.actions.length === 0 && (
+                        <Typography.Text view="primary-small" color="secondary" tag="span">
+                          —
+                        </Typography.Text>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -210,11 +228,43 @@ export const SessionRowsTable = ({ report }: Props) => {
         </table>
       </div>
 
-      {report.rowsPagination.total > report.rows.length && (
-        <Typography.Text view="primary-small" color="secondary" tag="div" style={{ marginTop: 8 }}>
-          Показано {report.rows.length} из {report.rowsPagination.total} строк.
-        </Typography.Text>
-      )}
+      {report.rowsPagination.total > 0 && (() => {
+        const { skip, take, total } = report.rowsPagination;
+        const pagesCount = Math.max(1, Math.ceil(total / take));
+        const currentPageIndex = Math.min(pagesCount - 1, Math.floor(skip / take));
+        const rangeFrom = total === 0 ? 0 : skip + 1;
+        const rangeTo = Math.min(total, skip + report.rows.length);
+
+        return (
+          <div
+            style={{
+              marginTop: 12,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 16,
+              flexWrap: 'wrap',
+              justifyContent: 'space-between',
+            }}
+          >
+            <Typography.Text view="primary-small" color="secondary" tag="span">
+              Показано {rangeFrom}–{rangeTo} из {total} строк.
+            </Typography.Text>
+            {pagesCount > 1 && (
+              <Pagination
+                currentPageIndex={currentPageIndex}
+                pagesCount={pagesCount}
+                onPageChange={(pageIndex) => {
+                  // Сбрасываем фильтр на «Все» при смене страницы, иначе пользователь
+                  // может попасть на пустой набор (страница есть, но в текущем фильтре —
+                  // ни одной строки) и подумать, что переход не сработал.
+                  setFilter('all');
+                  onPageChange?.(pageIndex * take);
+                }}
+              />
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 };

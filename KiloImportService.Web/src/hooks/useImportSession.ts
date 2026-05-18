@@ -70,7 +70,16 @@ export interface UseImportSessionState {
   cancel: () => Promise<void>;
   /** Сбросить состояние и подготовиться к новому импорту. */
   reset: () => void;
+  /**
+   * Перейти на страницу отчёта (по `skip` строк от начала, размер страницы
+   * фиксирован — <c>REPORT_PAGE_SIZE</c>). Использует currentSessionId,
+   * молча no-op если сессии нет.
+   */
+  loadReportPage: (skip: number) => Promise<void>;
 }
+
+/** Размер страницы построчного отчёта (совпадает с тем, что прислыпывает API при пустом take). */
+export const REPORT_PAGE_SIZE = 100;
 
 const FINAL_STATUSES = new Set(['Applied', 'Failed', 'Cancelled'] as const);
 const REPORT_LOAD_STATUSES = new Set([
@@ -116,20 +125,24 @@ export function useImportSession(): UseImportSessionState {
   }, []);
 
   /** Загрузить актуальный отчёт. Не падает наружу — пишет в state.error. */
-  const loadReport = useCallback(async (sessionId: string) => {
+  const loadReport = useCallback(async (sessionId: string, skip = 0) => {
     reportAbortRef.current?.abort();
     const ctrl = new AbortController();
     reportAbortRef.current = ctrl;
 
     try {
-      const apiReport = await getImportReport(sessionId, { signal: ctrl.signal });
+      const apiReport = await getImportReport(sessionId, {
+        signal: ctrl.signal,
+        skip,
+        take: REPORT_PAGE_SIZE,
+      });
       if (ctrl.signal.aborted) return;
       const currentSession = sessionLatestRef.current;
       if (!currentSession || currentSession.sessionId !== sessionId) {
         return; // переключились на новую сессию, отчёт уже неактуален
       }
       setReport(toUiReport(apiReport, currentSession));
-      console.info(`${LOG_TAG} report loaded: rows=${apiReport.rows.length} errors=${apiReport.errors.length}`);
+      console.info(`${LOG_TAG} report loaded: skip=${skip} rows=${apiReport.rows.length} errors=${apiReport.errors.length}`);
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
       const message = err instanceof Error ? err.message : String(err);
@@ -137,6 +150,13 @@ export function useImportSession(): UseImportSessionState {
       setError(message);
     }
   }, []);
+
+  /** Переключение страницы отчёта — публичный метод для UI. */
+  const loadReportPage = useCallback(async (skip: number) => {
+    const sid = sessionIdRef.current;
+    if (!sid) return;
+    await loadReport(sid, skip);
+  }, [loadReport]);
 
   /** Pull session state из backend (для синхронизации, fallback при потере SignalR). */
   const pullSession = useCallback(async (sessionId: string) => {
@@ -337,5 +357,5 @@ export function useImportSession(): UseImportSessionState {
     setError(null);
   }, []);
 
-  return { phase, session, report, error, start, apply, cancel, reset };
+  return { phase, session, report, error, start, apply, cancel, reset, loadReportPage };
 }
