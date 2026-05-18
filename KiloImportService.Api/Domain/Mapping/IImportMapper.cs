@@ -66,4 +66,22 @@ public record RowError(string? ColumnName, string ErrorCode, string Message);
 
 public record ValidationResult(IReadOnlyList<MappedRow> Rows, IReadOnlyList<RowError> FileLevelErrors);
 
-public record ApplyResult(int AppliedCount, IReadOnlyList<RowError> Errors);
+public record ApplyResult(
+    int AppliedCount,
+    IReadOnlyList<RowError> Errors,
+    IReadOnlyList<RowActionLog>? RowActions = null);
+
+/// <summary>
+/// Журнал реальных действий, выполненных по одной строке файла в Apply-фазе.
+/// Маппер заполняет (опционально) список лаконичных русскоязычных меток —
+/// «Корпус создан», «Помещение обновлено», «ДДУ найден (не создан)», «ДДУ
+/// привязан к новому помещению», «Застройщик переиспользован», … — чтобы
+/// в построчном отчёте было видно, ЧТО реально произошло, а не только статус.
+///
+/// Pipeline сериализует это в <c>StagedRow.Actions</c> (JSON-массив), отдаёт
+/// в <c>GetReport</c>, UI отрисовывает рядом со строкой.
+/// </summary>
+/// <param name="SourceRowNumber">Абсолютный номер строки в исходном файле (Excel-row).</param>
+/// <param name="Sheet">Имя листа, в котором эта строка (для многолистовых файлов).</param>
+/// <param name="Actions">Список меток действий в порядке выполнения.</param>
+public record RowActionLog(int SourceRowNumber, string Sheet, IReadOnlyList<string> Actions);

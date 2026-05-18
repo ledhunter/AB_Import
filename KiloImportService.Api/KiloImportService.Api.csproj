@@ -48,6 +48,12 @@
     <ProjectReference Include="..\Visary.Api.Client\Visary.Api.Client.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Тесты обращаются к internal-хелперам мапперов (например,
+         ExtractFirstRunOfDigits в RoomsFormImportMapper). -->
+    <InternalsVisibleTo Include="KiloImportService.Api.Tests" />
+  </ItemGroup>
+
   <!-- Эталонный XLSX-шаблон для экспорта бюджета («Бюджет_А4.1»).
        Visary при импорте бюджета чувствителен к структуре файла (порядок и состав строк
        строго как в эталоне), поэтому копируем эталон и подменяем только суммы — стили,

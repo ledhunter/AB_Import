@@ -82,7 +82,8 @@ public sealed class XlsxParser : IFileParser
         return layout switch
         {
             KeyValueVertical kv => ParseKeyValueVertical(workbook, kv, ct),
-            _ => ParseTabular(workbook, ct),
+            Tabular tab => ParseTabular(workbook, tab, ct),
+            _ => ParseTabular(workbook, new Tabular(), ct),
         };
     }
 
@@ -198,7 +199,7 @@ public sealed class XlsxParser : IFileParser
         w.Write(cleaned);
     }
 
-    private static ParseResult ParseTabular(XLWorkbook workbook, CancellationToken ct)
+    private static ParseResult ParseTabular(XLWorkbook workbook, Tabular layout, CancellationToken ct)
     {
         // Объединённые заголовки по всем листам (для совместимости с UI/маппером —
         // у каждого листа может быть свой набор колонок, например в файле помещений
@@ -214,6 +215,10 @@ public sealed class XlsxParser : IFileParser
             return new ParseResult(allHeaders, rows, errors);
         }
 
+        var anchorSet = layout.HeaderAnchors is { Count: > 0 } anchors
+            ? new HashSet<string>(anchors.Select(a => a.Trim()), StringComparer.OrdinalIgnoreCase)
+            : null;
+
         int processedSheets = 0;
         foreach (var sheet in sheets)
         {
@@ -228,47 +233,99 @@ public sealed class XlsxParser : IFileParser
                 continue;
             }
 
-            // Заголовки конкретного листа — для корректного маппинга его строк.
+            int firstAbsRow = range.FirstRow().RowNumber();
+            int totalRows = range.RowCount();
+
+            // Поиск строки заголовков. Legacy-поведение (без анкоров) — первая строка
+            // RangeUsed. С анкорами — первая среди первых ~30 строк, в которой ≥2
+            // ячеек точно совпадают с одним из анкоров (case-insensitive по trim).
+            // Так корректно разбираются файлы, где над «настоящей» шапкой сидят
+            // подзаголовки/коэффициенты (см. doc_project/68-rooms-import.md).
+            //
+            // ВАЖНО: если анкоры заданы, но в листе не нашлось — лист пропускаем
+            // ЦЕЛИКОМ (никаких ParsedRow). Это нужно для многолистовых файлов вроде
+            // «Ежевика короткая 1.xlsx», где помимо «Квартира» есть «Общий график»,
+            // «Итог», «План» — у них своя структура (НЕ реестр помещений), и
+            // попытка прочитать их с заголовками строки 1 порождает мусорные строки,
+            // которые проходят случайные проверки маппера и переполняют отчёт.
+            int headerLocalRow = 1;
+            bool headerFound = false;
+            if (anchorSet is not null)
+            {
+                int scanLimit = Math.Min(totalRows, 30);
+                for (int local = 1; local <= scanLimit; local++)
+                {
+                    var probeRow = range.Row(local);
+                    int count = 0;
+                    foreach (var cell in probeRow.Cells())
+                    {
+                        var text = cell.GetString().Trim();
+                        if (text.Length > 0 && anchorSet.Contains(text))
+                        {
+                            count++;
+                            if (count >= 2) break;
+                        }
+                    }
+                    if (count >= 2)
+                    {
+                        headerLocalRow = local;
+                        headerFound = true;
+                        break;
+                    }
+                }
+
+                if (!headerFound)
+                {
+                    // Скрипт не нашёл шапку → лист не нашего формата. Молча пропускаем.
+                    continue;
+                }
+            }
+
+            // Заголовки текущей раскладки — из выбранной строки.
+            var headerRangeRow = range.Row(headerLocalRow);
             var sheetHeaders = new List<string>();
-            var firstRow = range.FirstRow();
-            foreach (var cell in firstRow.Cells())
+            foreach (var cell in headerRangeRow.Cells())
             {
                 sheetHeaders.Add(cell.GetString().Trim());
             }
-            if (sheetHeaders.Count == 0)
-            {
-                continue;
-            }
+            // Хвостовые пустые заголовки отрезаем: если RangeUsed заходит за пределы
+            // значимых колонок (формулы в правом крыле и т.п.) — иначе мы породим
+            // ключи вида "" в Cells, и одна колонка перетрёт другую.
+            while (sheetHeaders.Count > 0 && string.IsNullOrEmpty(sheetHeaders[^1]))
+                sheetHeaders.RemoveAt(sheetHeaders.Count - 1);
+            if (sheetHeaders.Count == 0) continue;
 
             // Накопительный union заголовков (без дубликатов, case-insensitive).
             foreach (var h in sheetHeaders)
             {
-                if (!allHeaders.Contains(h, StringComparer.OrdinalIgnoreCase))
+                if (h.Length > 0 && !allHeaders.Contains(h, StringComparer.OrdinalIgnoreCase))
                     allHeaders.Add(h);
             }
 
-            var totalRows = range.RowCount();
             bool anyDataInSheet = false;
-            for (int rowIndex = 2; rowIndex <= totalRows; rowIndex++)
+            for (int local = headerLocalRow + 1; local <= totalRows; local++)
             {
                 ct.ThrowIfCancellationRequested();
-                var row = range.Row(rowIndex);
+                var row = range.Row(local);
                 var cells = new Dictionary<string, string>(sheetHeaders.Count, StringComparer.Ordinal);
                 bool isEmpty = true;
                 for (int c = 0; c < sheetHeaders.Count; c++)
                 {
+                    var header = sheetHeaders[c];
+                    if (header.Length == 0) continue; // пропускаем пустые заголовки внутри ряда
                     var cell = row.Cell(c + 1);
                     var value = cell.GetString();
                     if (!string.IsNullOrWhiteSpace(value)) isEmpty = false;
-                    cells[sheetHeaders[c]] = value ?? string.Empty;
+                    cells[header] = value ?? string.Empty;
                 }
                 if (isEmpty) continue; // пропускаем полностью пустые строки
 
-                // ⚠️ SourceRowNumber — индекс строки В ПРЕДЕЛАХ листа (как в Excel).
-                // Между листами возможны коллизии (строка 5 встречается в каждом
-                // листе), но маппер всегда логирует Sheet рядом с SourceRowNumber,
-                // так что неоднозначности в логах нет.
-                rows.Add(new ParsedRow(rowIndex, sheetName, cells));
+                // SourceRowNumber — АБСОЛЮТНЫЙ номер строки в листе (как в Excel).
+                // Для большинства файлов RangeUsed начинается с 1, и absolute == local.
+                // Но для файлов с пустыми верхними строками absolute != local —
+                // отчёт должен показывать настоящий Excel-номер.
+                int absRow = firstAbsRow + local - 1;
+                rows.Add(new ParsedRow(absRow, sheetName, cells));
                 anyDataInSheet = true;
             }
 

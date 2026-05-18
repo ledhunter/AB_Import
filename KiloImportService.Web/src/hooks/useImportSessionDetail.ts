@@ -14,6 +14,7 @@ import {
 } from '../services/importsService';
 import { toUiReport, toUiSession } from '../services/importMappers';
 import type { UiReport, UiSession } from '../types/session';
+import { REPORT_PAGE_SIZE } from './useImportSession';
 
 export interface UseImportSessionDetailState {
   session: UiSession | null;
@@ -21,6 +22,8 @@ export interface UseImportSessionDetailState {
   loading: boolean;
   error: string | null;
   reload: () => Promise<void>;
+  /** Переключение страницы построчного отчёта (skip строк от начала). */
+  loadReportPage: (skip: number) => Promise<void>;
 }
 
 /** Статусы, при которых имеет смысл подтягивать отчёт. */
@@ -41,7 +44,7 @@ export function useImportSessionDetail(
 
   const abortRef = useRef<AbortController | null>(null);
 
-  const load = useCallback(async (id: string) => {
+  const load = useCallback(async (id: string, skip = 0) => {
     abortRef.current?.abort();
     const ctrl = new AbortController();
     abortRef.current = ctrl;
@@ -57,7 +60,11 @@ export function useImportSessionDetail(
       if (REPORT_LOAD_STATUSES.has(
         ui.status as 'Validated' | 'Applied' | 'Failed' | 'Cancelled',
       )) {
-        const apiReport = await getImportReport(id, { signal: ctrl.signal });
+        const apiReport = await getImportReport(id, {
+          signal: ctrl.signal,
+          skip,
+          take: REPORT_PAGE_SIZE,
+        });
         if (ctrl.signal.aborted) return;
         setReport(toUiReport(apiReport, ui));
       } else {
@@ -92,5 +99,12 @@ export function useImportSessionDetail(
     if (sessionId) await load(sessionId);
   }, [sessionId, load]);
 
-  return { session, report, loading, error, reload };
+  const loadReportPage = useCallback(
+    async (skip: number) => {
+      if (sessionId) await load(sessionId, skip);
+    },
+    [sessionId, load],
+  );
+
+  return { session, report, loading, error, reload, loadReportPage };
 }

@@ -440,4 +440,111 @@ public class XlsxParserTests
         Assert.True(result.Rows[1].Cells.ContainsKey("Этаж"));
         Assert.False(result.Rows[1].Cells.ContainsKey("Колич. комнат"));
     }
+
+    [SkippableFact]
+    public async Task Tabular_HeaderAnchors_DetectShiftedHeaderRow()
+    {
+        // Регрессия по «Ежевика короткая 1.xlsx»: настоящие имена колонок —
+        // в строке 5, выше — подзаголовок «Реестр вывода КВАРТИР» и коэффициенты.
+        // Без HeaderAnchors парсер брал бы шапку из строки 1 (пустой), ключи
+        // выходили пустыми, и маппер выдавал site_mismatch на каждую строку.
+        Skip.IfNot(SkipReason is null, SkipReason);
+        using var wb = new XLWorkbook();
+        var ws = wb.Worksheets.Add("Квартира");
+        ws.Cell(1, 5).Value = "Реестр вывода КВАРТИР";          // подзаголовок
+        ws.Cell(2, 5).Value = "Стоимость кв.м/ руб.";           // подсказка
+        ws.Cell(3, 5).Value = "Дисконт";                         // подсказка
+        // Настоящая шапка — строка 5.
+        ws.Cell(5, 1).Value = "ПИН застройщика";
+        ws.Cell(5, 2).Value = "Номер разрешения";
+        ws.Cell(5, 3).Value = "Номер проекта";
+        ws.Cell(5, 4).Value = "Этап";
+        ws.Cell(5, 5).Value = "Номер помещения";
+        // Строки 6–7 — итоги/служебные.
+        ws.Cell(6, 1).Value = "ИТОГО";
+        ws.Cell(7, 1).Value = "Сумма с учетом вывода";
+        // Данные — с 8-й.
+        ws.Cell(8, 1).Value = "UC9NVP";
+        ws.Cell(8, 2).Value = "44-27-41-2025";
+        ws.Cell(8, 3).Value = "4895";
+        ws.Cell(8, 4).Value = "1";
+        ws.Cell(8, 5).Value = "1";
+        ws.Cell(9, 1).Value = "UC9NVP";
+        ws.Cell(9, 2).Value = "44-27-41-2025";
+        ws.Cell(9, 3).Value = "4895";
+        ws.Cell(9, 4).Value = "1";
+        ws.Cell(9, 5).Value = "2";
+        var ms = new MemoryStream();
+        wb.SaveAs(ms);
+        ms.Position = 0;
+
+        var layout = new Tabular(HeaderAnchors: new[]
+        {
+            "ПИН застройщика", "Номер разрешения", "Номер проекта", "Этап",
+        });
+        var result = await _parser.ParseAsync(ms, layout);
+
+        Assert.Empty(result.Errors);
+        Assert.Contains("Номер проекта", result.Headers);
+        // Шапка не должна попасть в строки данных. ИТОГО/«Сумма…» — обычные строки
+        // с непустой первой ячейкой: парсер их эмитит (фильтрация — забота маппера).
+        Assert.True(result.Rows.Count >= 2);
+        var dataRow = result.Rows.First(r => r.Cells.TryGetValue("Номер проекта", out var v) && v == "4895");
+        Assert.Equal("4895", dataRow.Cells["Номер проекта"]);
+        Assert.Equal("1", dataRow.Cells["Этап"]);
+        Assert.Equal("44-27-41-2025", dataRow.Cells["Номер разрешения"]);
+        Assert.Equal(8, dataRow.SourceRowNumber); // абсолютный Excel-номер
+    }
+
+    [SkippableFact]
+    public async Task Tabular_HeaderAnchors_StrictSkip_SheetWithoutAnchors()
+    {
+        // Если анкоры заданы, лист, в котором их нет ≥2 — пропускается ЦЕЛИКОМ
+        // (не возвращается ни одной ParsedRow). Так фильтруются «не наши» листы
+        // в многолистовых пользовательских файлах: «Общий график», «Итог»,
+        // «План» в «Ежевика короткая 1.xlsx».
+        Skip.IfNot(SkipReason is null, SkipReason);
+        using var wb = new XLWorkbook();
+        var sheetA = wb.Worksheets.Add("Реестр");
+        sheetA.Cell(1, 1).Value = "ПИН застройщика";
+        sheetA.Cell(1, 2).Value = "Номер проекта";
+        sheetA.Cell(2, 1).Value = "PIN";
+        sheetA.Cell(2, 2).Value = "4895";
+        var sheetB = wb.Worksheets.Add("Общий график");
+        sheetB.Cell(1, 1).Value = "Месяц";        // никаких анкоров
+        sheetB.Cell(1, 2).Value = "Объём";
+        sheetB.Cell(2, 1).Value = "Январь";
+        sheetB.Cell(2, 2).Value = "100";
+        var ms = new MemoryStream();
+        wb.SaveAs(ms);
+        ms.Position = 0;
+
+        var layout = new Tabular(HeaderAnchors: new[]
+        {
+            "ПИН застройщика", "Номер проекта",
+        });
+        var result = await _parser.ParseAsync(ms, layout);
+        Assert.Empty(result.Errors);
+        Assert.Single(result.Rows);
+        Assert.Equal("Реестр", result.Rows[0].Sheet);
+        Assert.Equal("4895", result.Rows[0].Cells["Номер проекта"]);
+    }
+
+    [SkippableFact]
+    public async Task Tabular_NoAnchors_LegacyBehavior()
+    {
+        // Если анкоры НЕ заданы — поведение legacy: первая строка = заголовок,
+        // лист всегда обрабатывается. Регрессия для существующих мапперов.
+        Skip.IfNot(SkipReason is null, SkipReason);
+        await using var stream = BuildXlsx("S", new[]
+        {
+            new[] { "Колонка1", "Колонка2" },
+            new[] { "v1", "v2" },
+        });
+        var result = await _parser.ParseAsync(stream);
+        Assert.Empty(result.Errors);
+        Assert.Equal(new[] { "Колонка1", "Колонка2" }, result.Headers);
+        Assert.Single(result.Rows);
+        Assert.Equal("v1", result.Rows[0].Cells["Колонка1"]);
+    }
 }

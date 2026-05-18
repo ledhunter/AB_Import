@@ -86,6 +86,14 @@ export interface ApiImportRow {
   sourceRowNumber: number;
   sheet: string | null;
   status: ApiStagedRowStatus;
+  /**
+   * Журнал действий, реально выполненных по этой строке в Apply-фазе.
+   * Заполняется маппером — например, `["Корпус создан (1.1)",
+   * "Помещение обновлено (№15)", "ДДУ найден (не создан, №ДДУ-42)"]`.
+   * `null` — маппер не сообщил per-row actions (старая сессия / маппер
+   * без поддержки журнала).
+   */
+  actions: string[] | null;
 }
 
 export interface ApiImportError {
