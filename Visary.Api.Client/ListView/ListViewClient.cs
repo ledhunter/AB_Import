@@ -115,6 +115,25 @@ public interface IListViewClient
     Task<ListViewResponse<WbsRaw>> GetWbsByProjectAsync(
         int projectId, CancellationToken ct = default);
 
+    /// <summary>
+    /// Список WBS-записей объекта строительства (дерево ИСР ОКСа). Отдельно от
+    /// <see cref="GetWbsByProjectAsync"/>: в большом проекте обычно несколько ОКСов
+    /// со своими копиями подстатей — для импорта ГФ нужны статьи именно выбранного
+    /// объекта (а не «нашего» дубликата из соседнего ОКСа).
+    /// HAR: <c>POST /api/visary/listview/wbs/onetomany/ConstructionSite?associationId={siteId}</c>.
+    /// </summary>
+    Task<ListViewResponse<WbsRaw>> GetWbsBySiteAsync(
+        int siteId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Список существующих строк ГФ (<c>costitem</c>) у конкретной подстатьи ИСР —
+    /// нужен перед POST'ом, чтобы не плодить дубликаты (на сервере уникальности по
+    /// (<see cref="CostItemRaw.WBSID"/>, <see cref="CostItemRaw.PlanPeriod"/>) нет).
+    /// HAR: <c>POST /api/visary/listview/costitem/onetomany/WBS?associationId={wbsId}</c>.
+    /// </summary>
+    Task<ListViewResponse<CostItemRaw>> GetCostItemsByWbsAsync(
+        int wbsId, CancellationToken ct = default);
+
     // ─── Справочники (list для резолвинга «название → ID») ──────────────────
     // Используются мапперами импорта: тянем справочник один раз на сессию,
     // строим Title → ID словарь по живым данным (не хардкод switch'ем).
@@ -206,6 +225,13 @@ public sealed class ListViewClient : VisaryHttpBase<ListViewClient>, IListViewCl
     private static readonly string[] WbsColumns =
         ["ID", "Title", "Code", "ParentID", "Parent", "ProjectID", "Project",
          "ConstructionSite", "DeclaredSum", "ConfirmedSum"];
+
+    // Колонки для costitem listview (имена 1:1 с HAR Context/har ГФ.txt).
+    // PlanQuarter/PlanYear — derived-поля; в ответе приходят, для дедупликации
+    // используем PlanPeriod (он же есть).
+    private static readonly string[] CostItemColumns =
+        ["ID", "WBS", "Snapshot", "PlanSum", "Status", "PlanPeriod", "ProjectDoc",
+         "Version", "PlanMonth", "PlanQuarter", "PlanYear"];
 
     private static readonly string[] ShareAgreementColumns =
         ["ID", "Title", "Number", "Date", "ConstructionPermitNumber", "ConstructionPermitDate",
@@ -742,6 +768,54 @@ public sealed class ListViewClient : VisaryHttpBase<ListViewClient>, IListViewCl
         return PostListViewAsync<WbsRaw>(
             $"{BaseUrl}/api/visary/listview/{VisaryMnemonics.Wbs}/onetomany/ConstructionProject?associationId={projectId}",
             body, $"{VisaryMnemonics.Wbs}/onetomany/ConstructionProject id={projectId}", ct);
+    }
+
+    public Task<ListViewResponse<WbsRaw>> GetWbsBySiteAsync(int siteId, CancellationToken ct)
+    {
+        // Используется импортом ГФ Финмодели — нужны WBS-подстатьи именно выбранного ОКСа
+        // (в большом проекте подстатьи Главы 1 могут существовать в каждом сайте отдельно).
+        // HAR: listview/wbs/onetomany/ConstructionSite?associationId={siteId}.
+        var body = new
+        {
+            Mnemonic = VisaryMnemonics.Wbs,
+            PageSkip = 0,
+            PageSize = Options.LargePageSize,
+            Columns = WbsColumns,
+            SearchPhrase = (string?)null,
+            Sorts = SortsNullSentinel,
+            Hidden = false,
+            Summaries = Array.Empty<object>(),
+        };
+        _log.LogDebug("Visary → GET listview/{Mnemonic}/onetomany/ConstructionSite siteId={SiteId}",
+            VisaryMnemonics.Wbs, siteId);
+        return PostListViewAsync<WbsRaw>(
+            $"{BaseUrl}/api/visary/listview/{VisaryMnemonics.Wbs}/onetomany/ConstructionSite?associationId={siteId}",
+            body, $"{VisaryMnemonics.Wbs}/onetomany/ConstructionSite id={siteId}", ct);
+    }
+
+    // ─── CostItem (ГФ — график финансирования) ──────────────────────────────
+
+    public Task<ListViewResponse<CostItemRaw>> GetCostItemsByWbsAsync(int wbsId, CancellationToken ct)
+    {
+        // POST listview/costitem/onetomany/WBS?associationId={wbsId} — все строки ГФ
+        // для конкретной подстатьи. Используется импортом ГФ для дедупликации:
+        // сервер не проверяет уникальность (WBSID, PlanPeriod) сам.
+        var body = new
+        {
+            Mnemonic = VisaryMnemonics.CostItem,
+            PageSkip = 0,
+            PageSize = Options.LargePageSize,
+            Columns = CostItemColumns,
+            SearchPhrase = (string?)null,
+            Sorts = SortsNullSentinel,
+            Hidden = false,
+            Summaries = Array.Empty<object>(),
+        };
+        _log.LogDebug("Visary → GET listview/{Mnemonic}/onetomany/WBS wbsId={WbsId}",
+            VisaryMnemonics.CostItem, wbsId);
+        return PostListViewAsync<CostItemRaw>(
+            $"{BaseUrl}/api/visary/listview/{VisaryMnemonics.CostItem}/onetomany/WBS?associationId={wbsId}",
+            body, $"{VisaryMnemonics.CostItem}/onetomany/WBS id={wbsId}", ct);
     }
 
     // ─── Справочники ─────────────────────────────────────────────────────────

@@ -49,7 +49,8 @@ public sealed record KeyValueVertical(
     string KeyColumn,
     string ValueStartColumn,
     StageCountReference? StageCount = null,
-    BudgetSectionHint? Budget = null) : FileLayoutHint;
+    BudgetSectionHint? Budget = null,
+    ChapterScheduleHint? ChapterSchedule = null) : FileLayoutHint;
 
 /// <summary>
 /// Ссылка на ячейку с количеством этапов: на листе <paramref name="SheetName"/> в столбце
@@ -86,3 +87,42 @@ public sealed record BudgetSectionHint(
     IReadOnlyList<string> EndMarkers,
     string LastIncludedColumn,
     string SheetMarker = "(budget)");
+
+/// <summary>
+/// Подсказка для парсера: на том же листе <see cref="KeyValueVertical.SheetName"/>
+/// от строки-маркера <paramref name="StartMarker"/> до строки-маркера
+/// <paramref name="EndMarker"/> (оба ищутся в <paramref name="MarkerColumn"/>,
+/// case-insensitive substring) расположена квартальная таблица сумм для графика
+/// финансирования (ГФ) Главы 1. Шапка с датами начала кварталов лежит в строке
+/// <paramref name="QuarterHeaderRow"/>; квартальные суммы для каждой статьи —
+/// в колонках <paramref name="FirstQuarterColumn"/>..<paramref name="LastQuarterColumn"/>.
+///
+/// Парсер эмитит набор <see cref="ParsedRow"/> с <c>Sheet = "{sheetName} {SheetMarker}"</c>:
+/// • Первая строка — «датовая» (<c>SourceRowNumber = QuarterHeaderRow</c>):
+///   <c>Cells["C"] = "__quarters__"</c> (sentinel-маркер), <c>Cells["H"]..Cells["CU"]</c> =
+///   ISO-даты начала кварталов («2026-01-01»). Дату извлекаем через ClosedXML
+///   <c>cell.GetDateTime()</c> где возможно, иначе по тексту.
+/// • Дальше — по одной строке на каждую непустую строку диапазона (между StartMarker
+///   и EndMarker). В <c>Cells</c>: <c>"C"</c> = Title из колонки <see cref="MarkerColumn"/>;
+///   <c>"H"..</c> = текстовые значения квартальных колонок (пустая ячейка = пустая строка).
+///   <c>SourceRowNumber</c> — абсолютный номер строки в листе (для точного указания
+///   ячейки <c>{col}{row}</c> в построчном журнале ошибок ГФ).
+///
+/// Семантика блока (этап 1, исключение «Этап 2/3», маппинг статей в коды бюджета)
+/// — на стороне маппера, парсер просто отдаёт сырые ячейки.
+/// </summary>
+/// <param name="MarkerColumn">Колонка с Title (обычно та же, что <c>KeyColumn</c>).</param>
+/// <param name="StartMarker">Текст начала блока (например, «Глава 1.»).</param>
+/// <param name="EndMarker">Текст конца блока (например, «Глава 2.»).</param>
+/// <param name="QuarterHeaderRow">Абсолютный номер строки с датами начала кварталов (например, 7).</param>
+/// <param name="FirstQuarterColumn">Буква первой квартальной колонки (например, «H»).</param>
+/// <param name="LastQuarterColumn">Буква последней квартальной колонки (например, «CU»).</param>
+/// <param name="SheetMarker">Суффикс для <c>Sheet</c> эмитируемых строк.</param>
+public sealed record ChapterScheduleHint(
+    string MarkerColumn,
+    string StartMarker,
+    string EndMarker,
+    int QuarterHeaderRow,
+    string FirstQuarterColumn,
+    string LastQuarterColumn,
+    string SheetMarker = "(schedule)");

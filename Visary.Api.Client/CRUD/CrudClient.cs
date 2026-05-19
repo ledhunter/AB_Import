@@ -67,6 +67,22 @@ public interface ICrudClient
         int wbsId, WbsPatchRequest request, CancellationToken ct = default);
 
     /// <summary>
+    /// Создать строку графика финансирования (<c>costitem</c>) — одна квартальная сумма
+    /// по подстатье ИСР. См. <see cref="CostItemCreateRequest"/>.
+    /// Идемпотентности на сервере нет: caller обязан pre-check'ить уже существующие
+    /// записи через <see cref="ListView.IListViewClient.GetCostItemsByWbsAsync"/>.
+    /// </summary>
+    Task<CostItemRaw> CreateCostItemAsync(
+        CostItemCreateRequest request, CancellationToken ct = default);
+
+    /// <summary>
+    /// PATCH строки ГФ. <c>forceUpdate=true</c> — без предварительного GET ради RowVersion
+    /// (тот же приём, что для Room/ShareAgreement/WBS).
+    /// </summary>
+    Task<bool> PatchCostItemAsync(
+        int costItemId, CostItemPatchRequest request, CancellationToken ct = default);
+
+    /// <summary>
     /// Создать запись <c>typedimportwbs</c> — TypedJournal-задание импорта бюджета (XLSX)
     /// из файла, уже загруженного в файловое хранилище. Поле <c>File</c> в request — это
     /// link-токен, возвращённый <see cref="FileStorage.IFileStorageClient.GetFileLinkAsync"/>.
@@ -429,6 +445,39 @@ public sealed class CrudClient : VisaryHttpBase<CrudClient>, ICrudClient
             $"{BaseUrl}/api/visary/crud/{VisaryMnemonics.Wbs}/{wbsId}?forceUpdate=true",
             request, $"{VisaryMnemonics.Wbs}/{wbsId}", wbsId, ct,
             $"CrudClient.PatchWbsAsync: wbsId={{Id}} success");
+    }
+
+    // ─── CostItem (ГФ — график финансирования подстатьи ИСР) ────────────────
+
+    public async Task<CostItemRaw> CreateCostItemAsync(
+        CostItemCreateRequest request, CancellationToken ct)
+    {
+        // POST /api/visary/crud/costitem — тело: { WBSID, WBS:{ID}, PlanSum, PlanPeriod, Status }.
+        // Сервер возвращает CostItemRaw c назначенным ID. Status=70 (Plan) — единственный
+        // используемый импортом статус, см. CostItemStatus.Plan.
+        _log.LogDebug("Visary → POST {Mnemonic} wbsId={WbsId}", VisaryMnemonics.CostItem, request.WBSID);
+        var result = await PostCrudAsync<CostItemRaw>(
+            $"{BaseUrl}/api/visary/crud/{VisaryMnemonics.CostItem}", request, VisaryMnemonics.CostItem, ct);
+        _log.LogInformation(
+            "CrudClient.CreateCostItemAsync: created id={Id} wbsId={WbsId} planSum={Sum} period={Start:O}..{End:O}",
+            result.ID, request.WBSID, request.PlanSum,
+            request.PlanPeriod?.Start, request.PlanPeriod?.End);
+        return result;
+    }
+
+    public Task<bool> PatchCostItemAsync(
+        int costItemId, CostItemPatchRequest request, CancellationToken ct)
+    {
+        // forceUpdate=true ⇒ ID/RowVersion в теле НЕ отправляются (Visary падает 500
+        // «Can not add property RowVersion to JObject» при их наличии). Те же поля
+        // nullable + WhenWritingNull в DTO. См. PatchWbsAsync/PatchRoomAsync.
+        request.ID = null;
+        request.RowVersion = null;
+        _log.LogDebug("Visary → PATCH {Mnemonic} id={Id}", VisaryMnemonics.CostItem, costItemId);
+        return PatchAndReportAsync(
+            $"{BaseUrl}/api/visary/crud/{VisaryMnemonics.CostItem}/{costItemId}?forceUpdate=true",
+            request, $"{VisaryMnemonics.CostItem}/{costItemId}", costItemId, ct,
+            $"CrudClient.PatchCostItemAsync: costItemId={{Id}} success");
     }
 
     // ─── TypedImportWbs (TypedJournal-импорт бюджета) ────────────────────────

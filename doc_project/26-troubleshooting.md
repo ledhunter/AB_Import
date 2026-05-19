@@ -2,10 +2,62 @@
 
 ## 📋 Содержание
 
+- [502 Bad Gateway от Vite proxy на `/api/*`](#502-bad-gateway-от-vite-proxy-на-api)
 - [Запуск backend при проблемах с Docker CLI](#запуск-backend-при-проблемах-с-docker-cli)
 - [Проверка подключения к БД](#проверка-подключения-к-бд)
 - [Отладка импорта "Финмодель"](#отладка-импорта-финмодель)
 - [Частые ошибки](#частые-ошибки)
+
+---
+
+## 502 Bad Gateway от Vite proxy на `/api/*`
+
+### Симптом
+
+В DevTools браузера:
+```
+POST http://localhost:5173/api/projects/sync   502 (Bad Gateway)
+GET  http://localhost:5173/api/projects/search  502 (Bad Gateway)
+```
+
+⚠️ **Не путать с 401**: 401 — токен Visary невалиден (см. [54](./54-visary-token-hot-reload.md)).
+**502** означает, что Vite proxy не дозвонился до upstream backend на `localhost:5000`
+(или dotnet вернул ошибку соединения).
+
+### Диагностика
+
+```powershell
+# 1. Backend контейнер жив?
+docker ps --filter "name=kilo-import-backend"
+# ожидание: Up X minutes (healthy)
+
+# 2. Прямой вызов backend (мимо Vite):
+curl -i http://localhost:5000/health
+# ожидание: 200; если "Failed to connect" — backend упал.
+
+# 3. Docker daemon жив?
+docker info
+# ошибка "failed to connect to the docker API at npipe://..." → Docker Desktop умер.
+```
+
+### Корневая причина (наблюдалась 2026-05-19)
+
+Docker Desktop был остановлен (закрыт пользователем / OOM / Windows-засып) → backend
+контейнер не работает → Vite proxy на `:5173` форвардит запросы на `:5000`, получает
+`ECONNREFUSED` и возвращает клиенту **502 Bad Gateway**.
+
+### Решение
+
+1. Запустить Docker Desktop вручную (`%ProgramFiles%\Docker\Docker\Docker Desktop.exe`).
+2. Дождаться, пока `docker info` отработает без ошибки (обычно ~30–90 секунд).
+3. Поднять контейнеры из **inner** клона:
+   ```powershell
+   Set-Location c:\Users\vkgsk\Desktop\AlfaProjects\import\AB_Import\AB_Import
+   docker compose --env-file ..\.env up -d backend
+   ```
+4. Обновить страницу в браузере — Vite proxy дозвонится, 502 уйдёт.
+
+Vite **не нужно** перезапускать: его токен и конфиг proxy остаются актуальными.
 
 ---
 

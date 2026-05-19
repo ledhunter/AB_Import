@@ -291,3 +291,53 @@ public sealed class TypedImportWbsRaw
     public string? File { get; set; }
     public string? Status { get; set; }
 }
+
+/// <summary>
+/// Числовые коды для <see cref="CostItemRaw.Status"/> (поле <c>Status</c> сущности
+/// CostItem). Значение <see cref="Plan"/> = 70 — единственное, наблюдавшееся в HAR
+/// (Context/har ГФ.txt) при ручном добавлении ГФ через UI Visary. Импорт ГФ из
+/// Финмодели всегда создаёт записи со статусом «План».
+/// </summary>
+public static class CostItemStatus
+{
+    public const int Plan = 70;
+}
+
+/// <summary>
+/// POST <c>/api/visary/crud/costitem</c> — создание строки графика финансирования
+/// (одна запись = одна квартальная сумма по подстатье <see cref="Visary.Api.Dto.WbsRaw"/>).
+/// Тело сформировано по HAR <c>Context/har ГФ.txt</c>:
+/// <code>{ "WBSID": 168482, "WBS": { "ID": 168482 }, "PlanSum": 2222000,
+///         "PlanPeriod": { "Start": "2026-07-01T00:00:00Z", "End": "2026-09-30T00:00:00Z" },
+///         "Status": 70 }</code>
+/// • Дубликат "WBS"+"WBSID" — тот же паттерн, что в <see cref="WbsCreateRequest"/>.
+/// • <c>PlanQuarter</c>/<c>PlanYear</c>/<c>PlanMonth</c> Visary derives из <c>PlanPeriod</c>;
+///   в POST НЕ передаём, чтобы не плодить рассинхрон.
+/// • Идемпотентности на сервере нет — повторный POST даст дубликат. Caller обязан
+///   pre-check'ить через <see cref="ListView.IListViewClient.GetCostItemsByWbsAsync"/>.
+/// </summary>
+public sealed class CostItemCreateRequest
+{
+    public int WBSID { get; set; }
+    public VisaryRef? WBS { get; set; }
+    public double PlanSum { get; set; }
+    public CostItemPeriod? PlanPeriod { get; set; }
+    public int Status { get; set; } = CostItemStatus.Plan;
+}
+
+/// <summary>
+/// PATCH <c>/api/visary/crud/costitem/{id}?forceUpdate=true</c> — обновление суммы
+/// у существующей строки ГФ (по найденной в <see cref="ListView.IListViewClient.GetCostItemsByWbsAsync"/>).
+/// Тот же приём, что в <see cref="WbsPatchRequest"/>/<see cref="RoomPatchRequest"/>:
+/// <c>ID</c>/<c>RowVersion</c> nullable + <c>WhenWritingNull</c> — иначе Visary падает
+/// 500 «Can not add property RowVersion to JObject».
+/// Период менять обычно не нужно (он же часть бизнес-ключа дедупликации); если
+/// потребуется — поле опционально.
+/// </summary>
+public sealed class CostItemPatchRequest
+{
+    public int? ID { get; set; }
+    public long? RowVersion { get; set; }
+    public double? PlanSum { get; set; }
+    public CostItemPeriod? PlanPeriod { get; set; }
+}

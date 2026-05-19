@@ -16,6 +16,7 @@ public static class VisaryMnemonics
     public const string Wbs = "wbs";
     public const string TypedImportWbs = "typedimportwbs";
     public const string ProjectManagement = "projectmanagement";
+    public const string CostItem = "costitem";
 
     // ─── Справочники ────────────────────────────────────────────────────
     public const string Town                = "town";

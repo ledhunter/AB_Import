@@ -638,6 +638,18 @@ public sealed class RoomRaw
 
 ## 📝 История версий
 
+- **1.2** (2026-05-19):
+  - Добавлена сущность **`CostItem`** (мнемоника `costitem`) — строка ГФ подстатьи ИСР.
+    DTO: `CostItemRaw`, `CostItemPeriod`, `CostItemCreateRequest`, `CostItemPatchRequest`,
+    константа `CostItemStatus.Plan = 70`.
+  - Методы клиента: `ICrudClient.CreateCostItemAsync` / `PatchCostItemAsync`
+    (PATCH `forceUpdate=true` — тот же приём, что для Room/ShareAgreement/WBS),
+    `IListViewClient.GetCostItemsByWbsAsync` (POST `listview/costitem/onetomany/WBS?associationId={wbsId}`).
+  - Добавлен `IListViewClient.GetWbsBySiteAsync` (POST `listview/wbs/onetomany/ConstructionSite?associationId={siteId}`)
+    — для поиска WBS-узлов именно у выбранного объекта (а не у всего проекта).
+  - `PlanQuarter` / `PlanYear` / `PlanMonth` — derived на сервере, в POST НЕ передавать.
+  - Дедупликации на сервере по `(WBSID, PlanPeriod)` нет — caller обязан pre-check'ить.
+  - Подробности маппинга и сценарии использования: [91-finmodel-chapter1-schedule.md](./91-finmodel-chapter1-schedule.md).
 - **1.1** (2026-05-07):
   - `CreateSectionAsync`: уточнено, что `Type` обязателен (без него 422); дефолт `МЖД (ID=3)` для импорта `rooms`.
   - `CreateRoomAsync`: явно отмечен обязательный `UniqueNumber`.

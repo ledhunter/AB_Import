@@ -248,3 +248,44 @@ public sealed class WbsRaw
     public double? DeclaredSum { get; set; }
     public double? ConfirmedSum { get; set; }
 }
+
+/// <summary>
+/// CostItem — одна строка графика финансирования (ГФ) подстатьи ИСР: квартальная
+/// плановая сумма по конкретной <see cref="Wbs"/>-записи.
+/// <para>
+/// Период (<see cref="PlanPeriod"/>) — закрытый интервал с границами квартала
+/// (Q3 2026 = <c>2026-07-01..2026-09-30</c>). <see cref="PlanQuarter"/> и
+/// <see cref="PlanYear"/> на стороне Visary derived из <see cref="PlanPeriod"/>
+/// — в POST-запросах их передавать НЕ нужно.
+/// </para>
+/// <para>
+/// <see cref="Status"/> = <see cref="Dto.CostItemStatus.Plan"/> (число 70) — единственный
+/// используемый импортом статус. Имя константы подсмотрено в HAR (<c>Context/har ГФ.txt</c>).
+/// </para>
+/// </summary>
+public sealed class CostItemRaw
+{
+    public int ID { get; set; }
+    public string? Title { get; set; }
+    public int? WBSID { get; set; }
+    public VisaryRef? WBS { get; set; }
+    public double? PlanSum { get; set; }
+    public CostItemPeriod? PlanPeriod { get; set; }
+    public int? Status { get; set; }
+    public int? PlanMonth { get; set; }
+    public int? PlanQuarter { get; set; }
+    public int? PlanYear { get; set; }
+    public VisaryRef? ProjectDoc { get; set; }
+    public DateTime? Version { get; set; }
+}
+
+/// <summary>
+/// Период ГФ-записи. Visary хранит как пару ISO-дат (UTC); в HAR значения
+/// формата <c>"2026-07-01T04:17:00.000Z"</c> — лишняя часть времени игнорируется
+/// сервером, можно слать <c>00:00:00Z</c>.
+/// </summary>
+public sealed class CostItemPeriod
+{
+    public DateTime Start { get; set; }
+    public DateTime End { get; set; }
+}

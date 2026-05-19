@@ -97,6 +97,10 @@ public class FinModelBudgetTests : IDisposable
         // «Этап 2» или фактические значения (та же таблица для другого среза). Учитываем
         // только данные до «Итого»: одно значение на статью в главе (см. ТЗ от 2026-05-14:
         // 1.8 «Прочие затраты на улучшения и содержание ЗУ» = E483, а не сумма всех вхождений).
+        //
+        // Параллельно ValidateBudget эмитит «chapter-direct» итог главы как отдельную
+        // MappedRow с ArticleCode == ChapterCode (для override-а агрегата в XLSX-exporter-е,
+        // см. doc 78 v1.3). Проверяем обе: article (1.1, sum=300) и chapter-direct (sum=300).
         var rows = new[]
         {
             BudgetRow(475, c: "Глава 1. Стоимость земельного участка и расходы по его содержанию"),
@@ -110,16 +114,23 @@ public class FinModelBudgetTests : IDisposable
 
         var result = await _mapper.ValidateAsync(Ctx(), rows, _dbContext, default);
 
-        Assert.Single(result.Rows);
-        Assert.True(result.Rows[0].IsValid);
+        Assert.Equal(2, result.Rows.Count);
+        Assert.All(result.Rows, r => Assert.True(r.IsValid));
 
-        var root = result.Rows[0].MappedValues.RootElement;
-        Assert.Equal("budget", root.GetProperty("Kind").GetString());
-        Assert.Equal("1.", root.GetProperty("ChapterCode").GetString());
-        Assert.Equal("1.1.", root.GetProperty("ArticleCode").GetString());
+        var article = result.Rows.Single(r =>
+            r.MappedValues.RootElement.GetProperty("ArticleCode").GetString() == "1.1.");
+        var articleRoot = article.MappedValues.RootElement;
+        Assert.Equal("budget", articleRoot.GetProperty("Kind").GetString());
+        Assert.Equal("1.", articleRoot.GetProperty("ChapterCode").GetString());
         // 300, а не 438 — повтор после «Итого» проигнорирован.
-        Assert.Equal(300.0, root.GetProperty("DeclaredSum").GetDouble(), precision: 4);
-        Assert.Equal(300.0, root.GetProperty("ConfirmedSum").GetDouble(), precision: 4);
+        Assert.Equal(300.0, articleRoot.GetProperty("DeclaredSum").GetDouble(), precision: 4);
+        Assert.Equal(300.0, articleRoot.GetProperty("ConfirmedSum").GetDouble(), precision: 4);
+
+        var chapterDirect = result.Rows.Single(r =>
+            r.MappedValues.RootElement.GetProperty("ArticleCode").GetString() == "1.");
+        Assert.Equal("1.", chapterDirect.MappedValues.RootElement.GetProperty("ChapterCode").GetString());
+        Assert.Equal(300.0,
+            chapterDirect.MappedValues.RootElement.GetProperty("DeclaredSum").GetDouble(), precision: 4);
     }
 
     [Fact]
@@ -138,9 +149,12 @@ public class FinModelBudgetTests : IDisposable
 
         var result = await _mapper.ValidateAsync(Ctx(), rows, _dbContext, default);
 
-        Assert.Single(result.Rows);
-        var root = result.Rows[0].MappedValues.RootElement;
-        Assert.Equal("1.8.", root.GetProperty("ArticleCode").GetString());
+        // 2 строки: article (1.8) + chapter-direct итог (Code "1.", sum 2222).
+        Assert.Equal(2, result.Rows.Count);
+
+        var article = result.Rows.Single(r =>
+            r.MappedValues.RootElement.GetProperty("ArticleCode").GetString() == "1.8.");
+        var root = article.MappedValues.RootElement;
         Assert.Equal("Прочие затраты на улучшения и содержание ЗУ",
             root.GetProperty("ArticleTitle").GetString());
         Assert.Equal(2222.0, root.GetProperty("DeclaredSum").GetDouble(), precision: 4);
@@ -149,12 +163,13 @@ public class FinModelBudgetTests : IDisposable
     [Fact]
     public async Task ValidateAsync_BudgetRows_UnknownTitle_SkippedSilently()
     {
-        // «Прочие затраты» отсутствует в эталонном справочнике (Глава 1 не имеет такой
-        // статьи) → строка молча пропускается; валидных нет, file-level errors нет.
+        // Title, которого нет ни в справочнике, ни как reverse-prefix потомков текущей
+        // главы → строка молча пропускается; в mapped — ничего, file-level errors нет.
+        // (Используем заведомо «бредовый» Title, который reverse-prefix не покроет.)
         var rows = new[]
         {
             BudgetRow(475, c: "Глава 1. Стоимость земельного участка и расходы по его содержанию"),
-            BudgetRow(481, c: "Прочие затраты", e: "100"),
+            BudgetRow(481, c: "Хитрая статья без сопоставления в справочнике", e: "100"),
         };
 
         var result = await _mapper.ValidateAsync(Ctx(), rows, _dbContext, default);
@@ -164,209 +179,37 @@ public class FinModelBudgetTests : IDisposable
     }
 
     [Fact]
-    public async Task ApplyAsync_Budget_CreatesChapterAndArticle_WhenNothingExists()
+    public async Task ApplyAsync_Budget_CountsRowsWithoutCallingWbsCrud()
     {
-        // Visary возвращает пустой WBS → маппер должен создать главу + подстатью.
-        _mockListView.Setup(c => c.GetWbsByProjectAsync(ProjectId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ListViewResponse<WbsRaw> { Data = [], Total = 0 });
-
-        // Сервер возвращает разные ID для главы и подстатьи (по порядку вызовов).
-        _mockCrud
-            .SetupSequence(c => c.CreateWbsAsync(It.IsAny<WbsCreateRequest>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new WbsRaw { ID = 9001, Code = "1.", Title = "Глава 1...", ParentID = null })
-            .ReturnsAsync(new WbsRaw { ID = 9002, Code = "1.1.", Title = "Затраты...", ParentID = 9001 });
-
+        // CRUD-путь записи бюджета в Visary OFF (см. doc 78 v1.3): дерево WBS через
+        // POST /api/visary/crud/wbs воспроизвести устойчиво не получилось, вместо этого
+        // мапп emit-ит mapped budget rows, а потом BudgetXlsxExporter отдаёт XLSX по
+        // эталону «Бюджет_А4.1» для ручной загрузки в Visary.
+        //
+        // ApplyAsync для бюджета должен:
+        //   • НЕ вызывать GetWbsByProjectAsync / CreateWbsAsync / PatchWbsAsync;
+        //   • вернуть AppliedCount = число mapped budget rows (нужно UI-у, чтобы сессия
+        //     помечалась Applied и появилась кнопка «Скачать XLSX»).
         var rows = new[]
         {
             BudgetRow(475, c: "Глава 1. Стоимость земельного участка и расходы по его содержанию"),
             BudgetRow(481, c: "Затраты на приобретение прав на ЗУ", e: "438000"),
+            BudgetRow(484, c: "Итого", e: "438000"),
         };
 
         var validation = await _mapper.ValidateAsync(Ctx(), rows, _dbContext, default);
         var apply = await _mapper.ApplyAsync(Ctx(), _dbContext, validation.Rows, default);
 
-        Assert.Equal(1, apply.AppliedCount);
+        Assert.True(apply.AppliedCount > 0,
+            "AppliedCount должен быть положительным — иначе сессия в UI не считается Applied.");
         Assert.Empty(apply.Errors);
 
-        // Глава: ParentID == null, привязка к проекту.
-        _mockCrud.Verify(c => c.CreateWbsAsync(
-            It.Is<WbsCreateRequest>(r =>
-                r.ProjectID == ProjectId && r.ParentID == null
-                && r.Title == "Глава 1. Стоимость земельного участка и расходы по его содержанию"),
-            It.IsAny<CancellationToken>()), Times.Once);
-
-        // Подстатья: ParentID == ID главы, ConstructionSiteID = SiteId, суммы переданы.
-        _mockCrud.Verify(c => c.CreateWbsAsync(
-            It.Is<WbsCreateRequest>(r =>
-                r.ParentID == 9001 && r.ConstructionSiteID == SiteId
-                && r.Title == "Затраты на приобретение прав на ЗУ"
-                && r.DeclaredSum == 438000 && r.ConfirmedSum == 438000),
-            It.IsAny<CancellationToken>()), Times.Once);
-
-        _mockCrud.Verify(c => c.PatchWbsAsync(It.IsAny<int>(), It.IsAny<WbsPatchRequest>(),
-            It.IsAny<CancellationToken>()), Times.Never);
-    }
-
-    [Fact]
-    public async Task ApplyAsync_Budget_PatchesArticle_WhenExistsWithDifferentSums()
-    {
-        // Глава и подстатья УЖЕ существуют в Visary. Импорт повторный — суммы поменялись.
-        // Идемпотентность: маппер не создаёт ничего, а PATCH-ает суммы у существующей подстатьи.
-        var existing = new ListViewResponse<WbsRaw>
-        {
-            Data =
-            [
-                new WbsRaw
-                {
-                    ID = 8001, Code = "1.", ParentID = null,
-                    Title = "Глава 1. Стоимость земельного участка и расходы по его содержанию",
-                },
-                new WbsRaw
-                {
-                    ID = 8002, Code = "1.1.", ParentID = 8001,
-                    Title = "Затраты на приобретение прав на ЗУ",
-                    DeclaredSum = 100, ConfirmedSum = 100,
-                },
-            ],
-            Total = 2,
-        };
-        _mockListView.Setup(c => c.GetWbsByProjectAsync(ProjectId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(existing);
-        _mockCrud.Setup(c => c.PatchWbsAsync(It.IsAny<int>(), It.IsAny<WbsPatchRequest>(),
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(true);
-
-        var rows = new[]
-        {
-            BudgetRow(475, c: "Глава 1. Стоимость земельного участка и расходы по его содержанию"),
-            BudgetRow(481, c: "Затраты на приобретение прав на ЗУ", e: "500"),
-        };
-
-        var validation = await _mapper.ValidateAsync(Ctx(), rows, _dbContext, default);
-        var apply = await _mapper.ApplyAsync(Ctx(), _dbContext, validation.Rows, default);
-
-        Assert.Equal(1, apply.AppliedCount);
-        Assert.Empty(apply.Errors);
-
-        // Никакого Create — ни главы, ни статьи.
-        _mockCrud.Verify(c => c.CreateWbsAsync(It.IsAny<WbsCreateRequest>(),
-            It.IsAny<CancellationToken>()), Times.Never);
-        // Patch на 8002 с новыми суммами.
-        _mockCrud.Verify(c => c.PatchWbsAsync(8002,
-            It.Is<WbsPatchRequest>(r => r.DeclaredSum == 500 && r.ConfirmedSum == 500),
-            It.IsAny<CancellationToken>()), Times.Once);
-    }
-
-    [Fact]
-    public async Task ApplyAsync_Budget_IsNoOp_WhenSumsAlreadyMatch()
-    {
-        // Если в Visary уже стоит та же сумма — мы не делаем PATCH (избегаем фантомных
-        // обновлений и лишней нагрузки). AppliedCount = 0.
-        _mockListView.Setup(c => c.GetWbsByProjectAsync(ProjectId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ListViewResponse<WbsRaw>
-            {
-                Data =
-                [
-                    new WbsRaw
-                    {
-                        ID = 7001, Code = "1.", ParentID = null,
-                        Title = "Глава 1. Стоимость земельного участка и расходы по его содержанию",
-                    },
-                    new WbsRaw
-                    {
-                        ID = 7002, Code = "1.1.", ParentID = 7001,
-                        Title = "Затраты на приобретение прав на ЗУ",
-                        DeclaredSum = 438000, ConfirmedSum = 438000,
-                    },
-                ],
-                Total = 2,
-            });
-
-        var rows = new[]
-        {
-            BudgetRow(475, c: "Глава 1. Стоимость земельного участка и расходы по его содержанию"),
-            BudgetRow(481, c: "Затраты на приобретение прав на ЗУ", e: "438000"),
-        };
-
-        var validation = await _mapper.ValidateAsync(Ctx(), rows, _dbContext, default);
-        var apply = await _mapper.ApplyAsync(Ctx(), _dbContext, validation.Rows, default);
-
-        Assert.Equal(0, apply.AppliedCount);
-        Assert.Empty(apply.Errors);
+        // Никаких походов в Visary WBS — путь выключен.
         _mockCrud.Verify(c => c.CreateWbsAsync(It.IsAny<WbsCreateRequest>(),
             It.IsAny<CancellationToken>()), Times.Never);
         _mockCrud.Verify(c => c.PatchWbsAsync(It.IsAny<int>(), It.IsAny<WbsPatchRequest>(),
             It.IsAny<CancellationToken>()), Times.Never);
-    }
-
-    [Fact]
-    public async Task ApplyAsync_Budget_ReusesExistingChapter_AndCreatesArticle()
-    {
-        // Глава уже есть, подстатьи — нет. Маппер должен взять ID существующей главы
-        // (по Code "1.") и создать только подстатью.
-        _mockListView.Setup(c => c.GetWbsByProjectAsync(ProjectId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ListViewResponse<WbsRaw>
-            {
-                Data =
-                [
-                    new WbsRaw
-                    {
-                        ID = 6001, Code = "1.", ParentID = null,
-                        Title = "Глава 1. Стоимость земельного участка и расходы по его содержанию",
-                    },
-                ],
-                Total = 1,
-            });
-
-        _mockCrud.Setup(c => c.CreateWbsAsync(It.IsAny<WbsCreateRequest>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new WbsRaw { ID = 6002, Code = "1.1.", ParentID = 6001 });
-
-        var rows = new[]
-        {
-            BudgetRow(475, c: "Глава 1. Стоимость земельного участка и расходы по его содержанию"),
-            BudgetRow(481, c: "Затраты на приобретение прав на ЗУ", e: "200"),
-        };
-
-        var validation = await _mapper.ValidateAsync(Ctx(), rows, _dbContext, default);
-        var apply = await _mapper.ApplyAsync(Ctx(), _dbContext, validation.Rows, default);
-
-        Assert.Equal(1, apply.AppliedCount);
-        // CreateWbsAsync вызывается ровно один раз — на подстатью, c ParentID = ID существующей главы.
-        _mockCrud.Verify(c => c.CreateWbsAsync(
-            It.Is<WbsCreateRequest>(r => r.ParentID == 6001 && r.Title == "Затраты на приобретение прав на ЗУ"),
-            It.IsAny<CancellationToken>()), Times.Once);
-        _mockCrud.Verify(c => c.CreateWbsAsync(
-            It.Is<WbsCreateRequest>(r => r.ParentID == null),
-            It.IsAny<CancellationToken>()), Times.Never);
-    }
-
-    [Fact]
-    public async Task ApplyAsync_Budget_NoProjectId_ReportsError()
-    {
-        // Site без ConstructionProjectId в локальном зеркале и без передачи projectId
-        // в ImportContext → бюджет применить невозможно.
-        const int orphanSiteId = 999;
-        _dbContext.ConstructionSites.Add(new ConstructionSite
-        {
-            Id = orphanSiteId,
-            Title = "Без проекта",
-            ConstructionProjectId = null,
-            Hidden = false,
-        });
-        _dbContext.SaveChanges();
-
-        var rows = new[]
-        {
-            BudgetRow(475, c: "Глава 1. Стоимость земельного участка и расходы по его содержанию"),
-            BudgetRow(481, c: "Затраты на приобретение прав на ЗУ", e: "200"),
-        };
-
-        var validation = await _mapper.ValidateAsync(Ctx(siteId: orphanSiteId), rows, _dbContext, default);
-        var apply = await _mapper.ApplyAsync(Ctx(siteId: orphanSiteId), _dbContext, validation.Rows, default);
-
-        Assert.Equal(0, apply.AppliedCount);
-        Assert.Contains(apply.Errors, e => e.ErrorCode == "project_required");
-        _mockCrud.Verify(c => c.CreateWbsAsync(It.IsAny<WbsCreateRequest>(),
+        _mockListView.Verify(c => c.GetWbsByProjectAsync(It.IsAny<int>(),
             It.IsAny<CancellationToken>()), Times.Never);
     }
 
