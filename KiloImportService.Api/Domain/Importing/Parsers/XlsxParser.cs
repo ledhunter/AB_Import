@@ -208,10 +208,17 @@ public sealed class XlsxParser : IFileParser
         var rows = new List<ParsedRow>();
         var errors = new List<ParseError>();
 
-        var sheets = workbook.Worksheets.ToList();
+        // Hidden / VeryHidden листы исключаем целиком: пользователь Excel-а специально
+        // прячет «черновые» / «технические» вкладки, и тащить из них строки в импорт
+        // = воспроизводить то, что автор файла уже спрятал глазами от себя самого.
+        // Решение принимаем ДО RangeUsed/анкоров — никаких ParsedRow, никаких ошибок:
+        // скрытый лист в логике парсера эквивалентен отсутствующему.
+        var sheets = workbook.Worksheets
+            .Where(w => w.Visibility == XLWorksheetVisibility.Visible)
+            .ToList();
         if (sheets.Count == 0)
         {
-            errors.Add(new ParseError(null, "Файл не содержит ни одного листа."));
+            errors.Add(new ParseError(null, "Файл не содержит ни одного видимого листа."));
             return new ParseResult(allHeaders, rows, errors);
         }
 
@@ -347,12 +354,19 @@ public sealed class XlsxParser : IFileParser
         var rows = new List<ParsedRow>();
         var errors = new List<ParseError>();
 
-        // Лист ищем по имени case-insensitive — Excel допускает любой регистр.
+        // Лист ищем по имени case-insensitive среди ВИДИМЫХ — Excel допускает любой регистр.
+        // Скрытые листы игнорируем: если пользователь спрятал «Inputs» в своём шаблоне,
+        // нечего по нему импортировать (см. parsetabular выше). В списке «доступные»
+        // тоже показываем только видимые — пусть подсказка соответствует тому, что
+        // парсер на самом деле увидит.
         var sheet = workbook.Worksheets.FirstOrDefault(w =>
-            string.Equals(w.Name, layout.SheetName, StringComparison.OrdinalIgnoreCase));
+            w.Visibility == XLWorksheetVisibility.Visible
+            && string.Equals(w.Name, layout.SheetName, StringComparison.OrdinalIgnoreCase));
         if (sheet is null)
         {
-            var available = string.Join(", ", workbook.Worksheets.Select(w => $"'{w.Name}'"));
+            var available = string.Join(", ", workbook.Worksheets
+                .Where(w => w.Visibility == XLWorksheetVisibility.Visible)
+                .Select(w => $"'{w.Name}'"));
             errors.Add(new ParseError(null,
                 $"Лист '{layout.SheetName}' не найден. Доступные листы: {available}."));
             return new ParseResult(headers, rows, errors);
@@ -556,11 +570,16 @@ public sealed class XlsxParser : IFileParser
     /// </summary>
     private static (int Count, ParseError? Error) ReadStageCount(XLWorkbook workbook, StageCountReference sc)
     {
+        // Скрытый «Control» = отсутствующий: парсер не должен молча читать число
+        // этапов из листа, который пользователь спрятал.
         var ctrl = workbook.Worksheets.FirstOrDefault(w =>
-            string.Equals(w.Name, sc.SheetName, StringComparison.OrdinalIgnoreCase));
+            w.Visibility == XLWorksheetVisibility.Visible
+            && string.Equals(w.Name, sc.SheetName, StringComparison.OrdinalIgnoreCase));
         if (ctrl is null)
         {
-            var available = string.Join(", ", workbook.Worksheets.Select(w => $"'{w.Name}'"));
+            var available = string.Join(", ", workbook.Worksheets
+                .Where(w => w.Visibility == XLWorksheetVisibility.Visible)
+                .Select(w => $"'{w.Name}'"));
             return (0, new ParseError(null,
                 $"Лист '{sc.SheetName}' не найден (нужен для определения количества этапов). Доступные листы: {available}."));
         }

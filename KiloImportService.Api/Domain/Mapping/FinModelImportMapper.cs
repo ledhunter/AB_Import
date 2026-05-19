@@ -281,7 +281,7 @@ public sealed class FinModelImportMapper : IImportMapper
 
             if (rowErrors.Count > 0)
             {
-                mappedRows.Add(new MappedRow(row.SourceRowNumber, false, JsonDocument.Parse("{}"), rowErrors));
+                mappedRows.Add(new MappedRow(row.SourceRowNumber, row.Sheet ?? string.Empty, false, JsonDocument.Parse("{}"), rowErrors));
                 continue;
             }
 
@@ -297,7 +297,7 @@ public sealed class FinModelImportMapper : IImportMapper
             });
 
             mappedRows.Add(new MappedRow(
-                row.SourceRowNumber, true, JsonDocument.Parse(mappedJson), rowErrors));
+                row.SourceRowNumber, row.Sheet ?? string.Empty, true, JsonDocument.Parse(mappedJson), rowErrors));
         }
 
         return (mappedRows, fileErrors);
@@ -509,6 +509,11 @@ public sealed class FinModelImportMapper : IImportMapper
 
         // Сортируем по SourceRowNumber, чтобы chapter-tracking шёл сверху вниз.
         var ordered = budgetRows.OrderBy(r => r.SourceRowNumber).ToList();
+        // Бюджетные строки приходят из ОДНОГО листа (KeyValueVertical с BudgetSectionHint
+        // эмитит их с одинаковым `Sheet = "{sheetName} {SheetMarker}"`). Берём имя из
+        // первой строки и проставляем во все агрегированные MappedRow — иначе пайплайн
+        // запишет StagedRow.Sheet="" и сломает (Sheet, SourceRowNumber) инвариант.
+        var budgetSheet = ordered[0].Sheet ?? string.Empty;
 
         BudgetReferenceEntry? currentChapter = null;
         // chapterClosed = true после строки «Итого…» текущей главы. В файле финмодели
@@ -662,7 +667,7 @@ public sealed class FinModelImportMapper : IImportMapper
                 ConfirmedSum  = bucket.Sum,
             });
             mapped.Add(new MappedRow(
-                bucket.FirstRowNumber, true, JsonDocument.Parse(json), Array.Empty<RowError>()));
+                bucket.FirstRowNumber, budgetSheet, true, JsonDocument.Parse(json), Array.Empty<RowError>()));
         }
 
         // Эмитим chapter-direct итоги отдельным набором строк (ArticleCode == ChapterCode):
@@ -680,7 +685,7 @@ public sealed class FinModelImportMapper : IImportMapper
                 ConfirmedSum  = total.Sum,
             });
             mapped.Add(new MappedRow(
-                total.RowNumber, true, JsonDocument.Parse(json), Array.Empty<RowError>()));
+                total.RowNumber, budgetSheet, true, JsonDocument.Parse(json), Array.Empty<RowError>()));
         }
 
         _log.LogInformation(

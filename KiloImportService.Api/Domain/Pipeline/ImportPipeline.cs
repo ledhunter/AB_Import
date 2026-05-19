@@ -204,10 +204,27 @@ public sealed class ImportPipeline
         // ассоциируется с конкретным листом Excel, а не с глобальной нумерацией.
         // Иначе «лист Квартиры: строка 2 из 9» (где 9 — суммарный счётчик
         // по всем листам) выглядит бессмысленно.
-        var totalsBySheet = parseResult.Rows
-            .GroupBy(r => r.Sheet ?? string.Empty, StringComparer.OrdinalIgnoreCase)
+        //
+        // ⚠️ Тоталы по листу берём из validation.Rows (а НЕ из parseResult.Rows): маппер
+        // может тихо пропускать сводные «ИТОГО»-строки, и тогда количество ParsedRow
+        // на лист > количество MappedRow на лист. Считаем относительно того, что реально
+        // увидим в этом цикле — иначе sheetProcessed никогда не достигнет sheetTotal.
+        var totalsBySheet = validation.Rows
+            .GroupBy(r => r.Sheet, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
         var processedBySheet = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+        // RawValues для StagedRow нужны для отчёта (UI показывает исходные ячейки).
+        // Маппер может пропускать строки, поэтому индекс i в validation.Rows НЕ совпадает
+        // с индексом в parseResult.Rows. Строим lookup (Sheet, SourceRowNumber) → ParsedRow.
+        // На дубликатах (если ParsedRow один и тот же приходит дважды — маловероятно)
+        // оставляем первый, чтобы избежать падения ToDictionary.
+        var parsedByKey = new Dictionary<(string Sheet, int Row), ParsedRow>(parseResult.Rows.Count);
+        foreach (var pr in parseResult.Rows)
+        {
+            var key = (pr.Sheet ?? string.Empty, pr.SourceRowNumber);
+            parsedByKey.TryAdd(key, pr);
+        }
 
         int successCount = 0, errorCount = 0;
         var totalRowsValidate = validation.Rows.Count;
@@ -216,18 +233,23 @@ public sealed class ImportPipeline
         {
             ct.ThrowIfCancellationRequested();
             var mr = validation.Rows[i];
-            var raw = parseResult.Rows[i];
+            // Sheet берём из MappedRow (mapper гарантирует — см. MappedRow.Sheet).
+            // Раньше использовался parseResult.Rows[i].Sheet — это был bug-by-design:
+            // mapper может пропускать строки, индексы расходятся, в StagedRow попадал
+            // «чужой» лист, и составной ключ (Sheet, SourceRowNumber) уже не уникален.
+            var sheet = mr.Sheet ?? string.Empty;
+            var parsedRow = parsedByKey.GetValueOrDefault((sheet, mr.SourceRowNumber));
             // Сохраняем не только Cells, но и Sheet — чтобы UI мог показать,
             // на каком листе находилась строка.
             var rawPayload = new Dictionary<string, object?>
             {
-                ["sheet"] = raw.Sheet,
-                ["cells"] = raw.Cells,
+                ["sheet"] = sheet,
+                ["cells"] = parsedRow?.Cells ?? new Dictionary<string, string>(),
             };
             _serviceDb.StagedRows.Add(new StagedRow
             {
                 ImportSessionId = sessionId,
-                Sheet = raw.Sheet ?? string.Empty,
+                Sheet = sheet,
                 SourceRowNumber = mr.SourceRowNumber,
                 RawValues = System.Text.Json.JsonSerializer.SerializeToDocument(rawPayload),
                 MappedValues = mr.MappedValues,
@@ -238,7 +260,7 @@ public sealed class ImportPipeline
                 _serviceDb.Errors.Add(new ImportError
                 {
                     ImportSessionId = sessionId,
-                    Sheet = raw.Sheet ?? string.Empty,
+                    Sheet = sheet,
                     SourceRowNumber = mr.SourceRowNumber,
                     ColumnName = err.ColumnName,
                     ErrorCode = err.ErrorCode,
@@ -248,10 +270,9 @@ public sealed class ImportPipeline
             if (mr.IsValid) successCount++; else errorCount++;
 
             // Per-sheet счётчик: «лист X — строка N из Total(X)».
-            var sheetKey = raw.Sheet ?? string.Empty;
-            var sheetProcessed = processedBySheet.GetValueOrDefault(sheetKey) + 1;
-            processedBySheet[sheetKey] = sheetProcessed;
-            var sheetTotal = totalsBySheet.GetValueOrDefault(sheetKey, 1);
+            var sheetProcessed = processedBySheet.GetValueOrDefault(sheet) + 1;
+            processedBySheet[sheet] = sheetProcessed;
+            var sheetTotal = totalsBySheet.GetValueOrDefault(sheet, 1);
 
             var processed = i + 1;
             // Шлём событие либо на throttle (каждые notifyEvery строк), либо в
@@ -276,7 +297,7 @@ public sealed class ImportPipeline
                     currentRow = sheetProcessed,
                     totalRows = sheetTotal,
                     percentComplete = sheetPercent,
-                    sheet = raw.Sheet,
+                    sheet = sheet,
                 }, ct);
             }
         }
@@ -331,7 +352,7 @@ public sealed class ImportPipeline
             .Where(r => r.ImportSessionId == sessionId && r.Status == StagedRowStatus.Valid)
             .ToListAsync(ct);
 
-        var mappedRows = staged.Select(r => new MappedRow(r.SourceRowNumber, true, r.MappedValues!, [])).ToList();
+        var mappedRows = staged.Select(r => new MappedRow(r.SourceRowNumber, r.Sheet ?? string.Empty, true, r.MappedValues!, [])).ToList();
         var ctx = new ImportContext(sessionId, session.VisaryProjectId, session.VisarySiteId, session.UserId);
         var applyResult = await mapper.ApplyAsync(ctx, _visaryDb, mappedRows, ct);
 

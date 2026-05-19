@@ -187,13 +187,51 @@ public sealed class RoomsFormImportMapper : IImportMapper
         // «Машиноместо». Используется как fallback, когда строка не указывает «Тип/Название/Вид»,
         // и для warn'ов когда тип строки расходится с типом листа.
         var sheetKindCache = new Dictionary<string, (int? Id, string? Title)>(StringComparer.OrdinalIgnoreCase);
+        var skippedSheetsByKind = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var sheetName in dataRows.Select(r => r.Sheet).Distinct(StringComparer.OrdinalIgnoreCase))
         {
             var (sId, sTitle) = ResolveKindBySheetName(sheetName, kindByTitle);
             sheetKindCache[sheetName] = (sId, sTitle);
+            if (sId.HasValue)
+            {
+                _log.LogInformation(
+                    "RoomsForm.Validate: лист '{Sheet}' → ожидаемый вид помещений '{Title}' (ID={Id})",
+                    sheetName, sTitle, sId.Value);
+            }
+            else
+            {
+                // Имя листа не соответствует ни одному виду помещений из живого справочника
+                // Visary (Квартира/Машиноместо/Кладовая/…). Такие листы — это «исторические
+                // снапшоты» в пользовательских файлах: «Кв_01.04.26», «Кв_01.03.26 (2)», и т.п.
+                // Они не реестр помещений; их обработка дала бы поток `required_missing`
+                // на каждую строку и захламила бы отчёт. Пропускаем ВСЕ строки листа целиком.
+                skippedSheetsByKind.Add(sheetName);
+                _log.LogInformation(
+                    "RoomsForm.Validate: лист '{Sheet}' пропущен — имя не соответствует ни одному " +
+                    "RoomKind в справочнике Visary (Квартира/Машиноместо/Кладовая/…). " +
+                    "Это нормально для исторических снапшотов («Кв_01.04.26» и т.п.).",
+                    sheetName);
+            }
+        }
+
+        // После определения «не наших» листов отфильтровываем их строки.
+        if (skippedSheetsByKind.Count > 0)
+        {
+            var before = dataRows.Count;
+            dataRows = dataRows.Where(r => !skippedSheetsByKind.Contains(r.Sheet)).ToList();
             _log.LogInformation(
-                "RoomsForm.Validate: лист '{Sheet}' → ожидаемый вид помещений '{Title}' (ID={Id})",
-                sheetName, sTitle ?? "<не определён>", sId?.ToString() ?? "—");
+                "RoomsForm.Validate: отфильтровано {Removed} строк из {SkippedSheets} листов, " +
+                "не соответствующих RoomKind. Останется {Remaining} строк для дальнейшей валидации.",
+                before - dataRows.Count, skippedSheetsByKind.Count, dataRows.Count);
+
+            if (dataRows.Count == 0)
+            {
+                fileErrors.Add(new RowError(null, "no_data",
+                    "В файле нет ни одного листа с именем, соответствующим виду помещений " +
+                    "(Квартира/Машиноместо/Кладовая/Апартаменты/…). " +
+                    $"Найденные листы: {string.Join(", ", skippedSheetsByKind.Select(s => $"'{s}'"))}."));
+                return new ValidationResult([], fileErrors);
+            }
         }
 
         var mappedRows = new List<MappedRow>(dataRows.Count);
@@ -258,6 +296,7 @@ public sealed class RoomsFormImportMapper : IImportMapper
 
                 mappedRows.Add(new MappedRow(
                     row.SourceRowNumber,
+                    row.Sheet ?? string.Empty,
                     IsValid: false,
                     JsonSerializer.SerializeToDocument(new { Sheet = row.Sheet }),
                     rowErrors));
@@ -399,6 +438,7 @@ public sealed class RoomsFormImportMapper : IImportMapper
             };
             mappedRows.Add(new MappedRow(
                 row.SourceRowNumber,
+                row.Sheet ?? string.Empty,
                 rowErrors.Count == 0,
                 JsonSerializer.SerializeToDocument(mapped),
                 rowErrors));
