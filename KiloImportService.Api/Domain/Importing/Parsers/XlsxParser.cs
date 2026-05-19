@@ -440,10 +440,14 @@ public sealed class XlsxParser : IFileParser
         }
 
         // Определяем, до какой колонки идти.
-        // С maxStages — ровно N колонок (даже если правее есть данные «про запас»).
-        // Без maxStages — до lastCol включительно.
+        // С maxStages — РОВНО N колонок (даже если правее RangeUsed пусто): нам важно
+        // выпустить ParsedRow на каждый этап шаблона, чтобы маппер показал value_empty
+        // для конкретного этапа. Math.Min(lastCol, ...) обрезал бы шаблон с N=2 этапов,
+        // у которого фактически заполнен только этап 1 — RangeUsed обрывался по
+        // последней непустой колонке и второй этап «терялся».
+        // Без maxStages — до lastCol включительно (legacy-поведение).
         int stopCol = maxStages.HasValue
-            ? Math.Min(lastCol, valueStartCol + maxStages.Value - 1)
+            ? valueStartCol + maxStages.Value - 1
             : lastCol;
 
         for (int c = valueStartCol; c <= stopCol; c++)
@@ -483,6 +487,16 @@ public sealed class XlsxParser : IFileParser
         if (layout.Budget is { } budget)
         {
             ExtractBudgetSection(sheet, sheetName, budget, rows, errors, ct);
+        }
+
+        // ─── Секция ГФ Главы 1 (опционально) ────────────────────────────────
+        // Параллельно бюджетной — горизонтальный «квартальный» блок: шапка с датами
+        // в строке QuarterHeaderRow, статьи (Title в MarkerColumn) с суммами по
+        // кварталам. Используется импортом Финмодели для построения графика
+        // финансирования (CostItem). См. ChapterScheduleHint.
+        if (layout.ChapterSchedule is { } schedule)
+        {
+            ExtractChapterSchedule(sheet, sheetName, schedule, rows, errors, ct);
         }
 
         return new ParseResult(headers, rows, errors);
@@ -559,6 +573,136 @@ public sealed class XlsxParser : IFileParser
             }
             if (!any) continue;
             rows.Add(new ParsedRow(r, budgetSheetTag, cells));
+        }
+    }
+
+    /// <summary>
+    /// Sentinel-маркер в <c>Cells["C"]</c> «датовой» (header) строки секции ГФ.
+    /// Маппер по нему отличает шапку с датами кварталов от обычной строки статьи.
+    /// </summary>
+    public const string ChapterScheduleQuartersSentinel = "__quarters__";
+
+    /// <summary>
+    /// Извлекает «горизонтальный» квартальный блок ГФ — см. <see cref="ChapterScheduleHint"/>.
+    /// Не падает при отсутствии StartMarker: ГФ — опциональный блок (новый файл может
+    /// его не содержать), маппер сам решит, нужен ли он. При полном отсутствии данных —
+    /// просто ничего не эмитим.
+    /// </summary>
+    private static void ExtractChapterSchedule(
+        IXLWorksheet sheet, string sheetName, ChapterScheduleHint hint,
+        List<ParsedRow> rows, List<ParseError> errors, CancellationToken ct)
+    {
+        if (!TryParseColumnLetter(hint.MarkerColumn, out var markerCol))
+        {
+            errors.Add(new ParseError(null,
+                $"ChapterScheduleHint: некорректная колонка-маркер '{hint.MarkerColumn}'."));
+            return;
+        }
+        if (!TryParseColumnLetter(hint.FirstQuarterColumn, out var firstQCol))
+        {
+            errors.Add(new ParseError(null,
+                $"ChapterScheduleHint: некорректная FirstQuarterColumn '{hint.FirstQuarterColumn}'."));
+            return;
+        }
+        if (!TryParseColumnLetter(hint.LastQuarterColumn, out var lastQCol))
+        {
+            errors.Add(new ParseError(null,
+                $"ChapterScheduleHint: некорректная LastQuarterColumn '{hint.LastQuarterColumn}'."));
+            return;
+        }
+        if (firstQCol > lastQCol)
+        {
+            errors.Add(new ParseError(null,
+                $"ChapterScheduleHint: FirstQuarterColumn '{hint.FirstQuarterColumn}' правее LastQuarterColumn '{hint.LastQuarterColumn}'."));
+            return;
+        }
+        if (hint.QuarterHeaderRow <= 0)
+        {
+            errors.Add(new ParseError(null,
+                $"ChapterScheduleHint: QuarterHeaderRow должно быть >= 1, получено {hint.QuarterHeaderRow}."));
+            return;
+        }
+
+        var range = sheet.RangeUsed();
+        if (range is null) return;
+        var lastRow = range.LastRow().RowNumber();
+
+        // Найти строку StartMarker (например, «Глава 1.») в MarkerColumn.
+        int? startRow = null;
+        for (int r = 1; r <= lastRow; r++)
+        {
+            ct.ThrowIfCancellationRequested();
+            var text = sheet.Cell(r, markerCol).GetString();
+            if (!string.IsNullOrWhiteSpace(text)
+                && text.Contains(hint.StartMarker, StringComparison.OrdinalIgnoreCase))
+            {
+                startRow = r;
+                break;
+            }
+        }
+        if (startRow is null)
+        {
+            // ГФ — опциональный блок: молча выходим. Маппер увидит отсутствие schedule-строк
+            // и пропустит шаг (с info-логом).
+            return;
+        }
+
+        var scheduleSheetTag = $"{sheetName} {hint.SheetMarker}";
+
+        // 1) Header-строка с датами кварталов. Эмитим ВСЕГДА, чтобы маппер мог понять
+        // какая колонка какому кварталу соответствует. ISO-даты («2026-01-01») — единый
+        // формат, не зависящий от региональных настроек.
+        var headerCells = new Dictionary<string, string>(lastQCol - firstQCol + 2, StringComparer.Ordinal)
+        {
+            [hint.MarkerColumn] = ChapterScheduleQuartersSentinel,
+        };
+        for (int c = firstQCol; c <= lastQCol; c++)
+        {
+            ct.ThrowIfCancellationRequested();
+            var cell = sheet.Cell(hint.QuarterHeaderRow, c);
+            var letter = ColumnLetter(c);
+            // Сначала пробуем DateTime: ClosedXML возвращает true только если ячейка
+            // действительно содержит дату (числовой формат date). Иначе fallback на
+            // текстовое представление — пусть маппер сам решит, что делать (если там
+            // строка типа «1кв 2026» — для текущего файла этот случай не нужен).
+            if (cell.TryGetValue<DateTime>(out var dt))
+            {
+                headerCells[letter] = dt.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+            }
+            else
+            {
+                headerCells[letter] = cell.GetString() ?? string.Empty;
+            }
+        }
+        rows.Add(new ParsedRow(hint.QuarterHeaderRow, scheduleSheetTag, headerCells));
+
+        // 2) Article-строки от startRow+1 до EndMarker (или конца листа).
+        for (int r = startRow.Value + 1; r <= lastRow; r++)
+        {
+            ct.ThrowIfCancellationRequested();
+            var marker = sheet.Cell(r, markerCol).GetString();
+            if (!string.IsNullOrWhiteSpace(marker)
+                && marker.Contains(hint.EndMarker, StringComparison.OrdinalIgnoreCase))
+            {
+                break;
+            }
+
+            // Собираем ячейки: MarkerColumn = Title; FirstQuarterColumn..LastQuarterColumn = суммы.
+            var cells = new Dictionary<string, string>(lastQCol - firstQCol + 2, StringComparer.Ordinal)
+            {
+                [hint.MarkerColumn] = marker ?? string.Empty,
+            };
+            bool anyAmount = false;
+            for (int c = firstQCol; c <= lastQCol; c++)
+            {
+                var v = sheet.Cell(r, c).GetString() ?? string.Empty;
+                if (!string.IsNullOrWhiteSpace(v)) anyAmount = true;
+                cells[ColumnLetter(c)] = v;
+            }
+            // Пустые служебные строки (без Title и без сумм) пропускаем —
+            // иначе массив schedule-строк раздуется на пустыми буферами.
+            if (string.IsNullOrWhiteSpace(marker) && !anyAmount) continue;
+            rows.Add(new ParsedRow(r, scheduleSheetTag, cells));
         }
     }
 

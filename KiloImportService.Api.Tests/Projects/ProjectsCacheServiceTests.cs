@@ -323,6 +323,12 @@ public class ProjectsCacheServiceTests
         public Task<ListViewResponse<WbsRaw>> GetWbsByProjectAsync(int projectId, CancellationToken ct)
             => throw new NotImplementedException();
 
+        public Task<ListViewResponse<WbsRaw>> GetWbsBySiteAsync(int siteId, CancellationToken ct)
+            => throw new NotImplementedException();
+
+        public Task<ListViewResponse<CostItemRaw>> GetCostItemsByWbsAsync(int wbsId, CancellationToken ct)
+            => throw new NotImplementedException();
+
         public Task<ListViewResponse<TownRaw>>                ListTownsAsync(string? titleFilter, CancellationToken ct) => throw new NotImplementedException();
         public Task<ListViewResponse<RegionRaw>>              ListRegionsAsync(string? titleFilter, CancellationToken ct) => throw new NotImplementedException();
         public Task<ListViewResponse<ProjectTypeRaw>>         ListProjectTypesAsync(CancellationToken ct) => throw new NotImplementedException();

@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using KiloImportService.Api.Data.Visary;
 using KiloImportService.Api.Domain.Importing;
+using KiloImportService.Api.Domain.Importing.Parsers;
 using KiloImportService.Api.Domain.Mapping.Budget;
 using Microsoft.EntityFrameworkCore;
 using Visary.Api.CRUD;
@@ -61,7 +62,18 @@ public sealed class FinModelImportMapper : IImportMapper
                 "Бухгалтерский баланс",
                 "Финансовые показатели",
             },
-            LastIncludedColumn: "G"));
+            LastIncludedColumn: "G"),
+        // ГФ Главы 1 — горизонтальный «квартальный» блок. Шапка с датами начала кварталов
+        // в строке 7, квартальные суммы — в колонках H..CU (23 квартала, далее идут годовые).
+        // Маппер берёт только Этап 1 и матчит статьи в коды 1.1/1.6/1.8 через
+        // BudgetReferenceProvider; всё остальное — пропускает. См. doc_project/91-finmodel-chapter1-schedule.md.
+        ChapterSchedule: new ChapterScheduleHint(
+            MarkerColumn: "C",
+            StartMarker: "Глава 1.",
+            EndMarker: "Глава 2.",
+            QuarterHeaderRow: 7,
+            FirstQuarterColumn: "H",
+            LastQuarterColumn: "CU"));
 
     private static readonly string[] FinishingTypeAliases =
         ["Тип отделки", "FinishingType", "Finishing"];
@@ -84,6 +96,33 @@ public sealed class FinModelImportMapper : IImportMapper
     // У бюджетных ParsedRow — Sheet вида "Inputs (budget)". Все остальные строки идут
     // через обычный flow (KV-параметры/показатели).
     private const string BudgetSheetSuffix = "(budget)";
+
+    // Маркер «строки ГФ», эмитируемой XlsxParser-ом (см. ChapterScheduleHint.SheetMarker).
+    // У schedule-строк — Sheet вида "Inputs (schedule)".
+    private const string ScheduleSheetSuffix = "(schedule)";
+
+    // Колонки квартального блока ГФ Главы 1 в файле «Параметры к переносу в АБ.xlsx»:
+    // H = 8-я колонка (первый квартал), CU = 99-я (23-й квартал). За CU идут годовые
+    // колонки CV..DS — в v1 их игнорируем (см. п.3 решения от пользователя).
+    private const string ScheduleFirstQuarterColumn = "H";
+    private const string ScheduleLastQuarterColumn = "CU";
+
+    // Алиасы Title → Code Главы 1 для случаев, когда BudgetReferenceProvider не справляется:
+    // в файле «Параметры к переносу в АБ.xlsx» статья «Прочие затраты» короче справочного
+    // «Прочие затраты на улучшения и содержание ЗУ» (1.8) — reverse-prefix провайдера
+    // не сработает (он fuzzy только когда file-title ДЛИННЕЕ ref-title). Закрепляем явным
+    // alias'ом. Пользователь подтвердил соответствие (решение от 2026-05-19, п.2).
+    private static readonly IReadOnlyDictionary<string, string> Chapter1TitleAliases =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Прочие затраты"] = "1.8.",
+        };
+
+    // Маркеры разделов внутри Главы 1: только Этап 1 (по решению пользователя от 2026-05-19, п.1).
+    // Этап 2/3 в файле содержат те же три статьи (повтор), их пропускаем.
+    private const string Chapter1Stage1Marker = "Этап 1";
+    private const string Chapter1StageMarkerPrefix = "Этап";
+    private const string Chapter1TotalMarkerPrefix = "Итого";
 
     // Декларативный список indicator-параметров. Добавление нового показателя =
     // одна строка в массиве (не нужно трогать flow). Title должен совпадать с тем,
@@ -147,26 +186,36 @@ public sealed class FinModelImportMapper : IImportMapper
             return new ValidationResult([], fileErrors);
         }
 
-        // Разделяем строки: бюджетные (Sheet с суффиксом (budget)) и обычные KV-стадии.
+        // Разделяем строки по типу секции:
+        //   • (budget)   — табличная секция бюджета (главы/статьи + Итого);
+        //   • (schedule) — квартальный блок ГФ Главы 1 (dates-header + статьи Этапа 1);
+        //   • остальное  — обычные KV-стадии (тип отделки, класс, показатели).
+        // Источник суффиксов — BudgetSectionHint.SheetMarker / ChapterScheduleHint.SheetMarker.
         var budgetRows = rows.Where(IsBudgetRow).ToList();
-        var stageRows = rows.Where(r => !IsBudgetRow(r)).ToList();
+        var scheduleRows = rows.Where(IsScheduleRow).ToList();
+        var stageRows = rows
+            .Where(r => !IsBudgetRow(r) && !IsScheduleRow(r))
+            .ToList();
 
         var (paramMappedRows, paramFileErrors) = await ValidateParametersAsync(
             stageRows, visaryDb, ct);
         fileErrors.AddRange(paramFileErrors);
 
         var budgetMappedRows = ValidateBudget(budgetRows, fileErrors);
+        var scheduleMappedRows = ValidateChapter1Schedule(scheduleRows, fileErrors);
 
         // Если параметрический поток отбраковал всё (нет целевых колонок шаблона) и
-        // бюджет тоже пуст — возвращаем только file-level errors. Если хоть один поток
-        // дал mapped-строки — возвращаем их вместе.
-        var combined = new List<MappedRow>(paramMappedRows.Count + budgetMappedRows.Count);
+        // бюджет+ГФ тоже пусты — возвращаем только file-level errors. Если хоть один
+        // поток дал mapped-строки — возвращаем их вместе.
+        var combined = new List<MappedRow>(
+            paramMappedRows.Count + budgetMappedRows.Count + scheduleMappedRows.Count);
         combined.AddRange(paramMappedRows);
         combined.AddRange(budgetMappedRows);
+        combined.AddRange(scheduleMappedRows);
 
         _log.LogInformation(
-            "FinModelImportMapper.ValidateAsync: completed paramRows={Param} budgetRows={Budget} fileErrors={FileErrorCount}",
-            paramMappedRows.Count, budgetMappedRows.Count, fileErrors.Count);
+            "FinModelImportMapper.ValidateAsync: completed paramRows={Param} budgetRows={Budget} scheduleRows={Schedule} fileErrors={FileErrorCount}",
+            paramMappedRows.Count, budgetMappedRows.Count, scheduleMappedRows.Count, fileErrors.Count);
         return new ValidationResult(combined, fileErrors);
     }
 
@@ -328,9 +377,12 @@ public sealed class FinModelImportMapper : IImportMapper
         // Разделяем mapped-строки по Kind.
         var paramRows = validRows.Where(r => GetKind(r) == "params").ToList();
         var budgetRows = validRows.Where(r => GetKind(r) == "budget").ToList();
+        var scheduleArticleRows = validRows.Where(r => GetKind(r) == "schedule_article").ToList();
+        var scheduleQuartersRow = validRows.FirstOrDefault(r => GetKind(r) == "schedule_quarters");
 
         var siteId = context.VisarySiteId.Value;
         int applied = 0;
+        var rowActions = new List<RowActionLog>();
 
         if (paramRows.Count > 0)
         {
@@ -357,7 +409,23 @@ public sealed class FinModelImportMapper : IImportMapper
             applied += budgetRows.Count;
         }
 
-        return new ApplyResult(applied, errors);
+        if (scheduleArticleRows.Count > 0 && scheduleQuartersRow is not null)
+        {
+            // ГФ Главы 1: для каждой mapped-статьи (1.1/1.6/1.8) находим WBS-узел объекта,
+            // pre-check существующие CostItem и POST/PATCH/skip per quarter. Per-cell
+            // RowAction — успех или «статья отсутствует в ИСР». См. doc 91.
+            var scheduleApply = await ApplyChapter1ScheduleAsync(
+                siteId, scheduleQuartersRow, scheduleArticleRows, errors, rowActions, ct);
+            applied += scheduleApply;
+        }
+        else if (scheduleArticleRows.Count > 0)
+        {
+            _log.LogWarning(
+                "FinModelImportMapper: schedule article rows={Count} но датовая строка не найдена — ГФ пропущен (siteId={SiteId})",
+                scheduleArticleRows.Count, siteId);
+        }
+
+        return new ApplyResult(applied, errors, rowActions.Count > 0 ? rowActions : null);
     }
 
     /// <summary>
@@ -1006,6 +1074,9 @@ public sealed class FinModelImportMapper : IImportMapper
     private static bool IsBudgetRow(ParsedRow row)
         => row.Sheet?.EndsWith(BudgetSheetSuffix, StringComparison.Ordinal) == true;
 
+    private static bool IsScheduleRow(ParsedRow row)
+        => row.Sheet?.EndsWith(ScheduleSheetSuffix, StringComparison.Ordinal) == true;
+
     private static string GetKind(MappedRow r)
     {
         var root = r.MappedValues.RootElement;
@@ -1029,6 +1100,394 @@ public sealed class FinModelImportMapper : IImportMapper
         public double Sum { get; set; } = Sum;
         public int FirstRowNumber { get; } = FirstRowNumber;
     }
+
+    // ─── Chapter 1 Schedule (ГФ) flow ────────────────────────────────────────
+
+    /// <summary>
+    /// Сборка mapped-строк ГФ Главы 1 из schedule-секции парсера:
+    /// <list type="bullet">
+    /// <item>Одна <see cref="MappedRow"/> с <c>Kind="schedule_quarters"</c> — словарь
+    /// <c>{ ColumnLetter → DateTime начала квартала }</c>. Берётся из header-row
+    /// (sentinel <see cref="Parsers.XlsxParser.ChapterScheduleQuartersSentinel"/>
+    /// в колонке C).</item>
+    /// <item>По одной <see cref="MappedRow"/> с <c>Kind="schedule_article"</c> на каждую
+    /// matched-статью Этапа 1 (Title → Code через <see cref="IBudgetReferenceProvider"/>
+    /// + явный <see cref="Chapter1TitleAliases"/>). В <c>MappedValues</c>: ArticleCode,
+    /// ArticleTitle, ChapterCode="1.", SourceRowNumber (= Excel-строка статьи),
+    /// Quarters: [{ ColLetter, AmountThousands }] (только непустые ячейки).</item>
+    /// </list>
+    /// Этап 2/3 игнорируем (по решению пользователя от 2026-05-19, п.1) — берём блок
+    /// от «Этап 1» до следующего «Этап»/«Итого».
+    /// </summary>
+    private List<MappedRow> ValidateChapter1Schedule(
+        IReadOnlyList<ParsedRow> scheduleRows, List<RowError> fileErrors)
+    {
+        var mapped = new List<MappedRow>();
+        if (scheduleRows.Count == 0) return mapped;
+
+        var ordered = scheduleRows.OrderBy(r => r.SourceRowNumber).ToList();
+        var scheduleSheet = ordered[0].Sheet ?? string.Empty;
+
+        // 1) Найти датовую строку (sentinel "__quarters__" в колонке C).
+        var headerRow = ordered.FirstOrDefault(r =>
+            r.Cells.TryGetValue("C", out var c)
+            && string.Equals(c, XlsxParser.ChapterScheduleQuartersSentinel, StringComparison.Ordinal));
+        if (headerRow is null)
+        {
+            _log.LogInformation(
+                "FinModelImportMapper: schedule-секция без header-строки — ГФ пропущен. Парсер передал {Count} строк.",
+                ordered.Count);
+            return mapped;
+        }
+
+        // Собираем словарь {ColLetter → ISO-дата}; пустые / некорректные ячейки молча
+        // игнорируем (за CU могут быть пустые колонки в шаблоне).
+        var quartersJson = new List<object>();
+        var quartersByLetter = new Dictionary<string, DateTime>(StringComparer.Ordinal);
+        foreach (var kv in headerRow.Cells)
+        {
+            if (string.Equals(kv.Key, "C", StringComparison.Ordinal)) continue;
+            if (string.IsNullOrWhiteSpace(kv.Value)) continue;
+            if (!DateTime.TryParseExact(kv.Value, "yyyy-MM-dd",
+                    CultureInfo.InvariantCulture, DateTimeStyles.None, out var dt))
+            {
+                continue;
+            }
+            quartersByLetter[kv.Key] = dt;
+            quartersJson.Add(new { Col = kv.Key, Date = dt.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) });
+        }
+        if (quartersByLetter.Count == 0)
+        {
+            _log.LogWarning("FinModelImportMapper: schedule header-row без распарсенных дат — ГФ пропущен.");
+            return mapped;
+        }
+
+        var quartersJsonStr = JsonSerializer.Serialize(new { Kind = "schedule_quarters", Quarters = quartersJson });
+        mapped.Add(new MappedRow(
+            headerRow.SourceRowNumber, scheduleSheet, true,
+            JsonDocument.Parse(quartersJsonStr), Array.Empty<RowError>()));
+
+        // 2) Найти «Этап 1» и собрать статьи до следующего «Этап»/«Итого».
+        var articleRows = ordered
+            .Where(r => r.SourceRowNumber != headerRow.SourceRowNumber)
+            .ToList();
+
+        int? stage1StartIdx = null;
+        for (int i = 0; i < articleRows.Count; i++)
+        {
+            var title = articleRows[i].Cells.GetValueOrDefault("C")?.Trim();
+            if (string.IsNullOrEmpty(title)) continue;
+            if (title.StartsWith(Chapter1Stage1Marker, StringComparison.OrdinalIgnoreCase))
+            {
+                stage1StartIdx = i + 1;
+                break;
+            }
+        }
+        if (stage1StartIdx is null)
+        {
+            _log.LogInformation(
+                "FinModelImportMapper: в ГФ-секции не найден маркер '{Marker}' — пропускаем (возможно файл без квартальной таблицы Главы 1).",
+                Chapter1Stage1Marker);
+            return mapped;
+        }
+
+        int matched = 0, skippedUnknown = 0;
+        for (int i = stage1StartIdx.Value; i < articleRows.Count; i++)
+        {
+            var row = articleRows[i];
+            var title = row.Cells.GetValueOrDefault("C")?.Trim();
+            if (string.IsNullOrEmpty(title)) continue;
+
+            // Стоп: следующий «Этап» / «Итого» / любой другой Глава — окончание Этапа 1.
+            if (title.StartsWith(Chapter1StageMarkerPrefix, StringComparison.OrdinalIgnoreCase)
+                || title.StartsWith(Chapter1TotalMarkerPrefix, StringComparison.OrdinalIgnoreCase)
+                || title.StartsWith("Глава", StringComparison.OrdinalIgnoreCase))
+            {
+                break;
+            }
+
+            // Resolve code: alias → provider.FindByTitle.
+            string? code = null;
+            string? matchedRefTitle = null;
+            if (Chapter1TitleAliases.TryGetValue(title, out var aliasCode))
+            {
+                code = aliasCode;
+                matchedRefTitle = _budgetRef.FindByCode(aliasCode)?.Title;
+            }
+            else
+            {
+                var entry = _budgetRef.FindByTitle(title);
+                // Принимаем только статьи Главы 1 (Code starts with "1.").
+                if (entry is not null
+                    && entry.Code.StartsWith("1.", StringComparison.Ordinal)
+                    && !entry.IsChapter)
+                {
+                    code = entry.Code;
+                    matchedRefTitle = entry.Title;
+                }
+            }
+
+            if (code is null)
+            {
+                skippedUnknown++;
+                _log.LogTrace(
+                    "Schedule row {RowNum}: Title '{Title}' не сопоставлен со статьёй Главы 1 — skip",
+                    row.SourceRowNumber, title);
+                continue;
+            }
+
+            // Собираем непустые квартальные суммы (только те колонки, для которых есть
+            // дата в header-row, остальное игнорируем — за CU могут быть годовые).
+            var quartersForArticle = new List<object>();
+            foreach (var (colLetter, _) in quartersByLetter)
+            {
+                if (!row.Cells.TryGetValue(colLetter, out var raw)) continue;
+                if (string.IsNullOrWhiteSpace(raw)) continue;
+                if (!TryParseFlexibleDouble(raw, out var amount)) continue;
+                if (Math.Abs(amount) < 0.0005) continue;
+                quartersForArticle.Add(new { Col = colLetter, AmountThousands = amount });
+            }
+
+            if (quartersForArticle.Count == 0)
+            {
+                _log.LogTrace(
+                    "Schedule row {RowNum}: статья '{Code}' без непустых квартальных сумм — skip",
+                    row.SourceRowNumber, code);
+                continue;
+            }
+
+            matched++;
+            var articleJson = JsonSerializer.Serialize(new
+            {
+                Kind         = "schedule_article",
+                ChapterCode  = "1.",
+                ArticleCode  = code,
+                ArticleTitle = matchedRefTitle ?? title,
+                FileTitle    = title,
+                Quarters     = quartersForArticle,
+            });
+            mapped.Add(new MappedRow(
+                row.SourceRowNumber, scheduleSheet, true,
+                JsonDocument.Parse(articleJson), Array.Empty<RowError>()));
+        }
+
+        _log.LogInformation(
+            "FinModelImportMapper: ГФ Главы 1 сборка → {Matched} matched / {Unknown} unknown (Этап 1, {Quarters} кварталов)",
+            matched, skippedUnknown, quartersByLetter.Count);
+        return mapped;
+    }
+
+    /// <summary>
+    /// Применяет ГФ Главы 1: для каждой mapped-статьи находим WBS-узел у объекта,
+    /// pre-check существующие <see cref="CostItemRaw"/> через
+    /// <see cref="IListViewClient.GetCostItemsByWbsAsync"/> и для каждого квартала
+    /// POST / PATCH / skip по совпадению <see cref="CostItemPeriod.Start"/>.
+    /// Per-cell <see cref="RowActionLog.Actions"/> — успех или «статья отсутствует в ИСР».
+    /// </summary>
+    private async Task<int> ApplyChapter1ScheduleAsync(
+        int siteId,
+        MappedRow quartersRow,
+        IReadOnlyList<MappedRow> articleRows,
+        List<RowError> errors,
+        List<RowActionLog> rowActions,
+        CancellationToken ct)
+    {
+        // 1) Reconstruct ColLetter → DateTime map.
+        var quartersByLetter = new Dictionary<string, DateTime>(StringComparer.Ordinal);
+        foreach (var q in quartersRow.MappedValues.RootElement.GetProperty("Quarters").EnumerateArray())
+        {
+            var col = q.GetProperty("Col").GetString()!;
+            var date = DateTime.ParseExact(
+                q.GetProperty("Date").GetString()!, "yyyy-MM-dd",
+                CultureInfo.InvariantCulture, DateTimeStyles.None);
+            quartersByLetter[col] = date;
+        }
+
+        // 2) Load WBS for the site.
+        ListViewResponse<WbsRaw> wbsList;
+        try
+        {
+            wbsList = await _listViewClient.GetWbsBySiteAsync(siteId, ct);
+        }
+        catch (Exception ex)
+        {
+            _log.LogError(ex, "ГФ: failed to load WBS for siteId={SiteId}", siteId);
+            errors.Add(new RowError(null, "wbs_list_failed",
+                $"Не удалось получить ИСР объекта {siteId}: {ex.Message}"));
+            return 0;
+        }
+
+        var wbsByCode = wbsList.Data
+            .Where(w => !string.IsNullOrWhiteSpace(w.Code))
+            .GroupBy(w => NormalizeWbsCode(w.Code!), StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
+
+        _log.LogInformation(
+            "ГФ: загружено {Count} WBS-узлов объекта siteId={SiteId} (по Code: {Codes})",
+            wbsList.Data.Count, siteId,
+            string.Join(", ", wbsByCode.Keys.Where(c => c.StartsWith("1.", StringComparison.Ordinal)).Take(15)));
+
+        int applied = 0;
+        foreach (var articleRow in articleRows)
+        {
+            ct.ThrowIfCancellationRequested();
+            var root = articleRow.MappedValues.RootElement;
+            var code = NormalizeWbsCode(root.GetProperty("ArticleCode").GetString()!);
+            var articleTitle = root.GetProperty("ArticleTitle").GetString()!;
+            var sheet = articleRow.Sheet;
+            var rowNum = articleRow.SourceRowNumber;
+            var perRowActions = new List<string>();
+
+            // Список ячеек для этой статьи (col, amountThousands) — нужен и для успеха,
+            // и для отчёта о пропуске «нет статьи в ИСР».
+            var cells = root.GetProperty("Quarters").EnumerateArray()
+                .Select(q => (
+                    Col: q.GetProperty("Col").GetString()!,
+                    AmountThousands: q.GetProperty("AmountThousands").GetDouble()))
+                .ToList();
+
+            if (!wbsByCode.TryGetValue(code, out var wbs))
+            {
+                // Per-cell сообщение в формате, который запросил пользователь
+                // (доп. строка для каждой непустой квартальной ячейки).
+                foreach (var (col, _) in cells)
+                {
+                    perRowActions.Add(
+                        $"для ячейки {col}{rowNum} не была добавлена информация для ГФ, " +
+                        $"тк статья {code.TrimEnd('.')} отсутствует в ИСР");
+                }
+                rowActions.Add(new RowActionLog(rowNum, sheet, perRowActions));
+                _log.LogInformation(
+                    "ГФ: статья {Code} ('{Title}') отсутствует в ИСР объекта {SiteId} — {Cells} ячеек пропущено",
+                    code, articleTitle, siteId, cells.Count);
+                continue;
+            }
+
+            // Pre-check существующих CostItem'ов этой подстатьи.
+            ListViewResponse<CostItemRaw> existing;
+            try
+            {
+                existing = await _listViewClient.GetCostItemsByWbsAsync(wbs.ID, ct);
+            }
+            catch (Exception ex)
+            {
+                _log.LogError(ex, "ГФ: failed to load CostItems for wbsId={WbsId}", wbs.ID);
+                errors.Add(new RowError(null, "costitem_list_failed",
+                    $"Не удалось получить существующий ГФ для статьи {code} (wbsId={wbs.ID}): {ex.Message}"));
+                continue;
+            }
+
+            // Map existing by quarter start (date-only, UTC-нечувствительно к времени).
+            var existingByStart = existing.Data
+                .Where(ci => ci.PlanPeriod is { } p && p.Start != default)
+                .GroupBy(ci => ci.PlanPeriod!.Start.Date)
+                .ToDictionary(g => g.Key, g => g.First());
+
+            int created = 0, patched = 0, skipped = 0, failed = 0;
+            foreach (var (col, amountThousands) in cells)
+            {
+                ct.ThrowIfCancellationRequested();
+                if (!quartersByLetter.TryGetValue(col, out var qStart))
+                {
+                    // header не содержит даты для этой колонки — пропускаем тихо.
+                    continue;
+                }
+                var qEnd = LastDayOfQuarter(qStart);
+                var amountRub = Math.Round(amountThousands * 1000.0, 2, MidpointRounding.AwayFromZero);
+                var quarterLabel = FormatQuarterLabel(qStart);
+                var cellLabel = $"{col}{rowNum}";
+
+                try
+                {
+                    if (existingByStart.TryGetValue(qStart.Date, out var match))
+                    {
+                        if (match.PlanSum is double cur && Math.Abs(cur - amountRub) < 0.01)
+                        {
+                            skipped++;
+                            perRowActions.Add(
+                                $"ГФ {cellLabel} ({quarterLabel}, статья {code.TrimEnd('.')}): сумма {FormatRub(amountRub)} совпадает — без изменений");
+                        }
+                        else
+                        {
+                            await _visaryClient.PatchCostItemAsync(match.ID, new CostItemPatchRequest
+                            {
+                                PlanSum = amountRub,
+                            }, ct);
+                            patched++;
+                            perRowActions.Add(
+                                $"ГФ {cellLabel} ({quarterLabel}, статья {code.TrimEnd('.')}): обновлено " +
+                                $"{FormatRub(match.PlanSum ?? 0)} → {FormatRub(amountRub)}");
+                        }
+                    }
+                    else
+                    {
+                        await _visaryClient.CreateCostItemAsync(new CostItemCreateRequest
+                        {
+                            WBSID = wbs.ID,
+                            WBS = new VisaryRef { ID = wbs.ID },
+                            PlanSum = amountRub,
+                            PlanPeriod = new CostItemPeriod
+                            {
+                                Start = DateTime.SpecifyKind(qStart, DateTimeKind.Utc),
+                                End = DateTime.SpecifyKind(qEnd, DateTimeKind.Utc),
+                            },
+                            Status = CostItemStatus.Plan,
+                        }, ct);
+                        created++;
+                        perRowActions.Add(
+                            $"ГФ {cellLabel} ({quarterLabel}, статья {code.TrimEnd('.')}): создано {FormatRub(amountRub)}");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    failed++;
+                    _log.LogError(ex,
+                        "ГФ {Cell}: ошибка применения для wbsId={WbsId} period={Start:yyyy-MM-dd} sum={Sum}",
+                        cellLabel, wbs.ID, qStart, amountRub);
+                    perRowActions.Add(
+                        $"ГФ {cellLabel} ({quarterLabel}, статья {code.TrimEnd('.')}): ошибка — {ex.Message}");
+                    errors.Add(new RowError(col, "costitem_apply_error",
+                        $"Не удалось применить ГФ {cellLabel} (статья {code}, {quarterLabel}): {ex.Message}"));
+                }
+            }
+
+            _log.LogInformation(
+                "ГФ: статья {Code} wbsId={WbsId} — created={Created} patched={Patched} skipped={Skipped} failed={Failed}",
+                code, wbs.ID, created, patched, skipped, failed);
+            applied += created + patched + skipped;
+            if (perRowActions.Count > 0)
+                rowActions.Add(new RowActionLog(rowNum, sheet, perRowActions));
+        }
+
+        return applied;
+    }
+
+    /// <summary>Нормализация Code WBS/справочника: trim + гарантированная хвостовая точка.</summary>
+    private static string NormalizeWbsCode(string code)
+    {
+        var s = code?.Trim() ?? string.Empty;
+        if (s.Length == 0) return s;
+        return s.EndsWith('.') ? s : s + ".";
+    }
+
+    /// <summary>Возвращает последний день квартала, в который попадает указанная дата.</summary>
+    private static DateTime LastDayOfQuarter(DateTime quarterStart)
+    {
+        // quarterStart — первый день квартала (1 января / 1 апреля / 1 июля / 1 октября).
+        // Конец = +3 месяца - 1 день.
+        var end = quarterStart.AddMonths(3).AddDays(-1);
+        return new DateTime(end.Year, end.Month, end.Day, 0, 0, 0, DateTimeKind.Unspecified);
+    }
+
+    /// <summary>«Q3 2026» для логов/сообщений журнала.</summary>
+    private static string FormatQuarterLabel(DateTime quarterStart)
+    {
+        int q = (quarterStart.Month - 1) / 3 + 1;
+        return $"Q{q} {quarterStart.Year}";
+    }
+
+    private static string FormatRub(double amount)
+        => amount.ToString("N2", CultureInfo.InvariantCulture).Replace(',', ' ') + " ₽";
 
     // ─── Generic helpers ─────────────────────────────────────────────────────
 
