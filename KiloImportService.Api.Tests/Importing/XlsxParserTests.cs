@@ -531,6 +531,123 @@ public class XlsxParserTests
     }
 
     [SkippableFact]
+    public async Task Tabular_SkipsHiddenSheets()
+    {
+        // Регрессия: пользователь Excel-а может пометить служебный/черновой лист
+        // как Hidden (а не удалять). XlsxParser обязан такие листы игнорировать —
+        // ParsedRow из них не появляется, ошибок тоже нет (скрытый лист = отсутствующий).
+        Skip.IfNot(SkipReason is null, SkipReason);
+        using var wb = new XLWorkbook();
+        var visible = wb.Worksheets.Add("Квартиры");
+        visible.Cell(1, 1).Value = "Номер";
+        visible.Cell(1, 2).Value = "Тип";
+        visible.Cell(2, 1).Value = "101";
+        visible.Cell(2, 2).Value = "Квартира";
+        var hidden = wb.Worksheets.Add("Черновик");
+        hidden.Cell(1, 1).Value = "Номер";
+        hidden.Cell(1, 2).Value = "Тип";
+        hidden.Cell(2, 1).Value = "999";
+        hidden.Cell(2, 2).Value = "НЕ_ИМПОРТИРОВАТЬ";
+        hidden.Visibility = XLWorksheetVisibility.Hidden;
+        var ms = new MemoryStream();
+        wb.SaveAs(ms);
+        ms.Position = 0;
+
+        var result = await _parser.ParseAsync(ms);
+
+        Assert.Empty(result.Errors);
+        Assert.Single(result.Rows);
+        Assert.Equal("Квартиры", result.Rows[0].Sheet);
+        Assert.Equal("101", result.Rows[0].Cells["Номер"]);
+        Assert.DoesNotContain(result.Rows, r => r.Sheet == "Черновик");
+    }
+
+    [SkippableFact]
+    public async Task Tabular_SkipsVeryHiddenSheets()
+    {
+        // Аналогично Hidden, но VeryHidden — лист, который пользователь даже не
+        // увидит в меню «Показать» (его можно сделать видимым только через VBA).
+        // Парсер должен трактовать его так же, как Hidden.
+        Skip.IfNot(SkipReason is null, SkipReason);
+        using var wb = new XLWorkbook();
+        var visible = wb.Worksheets.Add("Квартиры");
+        visible.Cell(1, 1).Value = "Номер";
+        visible.Cell(2, 1).Value = "101";
+        var vh = wb.Worksheets.Add("СовсемСкрытый");
+        vh.Cell(1, 1).Value = "Номер";
+        vh.Cell(2, 1).Value = "999";
+        vh.Visibility = XLWorksheetVisibility.VeryHidden;
+        var ms = new MemoryStream();
+        wb.SaveAs(ms);
+        ms.Position = 0;
+
+        var result = await _parser.ParseAsync(ms);
+        Assert.Empty(result.Errors);
+        Assert.Single(result.Rows);
+        Assert.Equal("Квартиры", result.Rows[0].Sheet);
+    }
+
+    [SkippableFact]
+    public async Task KeyValueVertical_SkipsHiddenInputsSheet()
+    {
+        // Если целевой лист «Inputs» скрыт — парсер должен сообщить «лист не найден»,
+        // а не вернуть данные. В списке доступных листов скрытые не показываем.
+        Skip.IfNot(SkipReason is null, SkipReason);
+        using var wb = new XLWorkbook();
+        var inputs = wb.Worksheets.Add("Inputs");
+        inputs.Cell(5, 3).Value = "Тип отделки";
+        inputs.Cell(5, 8).Value = "Черновая";
+        inputs.Visibility = XLWorksheetVisibility.Hidden;
+        var other = wb.Worksheets.Add("Outputs");
+        other.Cell(1, 1).Value = "x";
+        var ms = new MemoryStream();
+        wb.SaveAs(ms);
+        ms.Position = 0;
+
+        var result = await _parser.ParseAsync(ms,
+            new KeyValueVertical("Inputs", "C", "H"));
+
+        Assert.Empty(result.Rows);
+        Assert.NotEmpty(result.Errors);
+        var msg = result.Errors[0].Message;
+        Assert.Contains("Inputs", msg);    // упомянуто в «не найден»
+        Assert.Contains("Outputs", msg);   // видимый — показан
+        // Проверяем часть ПОСЛЕ «Доступные листы:»: имя скрытого листа в неё не попадает.
+        var marker = "Доступные листы:";
+        var idx = msg.IndexOf(marker, StringComparison.Ordinal);
+        Assert.True(idx >= 0, $"Не нашли маркер '{marker}' в сообщении: {msg}");
+        var availablePart = msg[(idx + marker.Length)..];
+        Assert.DoesNotContain("'Inputs'", availablePart);
+    }
+
+    [SkippableFact]
+    public async Task KeyValueVertical_StageCount_SkipsHiddenControlSheet()
+    {
+        // Скрытый «Control» = отсутствующий: парсер не должен молча читать
+        // число этапов из листа, который пользователь спрятал.
+        Skip.IfNot(SkipReason is null, SkipReason);
+        using var wb = new XLWorkbook();
+        var ctrl = wb.Worksheets.Add("Control");
+        ctrl.Cell(4, 6).Value = "Количество этапов";
+        ctrl.Cell(4, 7).Value = 3;
+        ctrl.Visibility = XLWorksheetVisibility.Hidden;
+        var inputs = wb.Worksheets.Add("Inputs");
+        inputs.Cell(28, 3).Value = "Тип отделки";
+        inputs.Cell(28, 8).Value = "Черновая";
+        var ms = new MemoryStream();
+        wb.SaveAs(ms);
+        ms.Position = 0;
+
+        var result = await _parser.ParseAsync(ms,
+            new KeyValueVertical("Inputs", "C", "H",
+                StageCount: new StageCountReference("Control", "F", "G", "Количество этапов")));
+
+        Assert.Empty(result.Rows);
+        Assert.NotEmpty(result.Errors);
+        Assert.Contains("Control", result.Errors[0].Message);
+    }
+
+    [SkippableFact]
     public async Task Tabular_NoAnchors_LegacyBehavior()
     {
         // Если анкоры НЕ заданы — поведение legacy: первая строка = заголовок,

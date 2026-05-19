@@ -55,8 +55,17 @@ public record ImportContext(
 );
 
 /// <summary>Результат валидации одной строки.</summary>
+/// <remarks>
+/// <c>Sheet</c> — имя листа Excel, из которого пришла строка. Маппер ОБЯЗАН его
+/// заполнять: пайплайн использует этот лист (а не индекс в parseResult) для
+/// записи <c>StagedRow.Sheet</c>. Раньше пайплайн брал <c>Sheet</c> по индексу
+/// <c>parseResult.Rows[i].Sheet</c>, но маппер может «тихо» пропускать строки
+/// (например, сводные «ИТОГО» без НПС/Этапа), отчего индексы расходятся и в БД
+/// падает уникальный индекс <c>(SessionId, Sheet, SourceRowNumber)</c>.
+/// </remarks>
 public record MappedRow(
     int SourceRowNumber,
+    string Sheet,
     bool IsValid,
     System.Text.Json.JsonDocument MappedValues,
     IReadOnlyList<RowError> Errors
