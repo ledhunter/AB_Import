@@ -199,5 +199,8 @@ export function toUiReport(api: ApiImportReport, session: UiSession): UiReport {
     rowsPagination: api.rowsPagination ?? { skip: 0, take: rows.length, total: rows.length },
     // sheetTotals может отсутствовать у старого backend'а — отрисуем без счётчиков свёрнутых.
     sheetTotals: api.sheetTotals ?? [],
+    // actionTotals — счётчики created/updated/skipped по ВСЕЙ сессии (doc 98 v1.2).
+    // Если backend старый — нули, табы фильтров просто не отрисуются (count > 0 gate).
+    actionTotals: api.actionTotals ?? { created: 0, updated: 0, skipped: 0 },
   };
 }

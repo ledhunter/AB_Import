@@ -117,6 +117,13 @@ export interface UiReportRow {
 /** Карта листов сессии: имя + полное число строк (по всей сессии, без фильтров). */
 export type UiSheetTotal = ApiSheetTotal;
 
+/** Счётчики по action-меткам ПО ВСЕЙ сессии — для action-фильтров отчёта. */
+export interface UiActionTotals {
+  created: number;
+  updated: number;
+  skipped: number;
+}
+
 export interface UiReport {
   session: UiSession;
   rows: UiReportRow[];
@@ -129,6 +136,8 @@ export interface UiReport {
    * сами строки исключены из выборки.
    */
   sheetTotals: UiSheetTotal[];
+  /** Action-counters по всей сессии (created/updated/skipped); 0/0/0 для legacy backend. */
+  actionTotals: UiActionTotals;
 }
 
 /**

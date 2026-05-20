@@ -328,6 +328,30 @@ public class ImportsController : ControllerBase
             .OrderBy(x => x.sheet)
             .ToListAsync(ct);
 
+        // actionTotals — счётчики по action-меткам (created/updated/skipped) ПО ВСЕЙ
+        // сессии, не по текущей странице. Маппер кладёт человекочитаемые метки в
+        // StagedRow.Actions (jsonb-массив строк), категоризация совпадает с
+        // SessionRowsTable.tsx (см. doc 98 v1.1): по ГЛАВНОЙ сущности строки
+        // (помещение). Тянем jsonb-массивы в память — для типичной сессии
+        // (≤10k Applied строк) это пара МБ JSON-а, гонять Postgres-regex не оправдано.
+        var actionsRaw = await _db.StagedRows.AsNoTracking()
+            .Where(r => r.ImportSessionId == id && r.Actions != null)
+            .Select(r => r.Actions!)
+            .ToListAsync(ct);
+
+        int actCreated = 0, actUpdated = 0, actSkipped = 0;
+        foreach (var doc in actionsRaw)
+        {
+            // Actions хранится как JSON-массив строк («["Корпус найден (1)", "Помещение
+            // создано (№1)", "ДДУ создан (№ДДУ-1)"]»). Сериализованный raw-text
+            // содержит все эти строки в нужной кодировке — достаточно substring-поиска.
+            var text = doc.RootElement.GetRawText();
+            if (text.Contains("Помещение создан", StringComparison.OrdinalIgnoreCase))    actCreated++;
+            if (text.Contains("Помещение обновлен", StringComparison.OrdinalIgnoreCase))  actUpdated++;
+            if (text.Contains("Без изменений", StringComparison.OrdinalIgnoreCase)
+                || text.Contains("пропуск", StringComparison.OrdinalIgnoreCase))           actSkipped++;
+        }
+
         return Ok(new
         {
             sessionId = id,
@@ -338,6 +362,7 @@ public class ImportsController : ControllerBase
             rows,
             rowsPagination = new { skip, take, total = totalRows },
             sheetTotals,
+            actionTotals = new { created = actCreated, updated = actUpdated, skipped = actSkipped },
             errors
         });
     }
