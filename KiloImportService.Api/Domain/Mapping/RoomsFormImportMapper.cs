@@ -1,8 +1,11 @@
+using System.Collections.Concurrent;
 using System.Globalization;
 using System.Text.Json;
+using KiloImportService.Api.Data.Entities;
 using KiloImportService.Api.Data.Visary;
 using KiloImportService.Api.Domain.Importing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Visary.Api.CRUD;
 using Visary.Api.Dto;
 using Visary.Api.ListView;
@@ -102,15 +105,28 @@ public sealed class RoomsFormImportMapper : IImportMapper
     private readonly ILogger<RoomsFormImportMapper> _log;
     private readonly IListViewClient _listView;
     private readonly ICrudClient     _crud;
+    // Маппер зарегистрирован Singleton (общий регистр стратегий), а
+    // RoomApplySnapshotStore зависит от Scoped ImportServiceDbContext —
+    // открываем мини-scope через factory (см. FinModelImportMapper / BudgetVisaryUploader).
+    private readonly IServiceScopeFactory _scopeFactory;
+
+    /// <summary>
+    /// Верхний потолок параллелизма на фазе 2 Apply (обработка Room+SA per Section).
+    /// Не выкручиваем сильно, чтобы не перегружать Visary API параллельными запросами.
+    /// Реальная степень = <c>min(N_sections, ProcessorCount, ParallelismCap)</c>.
+    /// </summary>
+    private const int ParallelismCap = 8;
 
     public RoomsFormImportMapper(
         ILogger<RoomsFormImportMapper> log,
         IListViewClient listView,
-        ICrudClient crud)
+        ICrudClient crud,
+        IServiceScopeFactory scopeFactory)
     {
         _log = log;
         _listView = listView;
         _crud = crud;
+        _scopeFactory = scopeFactory;
     }
 
     // ──────────────────────────────── Validate ──────────────────────────────
@@ -451,565 +467,627 @@ public sealed class RoomsFormImportMapper : IImportMapper
     }
 
     // ──────────────────────────────── Apply ─────────────────────────────────
+    //
+    // Архитектура Apply (см. doc_project/96-rooms-incremental-parallel-apply.md):
+    //   ① Pre-load snapshots — один SELECT по сайту, чтобы дифф-skip работал без БД-запросов на каждой строке.
+    //   ② Pre-pass 1 — РНС в Site (один PATCH, как и раньше).
+    //   ③ Pre-pass 2 — Sections sequential: для всех уникальных Section.Title сразу find-or-create.
+    //                  Параллелить нельзя — две строки одной секции породили бы дубликат Section.
+    //   ④ Pre-pass 3 — Developer link sequential: уникальные DeveloperPin → resolve org → create/link PM.
+    //                  Тоже sequential: создание/привязка одной PM-записи не должна race-condition'ить с другой.
+    //   ⑤ Main — Parallel.ForEachAsync по группам (Sheet, Section): каждая группа sequential внутри,
+    //            группы между собой параллельно. На каждую строку:
+    //              а) diff-hash → skip PATCH, если snapshot.MappedHash совпадает;
+    //              б) Room find-or-create по уже-pre-loaded sectionId;
+    //              в) ShareAgreement find/create как раньше;
+    //              г) собираем RoomApplySnapshot в ConcurrentBag → один UpsertBatchAsync в конце.
+    //
+    // Счётчики `applied`/`skipped` — Interlocked. Журнал действий — ConcurrentDictionary<key, List<string>>
+    // с локальным `lock(list)` на добавление: внешний lookup lock-free, внутренний short-burst для thread-safe Add.
     public async Task<ApplyResult> ApplyAsync(
         ImportContext context,
         VisaryDbContext visaryDb,
         IReadOnlyList<MappedRow> rows,
         CancellationToken ct)
     {
-        var errors  = new List<RowError>();
-        var applied = 0;
+        var errors  = new ConcurrentBag<RowError>();
+        int applied = 0;
+        int skipped = 0;
 
-        // Журнал действий per-row: ключ (Sheet, SourceRowNumber). Записываем сюда
-        // человекочитаемые метки («Корпус создан», «Помещение обновлено»,
-        // «ДДУ найден (не создан)», …) по ходу Apply. На выходе превращаем в
-        // RowActionLog-список для ApplyResult; Pipeline сохранит как StagedRow.Actions.
-        var actionsByRow = new Dictionary<(string Sheet, int Row), List<string>>();
+        // Журнал действий per-row (Sheet, SourceRowNumber) → список меток.
+        // ConcurrentDictionary даёт thread-safe GetOrAdd, но сам List<string>
+        // мутируется под мини-локом на инстанс — это короткие burst-операции,
+        // race-condition'а на разные ключи здесь нет.
+        var actionsByRow = new ConcurrentDictionary<(string Sheet, int Row), List<string>>();
         void Log(string sheet, int row, string action)
         {
-            var key = (sheet, row);
-            if (!actionsByRow.TryGetValue(key, out var list))
-                actionsByRow[key] = list = new List<string>(4);
-            list.Add(action);
+            var list = actionsByRow.GetOrAdd((sheet, row), _ => new List<string>(4));
+            lock (list) list.Add(action);
         }
 
         if (context.VisarySiteId is null)
         {
             errors.Add(new RowError(null, "site_required",
                 "Не указан объект строительства (visarySiteId)."));
-            return new ApplyResult(0, errors);
+            return new ApplyResult(0, errors.ToList());
         }
 
         var siteId = context.VisarySiteId.Value;
-
-        // Кэши, чтобы не дёргать Visary API на каждой строке заново.
-        var sectionCache = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-        var orgCache     = new Dictionary<string, int?>(StringComparer.OrdinalIgnoreCase);
-        // (orgId) → projectmanagement.ID c ролью «Застройщик» (после проверки/создания
-        // привязки на этой сессии). Один раз за сессию читаем список PM сайта; дальше
-        // — только локальные мутации.
-        var developerPmByOrg = new Dictionary<int, int>();
-        var pmListLoaded = false;
-
-        // ProjectID нужен для CREATE projectmanagement (Project — обязателен в Visary).
-        // Берём из контекста, иначе резолвим через свежий Site → Project.ID.
         int? projectId = context.VisaryProjectId;
 
-        // ⚙️ Группируем строки по листу (один лист = один тип помещений).
-        // GroupBy в LINQ сохраняет порядок появления групп = порядок листов в файле.
-        var rowsBySheet = rows
-            .Where(mr => mr.IsValid)
-            .GroupBy(mr => GetStringOrNull(mr.MappedValues.RootElement, "Sheet") ?? "<unknown>",
-                     StringComparer.OrdinalIgnoreCase)
-            .ToList();
+        // ── ① Pre-load snapshots ─────────────────────────────────────────────
+        // Маппер — Singleton, RoomApplySnapshotStore — Scoped (зависит от
+        // ImportServiceDbContext). Открываем короткий scope ради одного SELECT
+        // на сайт; внутри Parallel-цикла дёргать БД не будем — diff/skip целиком
+        // в памяти.
+        ConcurrentDictionary<RoomSnapshotKey, RoomApplySnapshot> snapshotsByKey;
+        using (var loadScope = _scopeFactory.CreateScope())
+        {
+            var store = loadScope.ServiceProvider.GetRequiredService<RoomApplySnapshotStore>();
+            snapshotsByKey = await store.LoadForSiteAsync(siteId, ct);
+        }
 
-        // ── 0. Обновление РНС в Site, если в ОКСе он пустой ────────────────
-        // Шаг из room_sa_create.puml: «Если в Объекте нет РНС → обновить значение
-        // РНС в Объекте строительства». Делаем один раз на сессию: берём первое
-        // непустое значение из валидных строк, читаем свежий RowVersion и PATCH-аем.
+        var validRows = rows.Where(mr => mr.IsValid).ToList();
+        _log.LogInformation(
+            "RoomsForm.Apply: siteId={SiteId}, validRows={Count}, snapshotsPreloaded={Snap}",
+            siteId, validRows.Count, snapshotsByKey.Count);
+
+        // ── ② Pre-pass: РНС в Site (как и раньше, один раз на сессию) ────────
         await TryUpdateSitePermissionNumberAsync(siteId, rows, ct);
 
-        foreach (var sheetGroup in rowsBySheet)
-        {
-            ct.ThrowIfCancellationRequested();
-            _log.LogInformation(
-                "RoomsForm.Apply: ───── Лист '{Sheet}' — {Count} валидных строк ─────",
-                sheetGroup.Key, sheetGroup.Count());
-
-        foreach (var mr in sheetGroup)
-        {
-            ct.ThrowIfCancellationRequested();
-            var v = mr.MappedValues.RootElement;
-            var sheetForRow = sheetGroup.Key;
-
-            try
+        // ── ③ Pre-pass: Sections sequential ──────────────────────────────────
+        // ConcurrentDictionary — основной цикл потом читает sectionId без блокировок.
+        var sectionCache = new ConcurrentDictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var sectionTitlesNeeded = validRows
+            .Select(mr =>
             {
-                // ── 1. Организация-застройщик через ProjectManagement ────────
-                //
-                // Flow по доке 75-projectmanagement-developer-link.md:
-                //   1) PIN → ID организации (listview/organization, ClientID=...)
-                //   2) Список projectmanagement сайта (listview/constructionsite/manytomany/projectmanagement)
-                //   3) Если уже есть PM c этой Organization и Role=Застройщик → пропуск
-                //   4) Иначе CREATE projectmanagement + LINK к сайту
-                //
-                // Кэшируется per-session: список PM грузится один раз, далее — локально.
-                var devPin = GetStringOrNull(v, "DeveloperPin");
-                if (!string.IsNullOrWhiteSpace(devPin))
+                var v = mr.MappedValues.RootElement;
+                return GetStringOrNull(v, "SectionTitleNumeric") ?? GetStringOrNull(v, "SectionTitle");
+            })
+            .Where(t => !string.IsNullOrWhiteSpace(t))
+            .Select(t => t!)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        foreach (var sectionTitle in sectionTitlesNeeded)
+        {
+            ct.ThrowIfCancellationRequested();
+            var existing = await _listView.GetSectionsBySiteAsync(siteId, sectionTitle, ct);
+            var sectionTitleTrim = sectionTitle.Trim();
+            var match = existing.Data.FirstOrDefault(x =>
+                string.Equals((x.Title ?? string.Empty).Trim(), sectionTitleTrim,
+                    StringComparison.OrdinalIgnoreCase));
+            if (match is not null)
+            {
+                sectionCache[sectionTitle] = match.ID;
+            }
+            else
+            {
+                _log.LogInformation(
+                    "RoomsForm.Apply: корпус не найден — создаём (siteId={SiteId}, title='{Title}')",
+                    siteId, sectionTitle);
+                var created = await _crud.CreateSectionAsync(new SectionCreateRequest
                 {
-                    if (!orgCache.TryGetValue(devPin, out var orgId))
-                    {
-                        var orgs = await _listView.GetOrganizationsByClientIdAsync(devPin, ct);
-                        orgId = orgs.Data.FirstOrDefault()?.ID;
-                        orgCache[devPin] = orgId;
-                        if (orgId is null)
-                        {
-                            _log.LogWarning(
-                                "RoomsForm.Apply: организация с ПИН '{Pin}' не найдена в Visary — пропуск привязки.",
-                                devPin);
-                        }
-                    }
+                    ConstructionSiteID = siteId,
+                    ConstructionSite   = new VisaryRef { ID = siteId },
+                    Title              = sectionTitle,
+                    Type               = new VisaryRef { ID = 3, Title = "МЖД" },
+                }, ct);
+                sectionCache[sectionTitle] = created.ID;
+            }
+        }
 
-                    if (orgId is not null)
-                    {
-                        // Один раз за сессию — прочитать существующие PM для сайта.
-                        if (!pmListLoaded)
-                        {
-                            try
-                            {
-                                var pmList = await _listView.GetProjectManagementsBySiteAsync(siteId, ct);
-                                foreach (var pm in pmList.Data)
-                                {
-                                    if (pm.Organization?.ID is int existingOrgId
-                                        && pm.Role?.ID == ProjectManagementRoles.Developer)
-                                    {
-                                        developerPmByOrg[existingOrgId] = pm.ID;
-                                    }
-                                }
-                                _log.LogInformation(
-                                    "RoomsForm.Apply: загружено {Count} существующих projectmanagement-записей для siteId={SiteId} (из них Застройщиков с организацией: {Devs})",
-                                    pmList.Data.Count, siteId, developerPmByOrg.Count);
-                            }
-                            catch (Exception loadEx)
-                            {
-                                // Не блокируем импорт — попробуем создавать «слепо» (Visary вернёт 4xx при дубликате).
-                                _log.LogWarning(loadEx,
-                                    "RoomsForm.Apply: не удалось загрузить projectmanagement для siteId={SiteId}: {Msg}",
-                                    siteId, loadEx.Message);
-                            }
-                            pmListLoaded = true;
-                        }
+        // ── ④ Pre-pass: Developer link для уникальных PIN-ов ────────────────
+        // Sequential: создание/привязка PM-записи не идемпотентна в смысле гонок.
+        // Метод возвращает (возможно резолвлённый) projectId — нужен дальше для
+        // CREATE ShareAgreement.
+        projectId = await ResolveDeveloperLinksAsync(siteId, projectId, validRows, Log, ct);
 
-                        // Уже есть Застройщик с этой организацией на этом сайте — пропуск.
-                        if (!developerPmByOrg.ContainsKey(orgId.Value))
-                        {
-                            // Резолвим projectId один раз — нужен и для поиска по проекту, и для CREATE.
-                            if (projectId is null)
-                            {
-                                try
-                                {
-                                    var siteFull = await _crud.GetSiteByIdFullAsync(siteId, ct);
-                                    projectId = siteFull.Project?.ID;
-                                }
-                                catch (Exception siteEx)
-                                {
-                                    _log.LogWarning(siteEx,
-                                        "RoomsForm.Apply: не удалось получить Project из Site {SiteId}: {Msg}",
-                                        siteId, siteEx.Message);
-                                }
-                            }
+        // ── ⑤ Main: Parallel.ForEachAsync по группам (Sheet, Section) ─────
+        // Группа = (sheet, section). Внутри группы строки sequential — это
+        // защищает Room.find-or-create от создания дубликатов при одинаковом
+        // (Kind, RoomNumber, BuildingSection) в нескольких строках одной секции
+        // (такого не должно быть в нормальном файле, но повторные строки в Excel
+        // встречаются). Между группами — параллельно с потолком ParallelismCap.
+        var groupsByKey = validRows
+            .GroupBy(mr =>
+            {
+                var v = mr.MappedValues.RootElement;
+                var sheet   = GetStringOrNull(v, "Sheet") ?? "<unknown>";
+                var section = GetStringOrNull(v, "SectionTitleNumeric")
+                              ?? GetStringOrNull(v, "SectionTitle") ?? string.Empty;
+                return (Sheet: sheet, Section: section);
+            })
+            .ToList();
 
-                            if (projectId is null)
-                            {
-                                _log.LogWarning(
-                                    "RoomsForm.Apply: пропуск projectmanagement (orgId={OrgId}) — не удалось определить projectId.",
-                                    orgId.Value);
-                            }
-                            else
-                            {
-                                // (a) Поиск PM (orgId, Role=Застройщик) в рамках всего проекта —
-                                //     возможно, уже создан для соседнего объекта того же проекта.
-                                //     При нескольких подходящих — берём с наибольшим ID (свежайший).
-                                int? reusablePmId = null;
-                                try
-                                {
-                                    var inProject = await _listView.GetProjectManagementsByProjectAsync(
-                                        projectId.Value, orgId.Value, ProjectManagementRoles.Developer, ct);
+        var snapshotUpserts = new ConcurrentBag<RoomApplySnapshot>();
+        var parallelism = groupsByKey.Count == 0 ? 1
+            : Math.Min(Math.Min(ParallelismCap, Environment.ProcessorCount), groupsByKey.Count);
 
-                                    // Сервер уже отфильтровал по Organization+Role, но Visary иногда
-                                    // отдаёт «лишние» записи (contains может матчить по подстроке) —
-                                    // отстрахуем себя локальной фильтрацией перед взятием max ID.
-                                    reusablePmId = inProject.Data
-                                        .Where(pm => pm.Organization?.ID == orgId.Value
-                                                     && pm.Role?.ID == ProjectManagementRoles.Developer)
-                                        .OrderByDescending(pm => pm.ID)
-                                        .FirstOrDefault()?.ID;
-                                }
-                                catch (Exception listEx)
-                                {
-                                    _log.LogWarning(listEx,
-                                        "RoomsForm.Apply: поиск projectmanagement в проекте {ProjectId} не удался: {Msg}",
-                                        projectId.Value, listEx.Message);
-                                }
+        _log.LogInformation(
+            "RoomsForm.Apply: groups={Groups}, parallelism={P}",
+            groupsByKey.Count, parallelism);
 
-                                try
-                                {
-                                    int pmIdToLink;
-                                    if (reusablePmId is int existingPmId)
-                                    {
-                                        // (b) Нашли — переиспользуем существующую PM-запись.
-                                        pmIdToLink = existingPmId;
-                                        _log.LogInformation(
-                                            "RoomsForm.Apply: переиспользуем projectmanagement id={PmId} из projectId={ProjectId} для siteId={SiteId} (orgId={OrgId})",
-                                            existingPmId, projectId.Value, siteId, orgId.Value);
-                                        Log(sheetForRow, mr.SourceRowNumber, "Застройщик переиспользован");
-                                    }
-                                    else
-                                    {
-                                        // (c) В проекте нет — создаём новую запись.
-                                        var created = await _crud.CreateProjectManagementAsync(
-                                            new ProjectManagementCreateRequest
-                                            {
-                                                Project = new VisaryRef { ID = projectId.Value },
-                                                Organization = new VisaryRef { ID = orgId.Value },
-                                                Role = new VisaryRef
-                                                {
-                                                    ID = ProjectManagementRoles.Developer,
-                                                    Title = ProjectManagementRoles.DeveloperTitle,
-                                                },
-                                                Affiliation = 0,
-                                            }, ct);
-                                        pmIdToLink = created.ID;
-                                        _log.LogInformation(
-                                            "RoomsForm.Apply: создан новый Застройщик projectmanagement id={PmId} (orgId={OrgId}, projectId={ProjectId})",
-                                            created.ID, orgId.Value, projectId.Value);
-                                        Log(sheetForRow, mr.SourceRowNumber, "Застройщик создан");
-                                    }
+        await Parallel.ForEachAsync(groupsByKey,
+            new ParallelOptions { MaxDegreeOfParallelism = parallelism, CancellationToken = ct },
+            async (group, gct) =>
+        {
+            var sheetForRow = group.Key.Sheet;
+            var sectionTitle = string.IsNullOrWhiteSpace(group.Key.Section) ? null : group.Key.Section;
+            int? sectionId = sectionTitle is not null && sectionCache.TryGetValue(sectionTitle, out var sid)
+                ? sid : (int?)null;
 
-                                    // (d) Линкуем найденную/созданную PM с сайтом.
-                                    await _crud.LinkProjectManagementToSiteAsync(siteId, pmIdToLink, ct);
-                                    developerPmByOrg[orgId.Value] = pmIdToLink;
-                                    Log(sheetForRow, mr.SourceRowNumber, "Застройщик привязан к объекту");
-                                }
-                                catch (Exception pmEx)
-                                {
-                                    _log.LogWarning(pmEx,
-                                        "RoomsForm.Apply: не удалось привязать projectmanagement (orgId={OrgId}, siteId={SiteId}): {Msg}",
-                                        orgId.Value, siteId, pmEx.Message);
-                                }
-                            }
-                        }
-                    }
+            // Один list-view запрос за все Room-ы секции — потом per-row только в памяти.
+            List<global::Visary.Api.Dto.RoomRaw> roomsInSection = new();
+            if (sectionId is not null)
+            {
+                try
+                {
+                    var fetched = await _listView.GetRoomsBySectionAsync(sectionId.Value, null, gct);
+                    roomsInSection = fetched.Data.ToList();
                 }
-
-                // ── 2. Section: найти/создать ───────────────────────────────
-                var sectionTitle = GetStringOrNull(v, "SectionTitleNumeric")
-                                   ?? GetStringOrNull(v, "SectionTitle");
-                int? sectionId = null;
-                if (!string.IsNullOrWhiteSpace(sectionTitle))
+                catch (Exception fetchEx)
                 {
-                    if (!sectionCache.TryGetValue(sectionTitle, out var cached))
-                    {
-                        // PRE-CHECK дубликатов корпуса: ищем по Title с Trim()+OrdinalIgnoreCase.
-                        // Без Trim «1.1» из файла и «1.1 » в БД считались разными — на второй
-                        // импорт создавался дубликат. Visary listview-фильтр уже использует
-                        // `contains`, локальный фильтр приводит набор к точному совпадению.
-                        var existing = await _listView.GetSectionsBySiteAsync(siteId, sectionTitle, ct);
-                        var sectionTitleTrim = sectionTitle.Trim();
-                        var match = existing.Data.FirstOrDefault(x =>
-                            string.Equals((x.Title ?? string.Empty).Trim(), sectionTitleTrim,
-                                StringComparison.OrdinalIgnoreCase));
-                        if (match is not null)
-                        {
-                            cached = match.ID;
-                            Log(sheetForRow, mr.SourceRowNumber, $"Корпус найден ({sectionTitle})");
-                        }
-                        else
-                        {
-                            // Логируем формулировку, заданную в задаче.
-                            _log.LogInformation(
-                                "RoomsForm.Apply: для строки файла {Row} нет подходящего корпуса, поэтому он будет создан (siteId={SiteId}, title='{Title}')",
-                                mr.SourceRowNumber, siteId, sectionTitle);
+                    _log.LogWarning(fetchEx,
+                        "RoomsForm.Apply: не удалось загрузить помещения секции {SectionId}: {Msg}",
+                        sectionId.Value, fetchEx.Message);
+                }
+            }
 
-                            // Section.Type обязателен для Visary (без него — 422).
-                            // По уточнению: пока используем МЖД (ID=3) для всех корпусов;
-                            // ветка «Паркинг» будет добавлена позже (TODO: динамический
-                            // справочник constructionsectiontype).
-                            var created = await _crud.CreateSectionAsync(new SectionCreateRequest
-                            {
-                                ConstructionSiteID = siteId,
-                                ConstructionSite   = new VisaryRef { ID = siteId },
-                                Title              = sectionTitle,
-                                Type               = new VisaryRef { ID = 3, Title = "МЖД" },
-                            }, ct);
-                            cached = created.ID;
-                            Log(sheetForRow, mr.SourceRowNumber, $"Корпус создан ({sectionTitle})");
-                        }
-                        sectionCache[sectionTitle] = cached;
+            foreach (var mr in group)
+            {
+                gct.ThrowIfCancellationRequested();
+                var v = mr.MappedValues.RootElement;
+                try
+                {
+                    var roomNumber = GetStringOrNull(v, "RoomNumber") ?? string.Empty;
+                    var kindId = GetIntOrNull(v, "RoomKindId");
+                    var buildingSection = GetStringOrNull(v, "BuildingSection") ?? string.Empty;
+
+                    // ── (a) Diff-hash → skip, если snapshot совпал ───────────
+                    var snapKey = RoomApplySnapshotStore.BuildKey(
+                        siteId, sheetForRow, sectionTitle ?? string.Empty,
+                        kindId, roomNumber, buildingSection);
+                    var hash = RoomApplySnapshotStore.ComputeMappedHash(v);
+
+                    if (snapshotsByKey.TryGetValue(snapKey, out var prev)
+                        && string.Equals(prev.MappedHash, hash, StringComparison.Ordinal))
+                    {
+                        // Запись уже соответствует тому, что мы применили в прошлый раз —
+                        // PATCH-и не нужны. Это и есть инкрементальный импорт.
+                        Log(sheetForRow, mr.SourceRowNumber, "Без изменений — пропуск (snapshot)");
+                        Interlocked.Increment(ref skipped);
+                        Interlocked.Increment(ref applied);
+                        continue;
+                    }
+
+                    if (sectionId is not null)
+                    {
+                        Log(sheetForRow, mr.SourceRowNumber, $"Корпус найден ({sectionTitle})");
+                    }
+
+                    // ── (b) Room find-or-create ──────────────────────────────
+                    int? roomId = null;
+                    if (sectionId is not null)
+                    {
+                        var roomNumberTrim = roomNumber.Trim();
+                        var buildingSectionTrim = buildingSection.Trim();
+                        var match = roomsInSection.FirstOrDefault(r =>
+                            (kindId is null || r.Kind?.ID == kindId.Value)
+                            && (string.Equals((r.ExplicationNumber ?? string.Empty).Trim(), roomNumberTrim, StringComparison.OrdinalIgnoreCase) ||
+                                string.Equals((r.Number            ?? string.Empty).Trim(), roomNumberTrim, StringComparison.OrdinalIgnoreCase))
+                            && string.Equals(
+                                    (r.BuildingSection ?? string.Empty).Trim(),
+                                    buildingSectionTrim,
+                                    StringComparison.OrdinalIgnoreCase));
+                        roomId = match?.ID;
+                    }
+
+                    var roomKindTitle = GetStringOrNull(v, "RoomKindTitle") ?? string.Empty;
+                    var uniqueNumber = $"{roomNumber}_{sectionTitle ?? string.Empty}_{buildingSection}";
+                    var roomTitle = string.IsNullOrWhiteSpace(roomKindTitle)
+                        ? uniqueNumber
+                        : $"{roomKindTitle} {uniqueNumber}";
+
+                    var areaFromFile = GetDoubleOrNull(v, "ProjectArea");
+                    var roomCategory = GetIntOrNull(v, "RoomCategory");
+                    var isNonResidential = roomCategory.HasValue && roomCategory.Value != ResidentialRoomCategory;
+                    double? projectAreaForCrud = isNonResidential ? 0d : areaFromFile;
+                    double? totalAreaForCrud   = isNonResidential ? areaFromFile : null;
+
+                    if (roomId is null)
+                    {
+                        var created = await _crud.CreateRoomAsync(new RoomCreateRequest
+                        {
+                            SiteID            = siteId,
+                            Site              = new VisaryRef { ID = siteId },
+                            Title             = roomTitle,
+                            ExplicationNumber = roomNumber,
+                            UniqueNumber      = uniqueNumber,
+                            Section           = sectionId is null ? null : new VisaryRef { ID = sectionId.Value },
+                            Kind              = kindId    is null ? null : new VisaryRef { ID = kindId.Value },
+                            Floor             = GetStringOrNull(v, "Floor"),
+                            BuildingSection   = buildingSection,
+                            RoomsNumber       = GetIntOrNull(v, "RoomsCount"),
+                            ProjectArea       = projectAreaForCrud,
+                            TotalArea         = totalAreaForCrud,
+                            CostForOne        = GetDoubleOrNull(v, "CostForOne"),
+                            MarketCostPerM    = GetDoubleOrNull(v, "MarketCostPerM"),
+                            ZalogCostPerM     = GetDoubleOrNull(v, "ZalogCostPerM"),
+                        }, gct);
+                        roomId = created.ID;
+                        Log(sheetForRow, mr.SourceRowNumber, $"Помещение создано (№{roomNumber})");
                     }
                     else
                     {
-                        // Корпус уже встречался в этой сессии — кэш-хит, реального
-                        // вызова Visary не было, но из перспективы пользователя
-                        // строка всё равно «привязалась к корпусу».
-                        Log(sheetForRow, mr.SourceRowNumber, $"Корпус найден ({sectionTitle})");
-                    }
-                    sectionId = cached;
-                }
-
-                // ── 3. Room: найти/создать ──────────────────────────────────
-                // Уникальность Room — в разрезе Section × Kind × Number × BuildingSection.
-                // В одной секции могут одновременно жить квартира №3, машиноместо №3,
-                // кладовая №3 — это РАЗНЫЕ помещения (Kind различен).
-                // Кроме того, два помещения с одним номером, но в разных подъездах
-                // («Подъезд/Секция» в файле) — также РАЗНЫЕ. Без проверки
-                // BuildingSection импорт PATCH-ил бы первое попавшееся и «терял»
-                // все последующие строки с тем же номером в других подъездах.
-                var roomNumber = GetStringOrNull(v, "RoomNumber") ?? string.Empty;
-                var kindId = GetIntOrNull(v, "RoomKindId");
-                var buildingSection = GetStringOrNull(v, "BuildingSection") ?? string.Empty;
-                int? roomId = null;
-                if (sectionId is not null)
-                {
-                    // PRE-CHECK дубликатов помещения: Section × Kind × Number × BuildingSection.
-                    // Все строковые поля нормализуем через Trim()+OrdinalIgnoreCase — пробелы
-                    // в Excel-ячейках и хвостовые символы в Visary иначе обходят дедуп.
-                    var roomsInSection = await _listView.GetRoomsBySectionAsync(sectionId.Value, null, ct);
-                    var roomNumberTrim = roomNumber.Trim();
-                    var buildingSectionTrim = buildingSection.Trim();
-                    var match = roomsInSection.Data.FirstOrDefault(r =>
-                        (kindId is null || r.Kind?.ID == kindId.Value)
-                        && (string.Equals((r.ExplicationNumber ?? string.Empty).Trim(), roomNumberTrim, StringComparison.OrdinalIgnoreCase) ||
-                            string.Equals((r.Number            ?? string.Empty).Trim(), roomNumberTrim, StringComparison.OrdinalIgnoreCase))
-                        && string.Equals(
-                                (r.BuildingSection ?? string.Empty).Trim(),
-                                buildingSectionTrim,
-                                StringComparison.OrdinalIgnoreCase));
-                    roomId = match?.ID;
-                }
-                // Формат UniqueNumber / Title по контракту импорта:
-                //   UniqueNumber = ExplicationNumber + "_" + Section.Title + "_" + BuildingSection
-                //                  → «15/16_1.1_1»
-                //   Title        = Kind.Title + " " + UniqueNumber
-                //                  → «Машиноместо 15/16_1.1_1»
-                // Пустые сегменты могут давать «висящие» подчёркивания/пробелы, но
-                // схема выдержки чисел сохраняется: пользователь хочет видеть позицию
-                // секции/корпуса даже когда её нет в источнике (это будет сигналом
-                // о неполных входных данных).
-                var roomKindTitle = GetStringOrNull(v, "RoomKindTitle") ?? string.Empty;
-                var uniqueNumber = $"{roomNumber}_{sectionTitle ?? string.Empty}_{buildingSection}";
-                var roomTitle = string.IsNullOrWhiteSpace(roomKindTitle)
-                    ? uniqueNumber
-                    : $"{roomKindTitle} {uniqueNumber}";
-
-                // Площадь: для жилых (RoomCategory == 1) — в ProjectArea, как раньше.
-                // Для нежилых (Машиноместо / Кладовая / Коммерческое / …) —
-                // площадь в TotalArea, а ProjectArea = 0. Если категория Kind не
-                // пришла (null), оставляем дефолт «как для жилого», чтобы случайно
-                // не перенести площадь в неправильное поле на незнакомых Kind.
-                var areaFromFile = GetDoubleOrNull(v, "ProjectArea");
-                var roomCategory = GetIntOrNull(v, "RoomCategory");
-                var isNonResidential = roomCategory.HasValue && roomCategory.Value != ResidentialRoomCategory;
-                double? projectAreaForCrud = isNonResidential ? 0d : areaFromFile;
-                double? totalAreaForCrud   = isNonResidential ? areaFromFile : null;
-
-                if (roomId is null)
-                {
-                    var created = await _crud.CreateRoomAsync(new RoomCreateRequest
-                    {
-                        SiteID            = siteId,
-                        Site              = new VisaryRef { ID = siteId },
-                        Title             = roomTitle,
-                        ExplicationNumber = roomNumber,
-                        UniqueNumber      = uniqueNumber,
-                        Section           = sectionId is null ? null : new VisaryRef { ID = sectionId.Value },
-                        Kind              = kindId    is null ? null : new VisaryRef { ID = kindId.Value },
-                        Floor             = GetStringOrNull(v, "Floor"),
-                        BuildingSection   = buildingSection,
-                        RoomsNumber       = GetIntOrNull(v, "RoomsCount"),
-                        ProjectArea       = projectAreaForCrud,
-                        TotalArea         = totalAreaForCrud,
-                        CostForOne        = GetDoubleOrNull(v, "CostForOne"),
-                        MarketCostPerM    = GetDoubleOrNull(v, "MarketCostPerM"),
-                        ZalogCostPerM     = GetDoubleOrNull(v, "ZalogCostPerM"),
-                    }, ct);
-                    roomId = created.ID;
-                    Log(sheetForRow, mr.SourceRowNumber, $"Помещение создано (№{roomNumber})");
-                }
-                else
-                {
-                    await _crud.PatchRoomAsync(roomId.Value, new RoomPatchRequest
-                    {
-                        Title           = roomTitle,
-                        UniqueNumber    = uniqueNumber,
-                        Section         = sectionId is null ? null : new VisaryRef { ID = sectionId.Value },
-                        Kind            = kindId    is null ? null : new VisaryRef { ID = kindId.Value },
-                        Floor           = GetStringOrNull(v, "Floor"),
-                        BuildingSection = buildingSection,
-                        RoomsNumber     = GetIntOrNull(v, "RoomsCount"),
-                        ProjectArea     = projectAreaForCrud,
-                        TotalArea       = totalAreaForCrud,
-                        CostForOne      = GetDoubleOrNull(v, "CostForOne"),
-                        MarketCostPerM  = GetDoubleOrNull(v, "MarketCostPerM"),
-                        ZalogCostPerM   = GetDoubleOrNull(v, "ZalogCostPerM"),
-                    }, ct);
-                    Log(sheetForRow, mr.SourceRowNumber, $"Помещение обновлено (№{roomNumber})");
-                }
-
-                // ── 4. ShareAgreement: глобально найти / реанимировать / создать ──
-                //
-                // Раньше искали ДДУ только в пределах комнаты — это пропускало
-                // «орфанные» ДДУ, которые есть в Visary, но не привязаны к Room.
-                // Симптом: повторный импорт создавал дубликат ДДУ (см. скриншот в
-                // doc 76-share-agreement-dedup.md).
-                //
-                // Теперь: ищем глобально по (Number, RoomKindRef, ConditionalNumber,
-                // StageNumber, ProjectNumber) — это уникальный бизнес-ключ ДДУ.
-                // Если найдено несколько — берём max(ID). Орфанный ДДУ
-                // PATCH'им на текущую комнату/сайт/проект. Иначе — создаём.
-                var saNumber = GetStringOrNull(v, "ShareAgreementNumber");
-                if (!string.IsNullOrWhiteSpace(saNumber) && roomId is not null)
-                {
-                    // StageNumber как строка для фильтра/CREATE/PATCH (см. ниже).
-                    var stageNumberForSa = GetStringOrNull(v, "StageNumberRaw");
-                    if (string.IsNullOrWhiteSpace(stageNumberForSa))
-                    {
-                        var stageInt = GetIntOrNull(v, "StageNumber");
-                        stageNumberForSa = stageInt?.ToString(System.Globalization.CultureInfo.InvariantCulture);
-                    }
-                    var projectNumberForSa = GetStringOrNull(v, "ProjectNumber");
-
-                    var saNumberTrim = saNumber.Trim();
-                    ShareAgreementRaw? saMatch = null;
-                    bool matchedInRoom = false;
-
-                    // (1) PRE-CHECK В КОМНАТЕ — самая частая причина дубликатов:
-                    //     повторный импорт того же файла или похожих строк в ту же
-                    //     комнату. Тянем ВСЕ ДДУ комнаты (без серверного фильтра по
-                    //     Number — Visary `=` чувствителен к whitespace/case), затем
-                    //     локально сравниваем Number с Trim()+OrdinalIgnoreCase.
-                    //     Это надёжнее серверного фильтра и спасает от дубликатов
-                    //     вроде «№ маш 2 -1-3» / «№ маш 2 -1-3 » (хвостовой пробел).
-                    try
-                    {
-                        var byRoom = await _listView.GetShareAgreementsByRoomAsync(roomId.Value, null, ct);
-                        saMatch = byRoom.Data
-                            .Where(a => string.Equals(
-                                (a.Number ?? string.Empty).Trim(), saNumberTrim,
-                                StringComparison.OrdinalIgnoreCase))
-                            .OrderByDescending(a => a.ID)
-                            .FirstOrDefault();
-                        if (saMatch is not null) matchedInRoom = true;
-                    }
-                    catch (Exception roomFindEx)
-                    {
-                        _log.LogWarning(roomFindEx,
-                            "RoomsForm.Apply: pre-check ДДУ в комнате roomId={RoomId} не удался: {Msg} — попробуем глобальный поиск.",
-                            roomId.Value, roomFindEx.Message);
+                        await _crud.PatchRoomAsync(roomId.Value, new RoomPatchRequest
+                        {
+                            Title           = roomTitle,
+                            UniqueNumber    = uniqueNumber,
+                            Section         = sectionId is null ? null : new VisaryRef { ID = sectionId.Value },
+                            Kind            = kindId    is null ? null : new VisaryRef { ID = kindId.Value },
+                            Floor           = GetStringOrNull(v, "Floor"),
+                            BuildingSection = buildingSection,
+                            RoomsNumber     = GetIntOrNull(v, "RoomsCount"),
+                            ProjectArea     = projectAreaForCrud,
+                            TotalArea       = totalAreaForCrud,
+                            CostForOne      = GetDoubleOrNull(v, "CostForOne"),
+                            MarketCostPerM  = GetDoubleOrNull(v, "MarketCostPerM"),
+                            ZalogCostPerM   = GetDoubleOrNull(v, "ZalogCostPerM"),
+                        }, gct);
+                        Log(sheetForRow, mr.SourceRowNumber, $"Помещение обновлено (№{roomNumber})");
                     }
 
-                    // (2) Если в комнате нет — глобальный поиск по бизнес-ключу.
-                    //     Так находим orphan-ДДУ (созданные где-то ещё с тем же
-                    //     номером/проектом/этапом/комнатой-условной) и привязываем
-                    //     к нашей комнате вместо плодения нового.
-                    if (saMatch is null)
+                    // ── (c) ShareAgreement find/create ───────────────────────
+                    var saNumber = GetStringOrNull(v, "ShareAgreementNumber");
+                    int? saId = null;
+                    if (!string.IsNullOrWhiteSpace(saNumber) && roomId is not null)
                     {
+                        var stageNumberForSa = GetStringOrNull(v, "StageNumberRaw");
+                        if (string.IsNullOrWhiteSpace(stageNumberForSa))
+                        {
+                            var stageInt = GetIntOrNull(v, "StageNumber");
+                            stageNumberForSa = stageInt?.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                        }
+                        var projectNumberForSa = GetStringOrNull(v, "ProjectNumber");
+
+                        var saNumberTrim = saNumber.Trim();
+                        ShareAgreementRaw? saMatch = null;
+                        bool matchedInRoom = false;
+
                         try
                         {
-                            var found = await _listView.FindShareAgreementsAsync(
-                                number:            saNumber,
-                                roomKindId:        kindId,
-                                conditionalNumber: roomNumber,
-                                stageNumber:       stageNumberForSa,
-                                projectNumber:     projectNumberForSa,
-                                ct);
-
-                            // Локальный пост-фильтр: Visary `contains` для VisaryRef может матчить
-                            // подстроку шире нужного — отстрахуем себя по точным значениям с Trim().
-                            saMatch = found.Data
+                            var byRoom = await _listView.GetShareAgreementsByRoomAsync(roomId.Value, null, gct);
+                            saMatch = byRoom.Data
                                 .Where(a => string.Equals(
                                     (a.Number ?? string.Empty).Trim(), saNumberTrim,
                                     StringComparison.OrdinalIgnoreCase))
-                                .Where(a => kindId is null || a.RoomKindRef?.ID == kindId)
-                                .OrderByDescending(a => a.ID)   // max(ID) при нескольких подходящих
+                                .OrderByDescending(a => a.ID)
                                 .FirstOrDefault();
+                            if (saMatch is not null) matchedInRoom = true;
                         }
-                        catch (Exception findEx)
+                        catch (Exception roomFindEx)
                         {
-                            _log.LogWarning(findEx,
-                                "RoomsForm.Apply: глобальный поиск ДДУ '{Number}' не удался: {Msg} — будет создан новый.",
-                                saNumber, findEx.Message);
+                            _log.LogWarning(roomFindEx,
+                                "RoomsForm.Apply: pre-check ДДУ в комнате roomId={RoomId} не удался: {Msg} — попробуем глобальный поиск.",
+                                roomId.Value, roomFindEx.Message);
                         }
-                    }
 
-                    if (saMatch is null)
-                    {
-                        await _crud.CreateShareAgreementAsync(new ShareAgreementCreateRequest
+                        if (saMatch is null)
                         {
-                            RoomID            = roomId.Value,
-                            Room              = new VisaryRef { ID = roomId.Value },
-                            Project           = context.VisaryProjectId is null
-                                                    ? null
-                                                    : new VisaryRef { ID = context.VisaryProjectId.Value },
-                            Site              = new VisaryRef { ID = siteId },
-                            RoomKindRef       = kindId is null ? null : new VisaryRef { ID = kindId.Value },
-                            Number            = saNumber,
-                            Title             = saNumber,
-                            ProjectNumber     = projectNumberForSa,
-                            StageNumber       = stageNumberForSa,
-                            ConditionalNumber = roomNumber,
-                        }, ct);
-                        Log(sheetForRow, mr.SourceRowNumber, $"ДДУ создан (№{saNumber})");
-                    }
-                    else
-                    {
-                        var isOrphan = saMatch.Room?.ID is null || saMatch.Room.ID != roomId.Value;
-                        if (matchedInRoom)
-                        {
-                            // Pre-check в комнате попал — это самый частый кейс:
-                            // повторный импорт того же файла. Просто PATCH-им поля.
-                            Log(sheetForRow, mr.SourceRowNumber, $"ДДУ найден в помещении (не создан, №{saNumber})");
+                            try
+                            {
+                                var found = await _listView.FindShareAgreementsAsync(
+                                    number:            saNumber,
+                                    roomKindId:        kindId,
+                                    conditionalNumber: roomNumber,
+                                    stageNumber:       stageNumberForSa,
+                                    projectNumber:     projectNumberForSa,
+                                    gct);
+
+                                saMatch = found.Data
+                                    .Where(a => string.Equals(
+                                        (a.Number ?? string.Empty).Trim(), saNumberTrim,
+                                        StringComparison.OrdinalIgnoreCase))
+                                    .Where(a => kindId is null || a.RoomKindRef?.ID == kindId)
+                                    .OrderByDescending(a => a.ID)
+                                    .FirstOrDefault();
+                            }
+                            catch (Exception findEx)
+                            {
+                                _log.LogWarning(findEx,
+                                    "RoomsForm.Apply: глобальный поиск ДДУ '{Number}' не удался: {Msg} — будет создан новый.",
+                                    saNumber, findEx.Message);
+                            }
                         }
-                        else if (isOrphan)
+
+                        if (saMatch is null)
                         {
-                            _log.LogInformation(
-                                "RoomsForm.Apply: найден орфанный/несоответствующий ДДУ id={SaId} number='{Num}' (Room={ExistingRoom}) — привязываем к roomId={NewRoom}",
-                                saMatch.ID, saNumber, saMatch.Room?.ID, roomId.Value);
-                            Log(sheetForRow, mr.SourceRowNumber, $"ДДУ найден глобально (привязан к новому помещению, №{saNumber})");
+                            var saCreated = await _crud.CreateShareAgreementAsync(new ShareAgreementCreateRequest
+                            {
+                                RoomID            = roomId.Value,
+                                Room              = new VisaryRef { ID = roomId.Value },
+                                Project           = context.VisaryProjectId is null
+                                                        ? null
+                                                        : new VisaryRef { ID = context.VisaryProjectId.Value },
+                                Site              = new VisaryRef { ID = siteId },
+                                RoomKindRef       = kindId is null ? null : new VisaryRef { ID = kindId.Value },
+                                Number            = saNumber,
+                                Title             = saNumber,
+                                ProjectNumber     = projectNumberForSa,
+                                StageNumber       = stageNumberForSa,
+                                ConditionalNumber = roomNumber,
+                            }, gct);
+                            saId = saCreated.ID;
+                            Log(sheetForRow, mr.SourceRowNumber, $"ДДУ создан (№{saNumber})");
                         }
                         else
                         {
-                            Log(sheetForRow, mr.SourceRowNumber, $"ДДУ найден (не создан, №{saNumber})");
+                            saId = saMatch.ID;
+                            var isOrphan = saMatch.Room?.ID is null || saMatch.Room.ID != roomId.Value;
+                            if (matchedInRoom)
+                                Log(sheetForRow, mr.SourceRowNumber, $"ДДУ найден в помещении (не создан, №{saNumber})");
+                            else if (isOrphan)
+                            {
+                                _log.LogInformation(
+                                    "RoomsForm.Apply: найден орфанный/несоответствующий ДДУ id={SaId} number='{Num}' (Room={ExistingRoom}) — привязываем к roomId={NewRoom}",
+                                    saMatch.ID, saNumber, saMatch.Room?.ID, roomId.Value);
+                                Log(sheetForRow, mr.SourceRowNumber, $"ДДУ найден глобально (привязан к новому помещению, №{saNumber})");
+                            }
+                            else
+                                Log(sheetForRow, mr.SourceRowNumber, $"ДДУ найден (не создан, №{saNumber})");
+
+                            await _crud.PatchShareAgreementAsync(saMatch.ID, new ShareAgreementPatchRequest
+                            {
+                                Number            = saNumber,
+                                Title             = saNumber,
+                                Site              = new VisaryRef { ID = siteId },
+                                Project           = context.VisaryProjectId is null
+                                                        ? null
+                                                        : new VisaryRef { ID = context.VisaryProjectId.Value },
+                                RoomID            = roomId.Value,
+                                Room              = new VisaryRef { ID = roomId.Value },
+                                RoomKindRef       = kindId is null ? null : new VisaryRef { ID = kindId.Value },
+                                ConditionalNumber = roomNumber,
+                                StageNumber       = stageNumberForSa,
+                                ProjectNumber     = projectNumberForSa,
+                            }, gct);
                         }
-
-                        await _crud.PatchShareAgreementAsync(saMatch.ID, new ShareAgreementPatchRequest
-                        {
-                            Number            = saNumber,
-                            Title             = saNumber,
-                            Site              = new VisaryRef { ID = siteId },
-                            Project           = context.VisaryProjectId is null
-                                                    ? null
-                                                    : new VisaryRef { ID = context.VisaryProjectId.Value },
-                            RoomID            = roomId.Value,
-                            Room              = new VisaryRef { ID = roomId.Value },
-                            RoomKindRef       = kindId is null ? null : new VisaryRef { ID = kindId.Value },
-                            ConditionalNumber = roomNumber,
-                            StageNumber       = stageNumberForSa,
-                            ProjectNumber     = projectNumberForSa,
-                        }, ct);
                     }
-                }
 
-                applied++;
-            }
-            catch (Exception ex)
-            {
-                // Сохраняем максимум контекста: какая строка, что за шаг, входные значения,
-                // и inner exception (если HttpRequestException обернул другую).
-                var ctx = mr.MappedValues.RootElement;
-                _log.LogError(ex,
-                    "RoomsFormImportMapper.Apply row {RowNum} failed: {Msg}. " +
-                    "Context: siteId={SiteId}, sectionTitle='{Section}', roomNumber='{Room}', " +
-                    "kindId={KindId}, saNumber='{Sa}'. Inner: {Inner}",
-                    mr.SourceRowNumber, ex.Message, siteId,
-                    GetStringOrNull(ctx, "SectionTitleNumeric") ?? GetStringOrNull(ctx, "SectionTitle"),
-                    GetStringOrNull(ctx, "RoomNumber"),
-                    GetIntOrNull(ctx, "RoomKindId"),
-                    GetStringOrNull(ctx, "ShareAgreementNumber"),
-                    ex.InnerException?.Message);
-                errors.Add(new RowError(null, "apply_failed",
-                    $"row {mr.SourceRowNumber}: {ex.Message}"));
-            }
-        } // end foreach row in sheetGroup
-        } // end foreach sheetGroup
+                    // ── (d) Snapshot для batch-upsert ────────────────────────
+                    snapshotUpserts.Add(new RoomApplySnapshot
+                    {
+                        VisarySiteId           = siteId,
+                        Sheet                  = sheetForRow,
+                        SectionTitle           = sectionTitle ?? string.Empty,
+                        RoomKindId             = kindId,
+                        RoomNumber             = roomNumber,
+                        BuildingSection        = buildingSection,
+                        MappedHash             = hash,
+                        MappedSnapshot         = JsonDocument.Parse(v.GetRawText()),
+                        VisarySectionId        = sectionId,
+                        VisaryRoomId           = roomId,
+                        VisaryShareAgreementId = saId,
+                        ShareAgreementNumber   = saNumber,
+                        LastAppliedSessionId   = context.SessionId,
+                        LastAppliedAt          = DateTimeOffset.UtcNow,
+                    });
+                    Interlocked.Increment(ref applied);
+                }
+                catch (Exception ex)
+                {
+                    var ctx = mr.MappedValues.RootElement;
+                    _log.LogError(ex,
+                        "RoomsFormImportMapper.Apply row {RowNum} failed: {Msg}. " +
+                        "Context: siteId={SiteId}, sectionTitle='{Section}', roomNumber='{Room}', " +
+                        "kindId={KindId}, saNumber='{Sa}'. Inner: {Inner}",
+                        mr.SourceRowNumber, ex.Message, siteId,
+                        GetStringOrNull(ctx, "SectionTitleNumeric") ?? GetStringOrNull(ctx, "SectionTitle"),
+                        GetStringOrNull(ctx, "RoomNumber"),
+                        GetIntOrNull(ctx, "RoomKindId"),
+                        GetStringOrNull(ctx, "ShareAgreementNumber"),
+                        ex.InnerException?.Message);
+                    errors.Add(new RowError(null, "apply_failed",
+                        $"row {mr.SourceRowNumber}: {ex.Message}"));
+                }
+            } // end foreach row in group
+        }); // end Parallel.ForEachAsync
+
+        // ── ⑥ Batch upsert snapshots — один SaveChanges на всё ───────────────
+        if (!snapshotUpserts.IsEmpty)
+        {
+            using var upsertScope = _scopeFactory.CreateScope();
+            var store = upsertScope.ServiceProvider.GetRequiredService<RoomApplySnapshotStore>();
+            await store.UpsertBatchAsync(snapshotUpserts.ToList(), ct);
+        }
 
         _log.LogInformation(
-            "RoomsForm.Apply: всего применено {Applied} строк из {Sheets} листов, ошибок: {Errors}",
-            applied, rowsBySheet.Count, errors.Count);
+            "RoomsForm.Apply: применено {Applied}, из них skip-by-hash {Skipped}, групп {Groups}, ошибок {Errors}",
+            applied, skipped, groupsByKey.Count, errors.Count);
 
         var rowActions = actionsByRow
             .Select(kv => new RowActionLog(kv.Key.Row, kv.Key.Sheet, kv.Value))
             .ToList();
-        return new ApplyResult(applied, errors, rowActions);
+        return new ApplyResult(applied, errors.ToList(), rowActions);
+    }
+
+    /// <summary>
+    /// Pre-pass перед основным циклом Apply: одна итерация по всем уникальным
+    /// <c>DeveloperPin</c> в валидных строках. Резолвит организацию, грузит
+    /// существующие projectmanagement для сайта (один SELECT), и при отсутствии
+    /// записи «Застройщик» — создаёт/переиспользует PM в рамках проекта и
+    /// линкует к сайту.
+    ///
+    /// Sequential by design — параллельные CREATE projectmanagement c одинаковым
+    /// orgId дали бы дубли в проекте.
+    /// </summary>
+    private async Task<int?> ResolveDeveloperLinksAsync(
+        int siteId,
+        int? projectId,
+        IReadOnlyList<MappedRow> validRows,
+        Action<string, int, string> Log,
+        CancellationToken ct)
+    {
+        // Список (Sheet, SourceRowNumber, DeveloperPin) — нужен, чтобы метку
+        // «Застройщик привязан к объекту» повесить на ту строку, где этот PIN
+        // встретился впервые в файле. Это сохраняет совместимость с прежней
+        // ленивой логикой: метки видны в построчном отчёте.
+        var rowsWithPin = validRows
+            .Select(mr =>
+            {
+                var v = mr.MappedValues.RootElement;
+                return (
+                    Sheet: GetStringOrNull(v, "Sheet") ?? "<unknown>",
+                    Row:   mr.SourceRowNumber,
+                    Pin:   GetStringOrNull(v, "DeveloperPin"));
+            })
+            .Where(t => !string.IsNullOrWhiteSpace(t.Pin))
+            .ToList();
+        if (rowsWithPin.Count == 0) return projectId;
+
+        var firstRowByPin = rowsWithPin
+            .GroupBy(t => t.Pin!, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.OrderBy(t => t.Row).First(), StringComparer.OrdinalIgnoreCase);
+
+        if (firstRowByPin.Count == 0) return projectId;
+
+        // Один раз грузим существующие PM-записи сайта.
+        var developerPmByOrg = new Dictionary<int, int>();
+        try
+        {
+            var pmList = await _listView.GetProjectManagementsBySiteAsync(siteId, ct);
+            foreach (var pm in pmList.Data)
+            {
+                if (pm.Organization?.ID is int existingOrgId
+                    && pm.Role?.ID == ProjectManagementRoles.Developer)
+                {
+                    developerPmByOrg[existingOrgId] = pm.ID;
+                }
+            }
+            _log.LogInformation(
+                "RoomsForm.Apply: pre-pass developers — загружено {Count} PM сайта, из них Застройщиков {Devs}",
+                pmList.Data.Count, developerPmByOrg.Count);
+        }
+        catch (Exception loadEx)
+        {
+            _log.LogWarning(loadEx,
+                "RoomsForm.Apply: не удалось загрузить projectmanagement для siteId={SiteId}: {Msg}",
+                siteId, loadEx.Message);
+        }
+
+        foreach (var (pin, first) in firstRowByPin)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            int? orgId;
+            try
+            {
+                var orgs = await _listView.GetOrganizationsByClientIdAsync(pin, ct);
+                orgId = orgs.Data.FirstOrDefault()?.ID;
+            }
+            catch (Exception ex)
+            {
+                _log.LogWarning(ex,
+                    "RoomsForm.Apply: GetOrganizationsByClientId('{Pin}') не удался: {Msg}",
+                    pin, ex.Message);
+                continue;
+            }
+            if (orgId is null)
+            {
+                _log.LogWarning(
+                    "RoomsForm.Apply: организация с ПИН '{Pin}' не найдена в Visary — пропуск привязки.",
+                    pin);
+                continue;
+            }
+
+            if (developerPmByOrg.ContainsKey(orgId.Value)) continue;
+
+            if (projectId is null)
+            {
+                try
+                {
+                    var siteFull = await _crud.GetSiteByIdFullAsync(siteId, ct);
+                    projectId = siteFull.Project?.ID;
+                }
+                catch (Exception siteEx)
+                {
+                    _log.LogWarning(siteEx,
+                        "RoomsForm.Apply: не удалось получить Project из Site {SiteId}: {Msg}",
+                        siteId, siteEx.Message);
+                }
+            }
+            if (projectId is null)
+            {
+                _log.LogWarning(
+                    "RoomsForm.Apply: пропуск projectmanagement (orgId={OrgId}) — не удалось определить projectId.",
+                    orgId.Value);
+                continue;
+            }
+
+            int? reusablePmId = null;
+            try
+            {
+                var inProject = await _listView.GetProjectManagementsByProjectAsync(
+                    projectId.Value, orgId.Value, ProjectManagementRoles.Developer, ct);
+                reusablePmId = inProject.Data
+                    .Where(pm => pm.Organization?.ID == orgId.Value
+                                 && pm.Role?.ID == ProjectManagementRoles.Developer)
+                    .OrderByDescending(pm => pm.ID)
+                    .FirstOrDefault()?.ID;
+            }
+            catch (Exception listEx)
+            {
+                _log.LogWarning(listEx,
+                    "RoomsForm.Apply: поиск projectmanagement в проекте {ProjectId} не удался: {Msg}",
+                    projectId.Value, listEx.Message);
+            }
+
+            try
+            {
+                int pmIdToLink;
+                if (reusablePmId is int existingPmId)
+                {
+                    pmIdToLink = existingPmId;
+                    _log.LogInformation(
+                        "RoomsForm.Apply: переиспользуем projectmanagement id={PmId} из projectId={ProjectId} для siteId={SiteId} (orgId={OrgId})",
+                        existingPmId, projectId.Value, siteId, orgId.Value);
+                    Log(first.Sheet, first.Row, "Застройщик переиспользован");
+                }
+                else
+                {
+                    var created = await _crud.CreateProjectManagementAsync(
+                        new ProjectManagementCreateRequest
+                        {
+                            Project = new VisaryRef { ID = projectId.Value },
+                            Organization = new VisaryRef { ID = orgId.Value },
+                            Role = new VisaryRef
+                            {
+                                ID = ProjectManagementRoles.Developer,
+                                Title = ProjectManagementRoles.DeveloperTitle,
+                            },
+                            Affiliation = 0,
+                        }, ct);
+                    pmIdToLink = created.ID;
+                    _log.LogInformation(
+                        "RoomsForm.Apply: создан Застройщик projectmanagement id={PmId} (orgId={OrgId}, projectId={ProjectId})",
+                        created.ID, orgId.Value, projectId.Value);
+                    Log(first.Sheet, first.Row, "Застройщик создан");
+                }
+
+                await _crud.LinkProjectManagementToSiteAsync(siteId, pmIdToLink, ct);
+                developerPmByOrg[orgId.Value] = pmIdToLink;
+                Log(first.Sheet, first.Row, "Застройщик привязан к объекту");
+            }
+            catch (Exception pmEx)
+            {
+                _log.LogWarning(pmEx,
+                    "RoomsForm.Apply: не удалось привязать projectmanagement (orgId={OrgId}, siteId={SiteId}): {Msg}",
+                    orgId.Value, siteId, pmEx.Message);
+            }
+        }
+
+        return projectId;
     }
 
     /// <summary>

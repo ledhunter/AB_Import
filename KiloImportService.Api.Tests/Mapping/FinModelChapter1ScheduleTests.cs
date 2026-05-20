@@ -55,11 +55,13 @@ public class FinModelChapter1ScheduleTests : IDisposable
             });
 
         var budgetRef = new BudgetReferenceProvider(NullLogger<BudgetReferenceProvider>.Instance);
+        var scopeFactory = new Mock<Microsoft.Extensions.DependencyInjection.IServiceScopeFactory>().Object;
         _mapper = new FinModelImportMapper(
             NullLogger<FinModelImportMapper>.Instance,
             _mockCrud.Object,
             _mockListView.Object,
-            budgetRef);
+            budgetRef,
+            scopeFactory);
 
         var options = new DbContextOptionsBuilder<VisaryDbContext>()
             .UseInMemoryDatabase($"FinModelScheduleTest_{Guid.NewGuid()}")

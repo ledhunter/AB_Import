@@ -65,6 +65,12 @@ try
     builder.Services.AddSingleton<IImportMapper, RoomsFormImportMapper>();
     builder.Services.AddSingleton<IImportMapperRegistry, ImportMapperRegistry>();
 
+    // Snapshot store для инкрементального импорта «rooms»: хранит хэш применённых
+    // MappedValues по бизнес-ключу (Site+Sheet+Section+Kind+RoomNumber+BuildingSection),
+    // маппер диффает повторный импорт и skip-ает неизменённые строки. Scoped (зависит
+    // от ImportServiceDbContext), маппер берёт через IServiceScopeFactory.
+    builder.Services.AddScoped<KiloImportService.Api.Domain.Mapping.RoomApplySnapshotStore>();
+
     // ─── Pipeline + Storage ───
     builder.Services.AddScoped<ImportPipeline>();
     builder.Services.AddSingleton<IFileStorage, LocalFileStorage>();
@@ -78,7 +84,7 @@ try
     builder.Services.AddScoped<KiloImportService.Api.Budget.BudgetXlsxExporter>();
     // Pipeline загрузки бюджета в Visary FileStorage + создание typedimportwbs
     // (см. doc_project/82-visary-file-storage-upload.md).
-    builder.Services.AddScoped<KiloImportService.Api.Budget.BudgetVisaryUploader>();
+    builder.Services.AddScoped<KiloImportService.Api.Budget.IBudgetVisaryUploader, KiloImportService.Api.Budget.BudgetVisaryUploader>();
 
     // ─── Visary HTTP API клиент + кэш проектов ───
     builder.Services.AddVisaryClient(builder.Configuration.GetSection(VisaryOptions.SectionName));
