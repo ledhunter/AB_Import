@@ -1,13 +1,16 @@
+using KiloImportService.Api.Budget;
 using KiloImportService.Api.Data.Visary;
 using KiloImportService.Api.Data.Visary.Entities;
 using KiloImportService.Api.Domain.Importing;
 using KiloImportService.Api.Domain.Mapping;
 using KiloImportService.Api.Domain.Mapping.Budget;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Visary.Api.CRUD;
 using Visary.Api.Dto;
+using Visary.Api.FileStorage;
 using Visary.Api.ListView;
 using Xunit;
 
@@ -26,6 +29,8 @@ public class FinModelBudgetTests : IDisposable
     private readonly VisaryDbContext _dbContext;
     private readonly Mock<ICrudClient> _mockCrud;
     private readonly Mock<IListViewClient> _mockListView;
+    private readonly Mock<IBudgetVisaryUploader> _mockBudgetUploader;
+    private readonly ServiceProvider _serviceProvider;
 
     private const int SiteId = 4585;
     private const int ProjectId = 4584;
@@ -51,11 +56,32 @@ public class FinModelBudgetTests : IDisposable
             });
 
         var budgetRef = new BudgetReferenceProvider(NullLogger<BudgetReferenceProvider>.Instance);
+
+        // Mock IBudgetVisaryUploader — он зарегистрирован в реальном DI как Scoped.
+        // Для теста ApplyAsync_Budget_CountsRowsWithoutCallingWbsCrud по умолчанию
+        // отдаём успех — каждый тест может перенастроить _mockBudgetUploader при необходимости.
+        _mockBudgetUploader = new Mock<IBudgetVisaryUploader>();
+        _mockBudgetUploader
+            .Setup(u => u.UploadAndWaitAsync(It.IsAny<Guid>(), It.IsAny<TimeSpan?>(), It.IsAny<TimeSpan?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new BudgetVisaryUploadAndWaitResult(
+                Upload: new BudgetVisaryUploadResult(
+                    FileStorageItemId: 1, TypedImportWbsId: 999, FileName: "stub.xlsx"),
+                Success: true, TimedOut: false,
+                FinalStatus: "Закончен успешно", CountErrors: 0, CountWarnings: 0));
+
+        // Собираем мини-DI чтобы FinModelImportMapper мог получить IBudgetVisaryUploader
+        // через IServiceScopeFactory (тот же паттерн, что в production).
+        var services = new ServiceCollection();
+        services.AddSingleton(_mockBudgetUploader.Object);
+        _serviceProvider = services.BuildServiceProvider();
+        var scopeFactory = _serviceProvider.GetRequiredService<IServiceScopeFactory>();
+
         _mapper = new FinModelImportMapper(
             NullLogger<FinModelImportMapper>.Instance,
             _mockCrud.Object,
             _mockListView.Object,
-            budgetRef);
+            budgetRef,
+            scopeFactory);
 
         var options = new DbContextOptionsBuilder<VisaryDbContext>()
             .UseInMemoryDatabase($"FinModelBudgetTest_{Guid.NewGuid()}")
@@ -74,7 +100,11 @@ public class FinModelBudgetTests : IDisposable
         _dbContext.SaveChanges();
     }
 
-    public void Dispose() => _dbContext?.Dispose();
+    public void Dispose()
+    {
+        _dbContext?.Dispose();
+        _serviceProvider?.Dispose();
+    }
 
     private static ImportContext Ctx(int? siteId = SiteId, int? projectId = null)
         => new(Guid.NewGuid(), projectId, siteId, null);

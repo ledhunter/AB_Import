@@ -10,6 +10,20 @@ using Visary.Api.FileStorage;
 namespace KiloImportService.Api.Budget;
 
 /// <summary>
+/// Абстракция над <see cref="BudgetVisaryUploader"/> — нужна, чтобы FinModelImportMapper
+/// мог быть протестирован без построения всего DI-графа Visary/FileStorage (см.
+/// <c>FinModelBudgetTests</c>). Production-код использует единственную реализацию.
+/// </summary>
+public interface IBudgetVisaryUploader
+{
+    Task<BudgetVisaryUploadAndWaitResult> UploadAndWaitAsync(
+        Guid sessionId,
+        TimeSpan? pollInterval = null,
+        TimeSpan? maxWait = null,
+        CancellationToken ct = default);
+}
+
+/// <summary>
 /// Загружает сгенерированный XLSX-бюджет в файловое хранилище Visary и создаёт
 /// TypedJournal-задание импорта (<c>typedimportwbs</c>). После успешного выполнения
 /// импорт уезжает на бэк Visary и обрабатывается в фоне; пользователю возвращается ID
@@ -24,7 +38,7 @@ namespace KiloImportService.Api.Budget;
 /// 3. <see cref="IFileStorageClient.GetFileLinkAsync"/> — POST <c>/api/files/link/file_link/by_id</c>.
 /// 4. <see cref="ICrudClient.CreateTypedImportWbsAsync"/> — POST <c>/api/visary/crud/typedimportwbs</c>.
 /// </summary>
-public sealed class BudgetVisaryUploader
+public sealed class BudgetVisaryUploader : IBudgetVisaryUploader
 {
     private const string XlsxMime =
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";

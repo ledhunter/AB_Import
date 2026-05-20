@@ -476,7 +476,7 @@ public sealed class FinModelImportMapper : IImportMapper
         try
         {
             using var scope = _scopeFactory.CreateScope();
-            var uploader = scope.ServiceProvider.GetRequiredService<BudgetVisaryUploader>();
+            var uploader = scope.ServiceProvider.GetRequiredService<IBudgetVisaryUploader>();
             var result = await uploader.UploadAndWaitAsync(sessionId, ct: ct);
 
             if (result.Success)

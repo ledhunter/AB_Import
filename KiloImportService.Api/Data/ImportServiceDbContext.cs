@@ -25,6 +25,7 @@ public class ImportServiceDbContext : DbContext
     public DbSet<ImportError> Errors => Set<ImportError>();
     public DbSet<ImportFileSnapshot> FileSnapshots => Set<ImportFileSnapshot>();
     public DbSet<CachedProject> CachedProjects => Set<CachedProject>();
+    public DbSet<RoomApplySnapshot> RoomApplySnapshots => Set<RoomApplySnapshot>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -148,6 +149,44 @@ public class ImportServiceDbContext : DbContext
             // Индексы под ILIKE-поиск (citext не используем — pg_trgm не обязателен).
             e.HasIndex(x => x.Title).HasDatabaseName("IX_CachedProject_Title");
             e.HasIndex(x => x.IdentifierKK).HasDatabaseName("IX_CachedProject_IdentifierKK");
+        });
+
+        // ─── RoomApplySnapshot ───
+        // Снапшоты последнего применённого состояния строки импорта «rooms».
+        // Бизнес-ключ совпадает с unique key Room (doc 77): VisarySiteId + Sheet
+        // + SectionTitle + RoomKindId + RoomNumber + BuildingSection.
+        b.Entity<RoomApplySnapshot>(e =>
+        {
+            e.ToTable("room_apply_snapshots");
+            e.HasKey(x => x.Id);
+
+            e.Property(x => x.Sheet).HasMaxLength(255).IsRequired();
+            e.Property(x => x.SectionTitle).HasMaxLength(255).IsRequired();
+            e.Property(x => x.RoomNumber).HasMaxLength(255).IsRequired();
+            e.Property(x => x.BuildingSection).HasMaxLength(255).IsRequired();
+            e.Property(x => x.ShareAgreementNumber).HasMaxLength(255);
+            e.Property(x => x.MappedHash).HasMaxLength(64).IsRequired();
+
+            // jsonb / value-конвертер по тому же паттерну, что и StagedRow.
+            if (Database.IsNpgsql())
+            {
+                e.Property(x => x.MappedSnapshot).HasColumnType("jsonb").IsRequired();
+            }
+            else
+            {
+                e.Property(x => x.MappedSnapshot).HasConversion(JsonDocConverter).IsRequired();
+            }
+
+            // Уникальный индекс по бизнес-ключу. RoomKindId nullable — Postgres трактует
+            // NULL как «не равно NULL», но в нашем сценарии Kind резолвится из живого
+            // справочника Visary и пустым не остаётся; на всякий случай храним 0
+            // вместо null в репозитории (см. RoomApplySnapshotStore.NormalizeKindId).
+            e.HasIndex(x => new { x.VisarySiteId, x.Sheet, x.SectionTitle, x.RoomKindId, x.RoomNumber, x.BuildingSection })
+                .IsUnique()
+                .HasDatabaseName("IX_RoomApplySnapshot_BusinessKey");
+
+            // Быстрый batch-pre-load по сайту (одна выборка на сессию).
+            e.HasIndex(x => x.VisarySiteId).HasDatabaseName("IX_RoomApplySnapshot_Site");
         });
 
         base.OnModelCreating(b);
