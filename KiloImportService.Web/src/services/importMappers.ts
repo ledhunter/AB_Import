@@ -113,6 +113,10 @@ export const toUiSessionSummary = (api: ApiImportSessionSummary): UiSessionSumma
   successRows: api.successRows,
   errorRows: api.errorRows,
   errorMessage: api.errorMessage,
+  // Старые сессии в БД (до миграции на сохранение projectId) могут вернуть null —
+  // считаем это валидным состоянием «проект не указан».
+  projectId: api.projectId ?? null,
+  projectName: api.projectName ?? null,
 });
 
 export const toUiRowError = (e: ApiImportError): UiRowError => ({
@@ -193,5 +197,7 @@ export function toUiReport(api: ApiImportReport, session: UiSession): UiReport {
     rows,
     fileLevelErrors,
     rowsPagination: api.rowsPagination ?? { skip: 0, take: rows.length, total: rows.length },
+    // sheetTotals может отсутствовать у старого backend'а — отрисуем без счётчиков свёрнутых.
+    sheetTotals: api.sheetTotals ?? [],
   };
 }

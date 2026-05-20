@@ -17,7 +17,10 @@ interface Props {
   onCancel: () => void;
   onReset: () => void;
   /** Пагинация построчного отчёта (см. useImportSession.loadReportPage). */
-  onReportPageChange?: (skip: number) => void;
+  onReportPageChange?: (
+    skip: number,
+    options?: { excludeSheets?: string[] },
+  ) => void;
 }
 
 /**

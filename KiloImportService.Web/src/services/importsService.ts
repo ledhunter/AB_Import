@@ -164,11 +164,13 @@ export interface ListImportsOptions extends RequestOptions {
   take?: number;
   status?: string;
   importTypeCode?: string;
+  /** ID проекта Visary для фильтрации сессий. */
+  projectId?: number;
 }
 
 /**
  * Получить список сессий импорта (история) — `GET /api/imports`.
- * Отсортированы по StartedAt DESC. Фильтры по статусу/типу и пагинация — опциональны.
+ * Отсортированы по StartedAt DESC. Фильтры по статусу/типу/проекту и пагинация — опциональны.
  */
 export function listImports(
   options: ListImportsOptions = {},
@@ -178,6 +180,7 @@ export function listImports(
   if (options.take != null) params.set('take', String(options.take));
   if (options.status) params.set('status', options.status);
   if (options.importTypeCode) params.set('importTypeCode', options.importTypeCode);
+  if (options.projectId != null) params.set('projectId', String(options.projectId));
   const qs = params.toString();
   const path = `/api/imports${qs ? `?${qs}` : ''}`;
   return fetchJson<ApiImportSessionsListResponse>(path, {
@@ -200,6 +203,13 @@ export function getImportSession(
 export interface GetReportOptions extends RequestOptions {
   skip?: number;
   take?: number;
+  /**
+   * Имена листов, которые нужно исключить из выборки строк и из `total`. Используется
+   * для клиентского сворачивания листов в UI: пагинация считается только по видимым
+   * строкам. Лист с `null`-именем (одностраничные импорты) не исключается — для него
+   * нет соответствующей строки в `sheetTotals`.
+   */
+  excludeSheets?: string[];
 }
 
 /** Получить подробный отчёт по сессии. */
@@ -210,6 +220,10 @@ export function getImportReport(
   const params = new URLSearchParams();
   if (options.skip != null) params.set('skip', String(options.skip));
   if (options.take != null) params.set('take', String(options.take));
+  // ASP.NET связывает повторяющиеся query-параметры в string[] — добавляем каждый отдельно.
+  for (const sheet of options.excludeSheets ?? []) {
+    if (sheet) params.append('excludeSheets', sheet);
+  }
   const qs = params.toString();
   const path = `/api/imports/${encodeURIComponent(sessionId)}/report${qs ? `?${qs}` : ''}`;
   return fetchJson<ApiImportReport>(path, { method: 'GET', signal: options.signal });

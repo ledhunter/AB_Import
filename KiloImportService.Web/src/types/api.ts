@@ -102,6 +102,16 @@ export interface ApiImportError {
   message: string;
 }
 
+/**
+ * Полная карта листов сессии: имя листа (null — одностраничные импорты) + общее
+ * число строк. Возвращается ВСЕГДА по всем листам, независимо от `excludeSheets`,
+ * чтобы UI мог отрисовать заголовки свёрнутых листов с их счётчиками.
+ */
+export interface ApiSheetTotal {
+  sheet: string | null;
+  total: number;
+}
+
 /** Ответ `GET /api/imports/{id}/report` — отчёт сессии (плоский). */
 export interface ApiImportReport {
   sessionId: string;
@@ -111,10 +121,13 @@ export interface ApiImportReport {
   errorRows: number;
   rows: ApiImportRow[];
   rowsPagination: {
+    /** Уже учитывает excludeSheets: `total` = число строк ВИДИМЫХ листов. */
     skip: number;
     take: number;
     total: number;
   };
+  /** Все листы сессии с числом строк — для рисования сворачиваемых заголовков. */
+  sheetTotals: ApiSheetTotal[];
   errors: ApiImportError[];
 }
 
@@ -137,6 +150,10 @@ export interface ApiImportSessionSummary {
   successRows: number;
   errorRows: number;
   errorMessage: string | null;
+  /** ID проекта Visary, выбранного при загрузке сессии (null — не указан). */
+  projectId: number | null;
+  /** Название проекта из локального кэша Visary (null — проект пропал из кэша). */
+  projectName: string | null;
 }
 
 /** Ответ `GET /api/imports` — постранично, отсортированно по StartedAt DESC. */

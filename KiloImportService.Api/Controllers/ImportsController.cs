@@ -112,8 +112,10 @@ public class ImportsController : ControllerBase
 
     /// <summary>
     /// Список сессий импорта — история всех загрузок. Отсортирован по StartedAt DESC.
-    /// Опциональные фильтры по статусу и типу импорта; пагинация skip/take.
+    /// Опциональные фильтры по статусу, типу импорта и проекту; пагинация skip/take.
     /// Лёгкий ответ без stages/rows/errors — детальное состояние получают через GET {id}.
+    /// Поле <c>projectName</c> резолвится из <see cref="CachedProject"/> (left join) —
+    /// если проект пропал из кэша Visary, остаётся только числовой <c>projectId</c>.
     /// </summary>
     [HttpGet]
     public async Task<IActionResult> List(
@@ -121,6 +123,7 @@ public class ImportsController : ControllerBase
         [FromQuery] int take = 50,
         [FromQuery] string? status = null,
         [FromQuery] string? importTypeCode = null,
+        [FromQuery] int? projectId = null,
         CancellationToken ct = default)
     {
         if (skip < 0) skip = 0;
@@ -137,12 +140,17 @@ public class ImportsController : ControllerBase
         {
             q = q.Where(s => s.ImportTypeCode == importTypeCode);
         }
+        if (projectId is > 0)
+        {
+            q = q.Where(s => s.VisaryProjectId == projectId);
+        }
 
         var total = await q.CountAsync(ct);
         var items = await q
             .OrderByDescending(s => s.StartedAt)
             .Skip(skip)
             .Take(take)
+            // LEFT JOIN на CachedProject: даже если проект уже не в кэше — сессию всё равно показываем.
             .Select(s => new
             {
                 sessionId = s.Id,
@@ -156,6 +164,13 @@ public class ImportsController : ControllerBase
                 successRows = s.SuccessRows,
                 errorRows = s.ErrorRows,
                 errorMessage = s.ErrorMessage,
+                projectId = s.VisaryProjectId,
+                projectName = s.VisaryProjectId == null
+                    ? null
+                    : _db.CachedProjects
+                        .Where(p => p.Id == s.VisaryProjectId)
+                        .Select(p => p.Title)
+                        .FirstOrDefault(),
             })
             .ToListAsync(ct);
 
@@ -251,16 +266,40 @@ public class ImportsController : ControllerBase
     /// <summary>
     /// Подробный отчёт сессии: распарсенные строки + ошибки.
     /// Для большого числа строк — пагинация через <c>skip</c>/<c>take</c>.
+    /// Опциональный <c>excludeSheets</c> (повторяющийся query-параметр) исключает листы
+    /// из выборки строк и из <c>rowsPagination.total</c> — нужен для клиентского
+    /// сворачивания листов в UI: пагинация считается только по видимым строкам.
+    /// Дополнительно отдаётся <c>sheetTotals</c> — все листы сессии с числом строк,
+    /// чтобы клиент мог рисовать заголовки/счётчики свёрнутых листов без отдельного запроса.
     /// </summary>
     [HttpGet("{id:guid}/report")]
-    public async Task<IActionResult> GetReport(Guid id, [FromQuery] int skip = 0, [FromQuery] int take = 100, CancellationToken ct = default)
+    public async Task<IActionResult> GetReport(
+        Guid id,
+        [FromQuery] int skip = 0,
+        [FromQuery] int take = 50,
+        [FromQuery] string[]? excludeSheets = null,
+        CancellationToken ct = default)
     {
         var session = await _db.Sessions.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, ct);
         if (session is null) return NotFound();
 
         take = Math.Clamp(take, 1, 500);
 
+        // Нормализуем excludeSheets: пустые/null отбрасываем, остальное trim.
+        // EF Postgres compares text exactly — клиент пришлёт ровно то, что мы отдали в sheetTotals.
+        var exclude = (excludeSheets ?? Array.Empty<string>())
+            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .Select(s => s)
+            .ToArray();
+
         var rowsQ = _db.StagedRows.AsNoTracking().Where(r => r.ImportSessionId == id);
+        if (exclude.Length > 0)
+        {
+            // Сравниваем именно по Sheet (может быть null), убираем только те, где Sheet ∈ exclude.
+            // Sheet == null (одностраничные импорты) — не исключается.
+            rowsQ = rowsQ.Where(r => r.Sheet == null || !exclude.Contains(r.Sheet));
+        }
+
         var totalRows = await rowsQ.CountAsync(ct);
         var rows = await rowsQ
             .OrderBy(r => r.Sheet).ThenBy(r => r.SourceRowNumber)
@@ -269,10 +308,24 @@ public class ImportsController : ControllerBase
             .Select(r => new { r.SourceRowNumber, r.Sheet, status = r.Status.ToString(), actions = r.Actions })
             .ToListAsync(ct);
 
-        var errors = await _db.Errors.AsNoTracking()
-            .Where(e => e.ImportSessionId == id)
+        var errorsQ = _db.Errors.AsNoTracking().Where(e => e.ImportSessionId == id);
+        if (exclude.Length > 0)
+        {
+            // File-level ошибки (Sheet == null) и ошибки на видимых листах — оставляем.
+            errorsQ = errorsQ.Where(e => e.Sheet == null || !exclude.Contains(e.Sheet));
+        }
+        var errors = await errorsQ
             .OrderBy(e => e.Sheet).ThenBy(e => e.SourceRowNumber)
             .Select(e => new { e.SourceRowNumber, e.Sheet, e.ColumnName, e.ErrorCode, e.Message })
+            .ToListAsync(ct);
+
+        // sheetTotals считаем ПО ВСЕМ строкам сессии (без учёта excludeSheets) — клиенту
+        // нужна полная карта листов, чтобы рисовать заголовки и счётчики свёрнутых.
+        var sheetTotals = await _db.StagedRows.AsNoTracking()
+            .Where(r => r.ImportSessionId == id)
+            .GroupBy(r => r.Sheet)
+            .Select(g => new { sheet = g.Key, total = g.Count() })
+            .OrderBy(x => x.sheet)
             .ToListAsync(ct);
 
         return Ok(new
@@ -284,6 +337,7 @@ public class ImportsController : ControllerBase
             errorRows = session.ErrorRows,
             rows,
             rowsPagination = new { skip, take, total = totalRows },
+            sheetTotals,
             errors
         });
     }
