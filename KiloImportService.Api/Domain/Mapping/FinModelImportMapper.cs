@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using KiloImportService.Api.Budget;
 using KiloImportService.Api.Data.Visary;
 using KiloImportService.Api.Domain.Importing;
 using KiloImportService.Api.Domain.Importing.Parsers;
@@ -145,17 +146,23 @@ public sealed class FinModelImportMapper : IImportMapper
     private readonly ICrudClient _visaryClient;
     private readonly IListViewClient _listViewClient;
     private readonly IBudgetReferenceProvider _budgetRef;
+    // BudgetVisaryUploader зарегистрирован Scoped (зависит от ImportServiceDbContext),
+    // а мапер — Singleton (общий регистр стратегий). Поэтому загружать его напрямую
+    // нельзя (captive dependency) — каждый раз открываем мини-scope через factory.
+    private readonly IServiceScopeFactory _scopeFactory;
 
     public FinModelImportMapper(
         ILogger<FinModelImportMapper> log,
         ICrudClient visaryClient,
         IListViewClient listViewClient,
-        IBudgetReferenceProvider budgetRef)
+        IBudgetReferenceProvider budgetRef,
+        IServiceScopeFactory scopeFactory)
     {
         _log = log;
         _visaryClient = visaryClient;
         _listViewClient = listViewClient;
         _budgetRef = budgetRef;
+        _scopeFactory = scopeFactory;
     }
 
     public async Task<ValidationResult> ValidateAsync(
@@ -384,39 +391,56 @@ public sealed class FinModelImportMapper : IImportMapper
         int applied = 0;
         var rowActions = new List<RowActionLog>();
 
+        bool paramsApplied = false;
         if (paramRows.Count > 0)
         {
             var paramApply = await ApplyParametersAsync(siteId, paramRows, errors, ct);
             applied += paramApply;
+            paramsApplied = paramApply > 0;
         }
 
+        // budget upload status — управляет тем, можно ли запускать ГФ Главы 1.
+        // null означает «бюджета в файле нет» — это допустимый сценарий (например,
+        // повторный импорт после ручной правки бюджета в Visary), ГФ выполняем.
+        bool? budgetUploadOk = null;
         if (budgetRows.Count > 0)
         {
-            // Бюджет в Visary через CRUD WBS не льётся — путь оказался непригодным
-            // (Visary возвращает 500 на listview/wbs/onetomany/ConstructionProject,
-            // а структура WBS-дерева ProjectRoot→SiteRoot→Глава→Подстатья сложна для
-            // воспроизведения CRUD-ом). Вместо этого после Apply мы отдаём пользователю
-            // готовый XLSX по эталонному шаблону «Бюджет_А4.1», который он импортирует
-            // вручную через нативный механизм Visary. См. doc_project/78-budget-xlsx-export.md.
-            //
-            // Сами mapped budget rows уже сохранены в staged_rows на стадии Validate,
-            // и BudgetXlsxExporter читает их оттуда при запросе GET /api/imports/{id}/budget-xlsx.
-            // Здесь только засчитываем их в applied, чтобы сессия пометилась Applied
-            // и в UI стала доступна кнопка скачивания.
-            _log.LogInformation(
-                "FinModelImportMapper: budget rows={Count} → отложены для XLSX-экспорта (siteId={SiteId})",
-                budgetRows.Count, siteId);
-            applied += budgetRows.Count;
+            // Бюджет в Visary заливается автоматически: BudgetXlsxExporter уже сохранил
+            // mapped budget rows в staged_rows на стадии Validate; здесь поднимаем XLSX,
+            // отправляем в файловое хранилище Visary, создаём typedimportwbs и ждём
+            // финального статуса Visary'я. ГФ Главы 1 ниже создаёт CostItem-ы на WBS-узлах,
+            // которые появляются в Visary именно по результатам этого импорта, поэтому
+            // запускать ГФ до завершения бюджета бессмысленно (узлов ещё нет в ИСР).
+            // Если Visary вернул «Закончен с ошибками» / timeout / сетевой сбой —
+            // UploadBudgetToVisaryAsync пишет одну консолидированную row-error
+            // (что сделано + причина Visary + «ГФ не создан»), и мы НЕ запускаем ГФ.
+            // См. doc_project/82-visary-file-storage-upload.md и doc 94.
+            var schedulePending = scheduleArticleRows.Count > 0 && scheduleQuartersRow is not null;
+            budgetUploadOk = await UploadBudgetToVisaryAsync(
+                context.SessionId, budgetRows.Count, paramsApplied, schedulePending, errors, ct);
+            if (budgetUploadOk.Value)
+                applied += budgetRows.Count;
         }
 
         if (scheduleArticleRows.Count > 0 && scheduleQuartersRow is not null)
         {
-            // ГФ Главы 1: для каждой mapped-статьи (1.1/1.6/1.8) находим WBS-узел объекта,
-            // pre-check существующие CostItem и POST/PATCH/skip per quarter. Per-cell
-            // RowAction — успех или «статья отсутствует в ИСР». См. doc 91.
-            var scheduleApply = await ApplyChapter1ScheduleAsync(
-                siteId, scheduleQuartersRow, scheduleArticleRows, errors, rowActions, ct);
-            applied += scheduleApply;
+            if (budgetUploadOk == false)
+            {
+                // Бюджет в Visary не доехал — WBS-узлов для ГФ ещё нет. Skip ГФ молча:
+                // факт «ГФ Главы 1 не создан» уже включён в сообщение budget_upload_*.
+                _log.LogWarning(
+                    "FinModelImportMapper: бюджет в Visary не завершён успешно — ГФ Главы 1 пропущен (siteId={SiteId})",
+                    siteId);
+            }
+            else
+            {
+                // ГФ Главы 1: для каждой mapped-статьи (1.1/1.6/1.8) находим WBS-узел объекта,
+                // pre-check существующие CostItem и POST/PATCH/skip per quarter. Per-cell
+                // RowAction — успех или «статья отсутствует в ИСР». См. doc 91.
+                var scheduleApply = await ApplyChapter1ScheduleAsync(
+                    siteId, scheduleQuartersRow, scheduleArticleRows, errors, rowActions, ct);
+                applied += scheduleApply;
+            }
         }
         else if (scheduleArticleRows.Count > 0)
         {
@@ -426,6 +450,131 @@ public sealed class FinModelImportMapper : IImportMapper
         }
 
         return new ApplyResult(applied, errors, rowActions.Count > 0 ? rowActions : null);
+    }
+
+    /// <summary>
+    /// Заливает сгенерированный XLSX бюджета в файловое хранилище Visary, создаёт
+    /// <c>typedimportwbs</c> и дожидается финального статуса. Возвращает <c>true</c>,
+    /// если Visary вернул «Закончен успешно» либо «Закончен с предупреждениями» (оба
+    /// разрешают запуск импорта ГФ); иначе — <c>false</c> с одной консолидированной
+    /// row-error: что было сделано до бюджета + причина от Visary + явное упоминание,
+    /// что ГФ Главы 1 не созданы (если они были запланированы).
+    /// </summary>
+    /// <remarks>
+    /// <see cref="BudgetVisaryUploader"/> зарегистрирован Scoped (зависит от
+    /// <c>ImportServiceDbContext</c>), а мапер — Singleton, поэтому открываем мини-scope
+    /// через <see cref="IServiceScopeFactory"/>. Сам uploader держит логику upload+poll.
+    /// </remarks>
+    private async Task<bool> UploadBudgetToVisaryAsync(
+        Guid sessionId,
+        int budgetRowsCount,
+        bool paramsApplied,
+        bool schedulePending,
+        List<RowError> errors,
+        CancellationToken ct)
+    {
+        try
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var uploader = scope.ServiceProvider.GetRequiredService<BudgetVisaryUploader>();
+            var result = await uploader.UploadAndWaitAsync(sessionId, ct: ct);
+
+            if (result.Success)
+            {
+                _log.LogInformation(
+                    "FinModelImportMapper: бюджет залит в Visary (typedImportWbsId={Id}, status='{Status}', errors={Errors}, warnings={Warnings}, budgetRows={Rows})",
+                    result.Upload.TypedImportWbsId, result.FinalStatus,
+                    result.CountErrors, result.CountWarnings, budgetRowsCount);
+                return true;
+            }
+
+            var summary = BuildBudgetFailureSummary(
+                paramsApplied, schedulePending, result.Upload.TypedImportWbsId,
+                result.FinalStatus, result.CountErrors, result.CountWarnings,
+                result.TimedOut, exceptionMessage: null);
+            errors.Add(new RowError(null,
+                result.TimedOut ? "budget_upload_timeout" : "budget_upload_failed",
+                summary));
+            return false;
+        }
+        catch (Exception ex)
+        {
+            _log.LogError(ex, "FinModelImportMapper: ошибка автоматической загрузки бюджета (sessionId={SessionId})", sessionId);
+            var summary = BuildBudgetFailureSummary(
+                paramsApplied, schedulePending, typedImportWbsId: null,
+                finalStatus: null, countErrors: null, countWarnings: null,
+                timedOut: false, exceptionMessage: ex.Message);
+            errors.Add(new RowError(null, "budget_upload_error", summary));
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Формирует единое сообщение о завершении импорта при провале бюджета. Три блока:
+    /// (1) что было сделано до бюджета (параметры объекта применены / не применялись);
+    /// (2) почему импорт бюджета не прошёл — статус Visary + counts либо текст исключения;
+    /// (3) ГФ Главы 1 не созданы (если они были запланированы).
+    /// </summary>
+    private static string BuildBudgetFailureSummary(
+        bool paramsApplied,
+        bool schedulePending,
+        int? typedImportWbsId,
+        string? finalStatus,
+        int? countErrors,
+        int? countWarnings,
+        bool timedOut,
+        string? exceptionMessage)
+    {
+        var sb = new System.Text.StringBuilder();
+
+        // (1) Что сделано
+        sb.Append("Импорт Финмодели завершён. ");
+        sb.Append(paramsApplied
+            ? "Параметры объекта строительства (отделка, класс жилья, адрес, показатели) применены."
+            : "Параметры объекта строительства не применялись.");
+
+        // (2) Почему не прошёл бюджет
+        sb.Append(' ');
+        if (exceptionMessage is not null)
+        {
+            sb.Append($"Импорт бюджета в Visary не выполнен: {exceptionMessage}.");
+        }
+        else if (timedOut)
+        {
+            sb.Append("Импорт бюджета в Visary не завершился за отведённое время");
+            if (typedImportWbsId is not null)
+                sb.Append($" (typedimportwbs ID={typedImportWbsId.Value}");
+            if (!string.IsNullOrWhiteSpace(finalStatus))
+                sb.Append($"{(typedImportWbsId is not null ? ", " : " (")}последний статус: «{finalStatus}»");
+            if (typedImportWbsId is not null || !string.IsNullOrWhiteSpace(finalStatus))
+                sb.Append(')');
+            sb.Append('.');
+        }
+        else
+        {
+            sb.Append($"Импорт бюджета в Visary завершился со статусом «{finalStatus ?? "—"}»");
+            var hasErr = countErrors is not null && countErrors > 0;
+            var hasWarn = countWarnings is not null && countWarnings > 0;
+            if (hasErr || hasWarn)
+            {
+                sb.Append(" (");
+                if (hasErr) sb.Append($"ошибок: {countErrors}");
+                if (hasErr && hasWarn) sb.Append(", ");
+                if (hasWarn) sb.Append($"предупреждений: {countWarnings}");
+                sb.Append(')');
+            }
+            sb.Append('.');
+            if (typedImportWbsId is not null)
+                sb.Append($" Детали — в карточке typedimportwbs ID={typedImportWbsId.Value} в Visary.");
+        }
+
+        // (3) ГФ
+        sb.Append(' ');
+        sb.Append(schedulePending
+            ? "ГФ Главы 1 не создан, так как WBS-узлы появляются в Visary только после успешного импорта бюджета."
+            : "ГФ Главы 1 не запрашивался.");
+
+        return sb.ToString();
     }
 
     /// <summary>

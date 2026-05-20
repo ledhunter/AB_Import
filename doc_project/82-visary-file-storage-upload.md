@@ -2,25 +2,28 @@
 
 ## 📋 Описание
 
-**Статус**: 🟢 v1.2 — папка из проекта **+** case-insensitive парсинг link-токена.
-**Дата**: 2026-05-15 (v1.1/v1.2), 2026-05-14 (v1.0).
+**Статус**: 🟢 v1.3 — заливка идёт **автоматически в Apply-фазе** + polling статуса.
+**Дата**: 2026-05-19 (v1.3), 2026-05-15 (v1.1/v1.2), 2026-05-14 (v1.0).
 **Зависит от**: [78-budget-xlsx-export.md](78-budget-xlsx-export.md) (генерация XLSX).
+**Связанная документация**: [94-finmodel-auto-budget-before-gf.md](94-finmodel-auto-budget-before-gf.md) — почему бюджет должен закончиться раньше, чем стартует ГФ Главы 1.
 **Источники API**: `Context/har файл по загрузке бюджета в папку ФХ.txt`, `Context/har импорт бюджета.txt`.
 
 ### 📌 История версий
 
-| | v1.0 (2026-05-14) | v1.1 (2026-05-15) | v1.2 (2026-05-15) |
-|---|---|---|---|
-| `drive_id` / `directory_id` | константы из `Visary:BudgetUpload:DriveId/DirectoryId` | парсятся из `ConstructionProject.ProjectFolder` (`«32,40110»`) | то же |
-| Кол-во HTTP-вызовов в `UploadAsync` | 3 | **4** (+`GET constructionproject/{id}`) | 4 |
-| `BudgetUploadOptions` | `DriveId`/`DirectoryId`/`ImportType` | только `ImportType` | только `ImportType` |
-| Парсинг ответа `/file_link/by_id` | `link/result/value/token` через `TryGetProperty` (case-sensitive) | то же | **case-insensitive** (`Link`/`Result`/…) |
+| | v1.0 (2026-05-14) | v1.1 (2026-05-15) | v1.2 (2026-05-15) | v1.3 (2026-05-19) |
+|---|---|---|---|---|
+| `drive_id` / `directory_id` | константы из `Visary:BudgetUpload:DriveId/DirectoryId` | парсятся из `ConstructionProject.ProjectFolder` (`«32,40110»`) | то же | то же |
+| Кол-во HTTP-вызовов в `UploadAsync` | 3 | **4** (+`GET constructionproject/{id}`) | 4 | 4 + N polling-итераций |
+| `BudgetUploadOptions` | `DriveId`/`DirectoryId`/`ImportType` | только `ImportType` | только `ImportType` | только `ImportType` |
+| Парсинг ответа `/file_link/by_id` | `link/result/value/token` через `TryGetProperty` (case-sensitive) | то же | **case-insensitive** (`Link`/`Result`/…) | то же |
+| Триггер загрузки | ручная кнопка `kind="budget-upload"` | то же | то же | **авто в Apply-фазе финмодели** (кнопка снята, endpoint удалён) |
+| Ожидание завершения Visary | нет, fire-and-forget | то же | то же | **polling `typedimportwbs` каждые 3 сек, дедлайн 5 мин** |
 
 ⚠️ **Регрессия v1.1→v1.2**: Visary вернул JSON `{"Link":"…"}` в **PascalCase**, `TryGetProperty("link")` его не нашёл, `ExtractLinkToken` свалился в fallback `return raw` и отдал backend-у сериализованный JSON-объект целиком. Это уехало в Visary как `File` → Visary распарсил как Base-64 → 500 «not a valid Base-64 string». Фикс — итерация `EnumerateObject()` + `OrdinalIgnoreCase`.
 
-После Apply сессии «Финмодель» backend умеет **двумя кнопками** в разделе «Сформированные файлы»:
-- **Скачать** — отдаёт `Бюджет_{id}.xlsx` для ручного импорта (старое поведение, v1.1).
-- **Загрузить** *(новое)* — заливает тот же XLSX в файловое хранилище Visary + создаёт `typedimportwbs` (TypedJournal-задание), которое Visary обрабатывает в фоне.
+🔄 **v1.3**: ручная кнопка «Загрузить бюджет в Visary» и `POST /api/imports/{id}/budget-upload` удалены. По правильному порядку бизнес-процесса бюджет должен залиться до создания ГФ Главы 1 (WBS-узлы для `CostItem` появляются в ИСР именно по результатам импорта бюджета). Поэтому теперь `FinModelImportMapper.ApplyAsync` сам вызывает `BudgetVisaryUploader.UploadAndWaitAsync` (`UploadAsync` + polling `GET /api/visary/crud/typedimportwbs/{id}`); ГФ запускается только при статусах «Закончен успешно» / «Закончен с предупреждениями». См. [doc 94](94-finmodel-auto-budget-before-gf.md).
+
+В разделе «Сформированные файлы» после Apply остаётся **только** кнопка **«Скачать»** — `Бюджет_{id}.xlsx` для проверки/back-up. Action-кнопок UI больше не показывает.
 
 ---
 
@@ -107,44 +110,58 @@ Content-Type: application/json
 
 ## 🏗️ Архитектура backend
 
-### Поток
+### Поток (v1.3 — авто из Apply финмодели)
 
 ```
-POST /api/imports/{id}/budget-upload
+POST /api/imports/{id}/apply
         │
         ▼
-BudgetVisaryUploader.UploadAsync(sessionId)
-   ├─ 0. CrudClient.GetProjectByIdFullAsync(projectId)      → ProjectFolder="d,dir"  (v1.1)
-   ├─ 0.5 ParseProjectFolder("32,40110")                    → (driveId=32, directoryId=40110)
-   ├─ 1. BudgetXlsxExporter.GenerateAsync(sessionId)        → byte[] xlsx
-   ├─ 2. FileStorageClient.UploadAsync(drive, dir, ...)     → int itemId
-   ├─ 3. FileStorageClient.GetFileLinkAsync(drive, itemId)  → string linkToken
-   └─ 4. CrudClient.CreateTypedImportWbsAsync(...)          → int importId
-   ⇒ { fileStorageItemId, typedImportWbsId, fileName }
+FinModelImportMapper.ApplyAsync
+   ├─ ApplyParametersAsync(siteId, paramRows)                ─── params
+   │
+   ├─ if (budgetRows.Count > 0):                              ─── budget (авто)
+   │     using scope (IServiceScopeFactory):
+   │        BudgetVisaryUploader.UploadAndWaitAsync(sessionId)
+   │           ├─ UploadAsync(sessionId):
+   │           │    ├─ 0. CrudClient.GetProjectByIdFullAsync(projectId)      → ProjectFolder
+   │           │    ├─ 0.5 ParseProjectFolder("32,40110")                    → (drive, dir)
+   │           │    ├─ 1. BudgetXlsxExporter.GenerateAsync(sessionId)        → byte[] xlsx
+   │           │    ├─ 2. FileStorageClient.UploadAsync(drive, dir, …)       → itemId
+   │           │    ├─ 3. FileStorageClient.GetFileLinkAsync(drive, itemId)  → linkToken
+   │           │    └─ 4. CrudClient.CreateTypedImportWbsAsync(…)            → importId
+   │           └─ poll loop: CrudClient.GetTypedImportWbsByIdAsync(importId) каждые 3 сек
+   │                        дедлайн 5 мин
+   │              ⇒ { Success, TimedOut, FinalStatus, CountErrors, CountWarnings }
+   │     → budgetUploadOk: bool? (null если budgetRows.Count == 0)
+   │
+   └─ if (scheduleArticleRows.Count > 0 && quartersRow):       ─── ГФ
+         if (budgetUploadOk == false) → пропустить (факт «ГФ не создан» уже в budget_upload_failed)
+         else                          → ApplyChapter1ScheduleAsync(siteId, …)
 ```
 
 ### Ключевые места кода
 
 | Компонент | Файл | Что |
 |---|---|---|
-| `IFileStorageClient` (НОВЫЙ) | [FileStorageClient.cs](../Visary.Api.Client/FileStorage/FileStorageClient.cs) | `UploadAsync` + `GetFileLinkAsync`, `ExtractLinkToken` (устойчив к raw-string и JSON-обёртке) |
+| `IFileStorageClient` | [FileStorageClient.cs](../Visary.Api.Client/FileStorage/FileStorageClient.cs) | `UploadAsync` + `GetFileLinkAsync`, `ExtractLinkToken` (устойчив к raw-string и JSON-обёртке) |
 | `ICrudClient.CreateTypedImportWbsAsync` | [CrudClient.cs](../Visary.Api.Client/CRUD/CrudClient.cs) | POST `/api/visary/crud/typedimportwbs` |
-| DTO запроса | [VisaryCrudRequests.cs](../Visary.Api.Client/Dto/VisaryCrudRequests.cs) | `TypedImportWbsCreateRequest`, `TypedImportWbsRaw` |
+| `ICrudClient.GetTypedImportWbsByIdAsync` *(v1.3)* | [CrudClient.cs](../Visary.Api.Client/CRUD/CrudClient.cs) | `GET /api/visary/crud/typedimportwbs/{id}` для polling-а статуса |
+| DTO запроса/статуса | [VisaryCrudRequests.cs](../Visary.Api.Client/Dto/VisaryCrudRequests.cs) | `TypedImportWbsCreateRequest`, `TypedImportWbsRaw` (+`CountErrors`/`CountWarnings`/`StartDate`/`FinishDate` в v1.3) |
 | Мнемоника | [VisaryMnemonics.cs](../Visary.Api.Client/Common/VisaryMnemonics.cs) | `TypedImportWbs = "typedimportwbs"` |
 | Конфиг importType | [VisaryOptions.cs](../Visary.Api.Client/VisaryOptions.cs) | `BudgetUploadOptions.ImportType` (дефолт `10`); поля диска/папки удалены в v1.1 |
 | Источник drive/dir | [ConstructionProjectFull.cs](../Visary.Api.Client/Dto/Generated/ConstructionProjectFull.cs) → `ProjectFolder` | парсинг — `BudgetVisaryUploader.ParseProjectFolder` |
 | DI Visary client | [VisaryClientExtensions.cs](../Visary.Api.Client/VisaryClientExtensions.cs) | `AddHttpClient<IFileStorageClient, FileStorageClient>` |
-| Pipeline | [BudgetVisaryUploader.cs](../KiloImportService.Api/Budget/BudgetVisaryUploader.cs) | `UploadAsync` оркестрирует все 4 шага |
-| Endpoint | [ImportsController.cs](../KiloImportService.Api/Controllers/ImportsController.cs) | `POST /api/imports/{id}/budget-upload` (200 → `{fileStorageItemId, typedImportWbsId, fileName}`) |
+| Pipeline upload | [BudgetVisaryUploader.cs](../KiloImportService.Api/Budget/BudgetVisaryUploader.cs) | `UploadAsync` оркестрирует 4 HTTP-шага |
+| Pipeline upload+wait *(v1.3)* | [BudgetVisaryUploader.cs](../KiloImportService.Api/Budget/BudgetVisaryUploader.cs) | `UploadAndWaitAsync(sessionId, pollInterval=3s, maxWait=5min)`; классификаторы `IsSuccessStatus`/`IsFailureStatus` (case-insensitive по корням слов) |
+| Auto-вызов из Apply *(v1.3)* | [FinModelImportMapper.cs](../KiloImportService.Api/Domain/Mapping/FinModelImportMapper.cs) | `UploadBudgetToVisaryAsync(sessionId, …)` через `IServiceScopeFactory` (мапер Singleton, uploader Scoped) |
+| ~~Endpoint~~ *(удалён в v1.3)* | ~~`POST /api/imports/{id}/budget-upload`~~ | теперь не нужен — загрузка происходит автоматически в Apply |
 | DI сервиса | [Program.cs](../KiloImportService.Api/Program.cs) | `AddScoped<BudgetVisaryUploader>()` |
-| `generatedFiles` | [ImportsController.cs](../KiloImportService.Api/Controllers/ImportsController.cs) | `BuildGeneratedFilesAsync` — добавлен второй элемент `kind="budget-upload"` рядом с `kind="budget-xlsx"` |
+| `generatedFiles` *(упрощён в v1.3)* | [ImportsController.cs](../KiloImportService.Api/Controllers/ImportsController.cs) | `BuildGeneratedFilesAsync` — оставлен только `kind="budget-xlsx"` (back-up для проверки); `kind="budget-upload"` снят |
 
-### UI
+### UI *(упрощён в v1.3)*
 
-- API-тип [ApiGeneratedFile](../KiloImportService.Web/src/types/api.ts) расширен полем `actionUrl?: string \| null`; `downloadUrl` теперь `string \| null`.
-- Компонент [SessionGeneratedFiles.tsx](../KiloImportService.Web/src/components/ImportSession/SessionGeneratedFiles.tsx) распознаёт оба варианта:
-  - есть `downloadUrl` → кнопка **«Скачать»** (старый паттерн: fetch → blob → `<a download>`);
-  - есть только `actionUrl` → кнопка **«Загрузить»** (primary), POST → toast с ID импорта.
+- [ApiGeneratedFile](../KiloImportService.Web/src/types/api.ts) — поле `actionUrl?: string \| null` зарезервировано, backend больше не выставляет.
+- [SessionGeneratedFiles.tsx](../KiloImportService.Web/src/components/ImportSession/SessionGeneratedFiles.tsx) — только кнопка **«Скачать»** (fetch → blob → `<a download>`). Action-логика (`handleAction`, `buildSuccessMessage`, toast) удалена.
 
 ---
 
@@ -282,12 +299,13 @@ var itemId = ExtractItemId(raw) ?? throw …;
 
 | Шаг | Файл / endpoint |
 |---|---|
-| User: «Загрузить бюджет в Visary» (кнопка) | [SessionGeneratedFiles.tsx](../KiloImportService.Web/src/components/ImportSession/SessionGeneratedFiles.tsx) |
-| POST `/api/imports/{id}/budget-upload` | [ImportsController.cs](../KiloImportService.Api/Controllers/ImportsController.cs) — `UploadBudgetToVisary` |
-| Оркестратор | [BudgetVisaryUploader.cs](../KiloImportService.Api/Budget/BudgetVisaryUploader.cs) |
+| User: «Apply» сессии финмодели | [SessionDetailsPage](../KiloImportService.Web/src/pages/SessionDetailsPage.tsx) → `POST /api/imports/{id}/apply` |
+| Оркестратор Apply | [FinModelImportMapper.cs](../KiloImportService.Api/Domain/Mapping/FinModelImportMapper.cs) → `ApplyAsync` / `UploadBudgetToVisaryAsync` |
+| Upload + polling | [BudgetVisaryUploader.cs](../KiloImportService.Api/Budget/BudgetVisaryUploader.cs) → `UploadAndWaitAsync` |
 | Генерация XLSX | [BudgetXlsxExporter.cs](../KiloImportService.Api/Budget/BudgetXlsxExporter.cs) (см. [doc 78](78-budget-xlsx-export.md)) |
 | Заливка в ФХ | [FileStorageClient.cs](../Visary.Api.Client/FileStorage/FileStorageClient.cs) |
-| TypedJournal | [CrudClient.cs](../Visary.Api.Client/CRUD/CrudClient.cs) — `CreateTypedImportWbsAsync` |
+| TypedJournal create/status | [CrudClient.cs](../Visary.Api.Client/CRUD/CrudClient.cs) — `CreateTypedImportWbsAsync`, `GetTypedImportWbsByIdAsync` |
+| Back-up: «Скачать XLSX» | [SessionGeneratedFiles.tsx](../KiloImportService.Web/src/components/ImportSession/SessionGeneratedFiles.tsx) → `GET /api/imports/{id}/budget-xlsx` |
 
 ---
 
@@ -296,7 +314,7 @@ var itemId = ExtractItemId(raw) ?? throw …;
 - [ ] При обновлении Visary — повторно проверить формат ответа `POST /api/files/files/upload` (видели: bare-int, quoted-int, `[id]`-массив). Если появится новый вариант — расширить `ExtractItemId` в [FileStorageClient.cs](../Visary.Api.Client/FileStorage/FileStorageClient.cs).
 - [ ] При переходе на prod-окружение: сверить только `BudgetUploadOptions.ImportType` со справочниками Visary (`Visary:BudgetUpload:ImportType` / env `Visary__BudgetUpload__ImportType`). Папка диска **не настраивается** — она приходит из `ConstructionProject.ProjectFolder` (поэтому в каждом проекте оно должно быть заполнено корректно).
 - [ ] Token из `.env` имеет права на запись в папку из `ProjectFolder` (`check_permission=true` — Visary проверит).
-- [ ] Не использовать `kind="budget-upload"` для сессий, у которых `visaryProjectId`/`visarySiteId` пустые — `BudgetVisaryUploader.UploadAsync` бросит `InvalidOperationException` (endpoint вернёт 400).
-- [ ] Если у выбранного проекта `ProjectFolder` пустой / не парсится в `«driveId,directoryId»` — endpoint вернёт 400 с указанием `projectId`. Это **не баг сервиса импорта**, а конфиг карточки проекта в Visary (поправить в Visary UI или через `PATCH /api/visary/crud/constructionproject/{id}`).
-- [ ] Для отладки: статус задания доступен через `GET /api/visary/crud/typedimportwbs/{id}` — пока этот метод не обёрнут в `ICrudClient`; при необходимости добавить по аналогии с `GetWbsByIdAsync`.
-- [ ] Поллинг статуса импорта (если потребуется в UI) — отдельная задача; сейчас при успешном создании показываем toast с ID и не отслеживаем дальнейший статус.
+- [ ] Для сессий без `visaryProjectId` / `visarySiteId` — `BudgetVisaryUploader.UploadAsync` бросит `InvalidOperationException`, и `UploadBudgetToVisaryAsync` в маппере добавит **одну** `budget_upload_error` в file-level errors сессии. Сообщение содержит «что было сделано до бюджета» + текст исключения + «ГФ Главы 1 не созданы» — ГФ при этом пропускается без отдельной записи.
+- [ ] Если у выбранного проекта `ProjectFolder` пустой / не парсится в `«driveId,directoryId»` — аналогично: file-level error, ГФ пропущен. Это **не баг сервиса импорта**, а конфиг карточки проекта в Visary (поправить в Visary UI или через `PATCH /api/visary/crud/constructionproject/{id}`).
+- [ ] При обновлении Visary — пересмотреть тексты `Status` (классификаторы `IsSuccessStatus` / `IsFailureStatus` матчат по корням «успеш»/«предупреж»/«ошибк»/`error`/`fail`/`complet`/`warning`; если корни изменятся — править здесь, DTO не трогать).
+- [ ] Поллинг-параметры (3 сек / 5 мин) сейчас хардкод в `UploadAndWaitAsync`. Если будут большие бюджеты — параметризовать через `appsettings`.

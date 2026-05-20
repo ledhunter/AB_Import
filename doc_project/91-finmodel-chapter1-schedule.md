@@ -63,6 +63,17 @@ new KeyValueVertical(
 
 Шаг `ApplyChapter1ScheduleAsync` (в `ApplyAsync`):
 
+> 🔁 **Порядок в Apply (v1.3 финмодели)**: ГФ запускается **после** автоматической
+> заливки бюджета в Visary (см. [doc 82](82-visary-file-storage-upload.md),
+> [doc 94](94-finmodel-auto-budget-before-gf.md)). WBS-узлы (`1.1.`, `1.6.`, `1.8.`)
+> создаются именно импортом бюджета — без него ниже было бы 70+ записей
+> «статья отсутствует в ИСР» на каждую квартальную ячейку. Если бюджет вернул статус
+> «Закончен с ошибкой» / `TimedOut` — `ApplyChapter1ScheduleAsync` **не вызывается**,
+> а в сессии остаётся одна консолидированная row-error от шага бюджета
+> (`budget_upload_failed` / `budget_upload_timeout` / `budget_upload_error`) с тремя
+> блоками: что было сделано, причина Visary (статус + counts + typedimportwbs ID),
+> «ГФ Главы 1 не созданы». См. [doc 94 v1.1](94-finmodel-auto-budget-before-gf.md).
+
 1. `_listViewClient.GetWbsBySiteAsync(siteId, ct)` — загружаем WBS объекта.
 2. Строим `WbsByCode` (`"1.1."` → `WbsRaw`). Если статьи нет → per-cell `RowActionLog`
    с сообщением заказчика:

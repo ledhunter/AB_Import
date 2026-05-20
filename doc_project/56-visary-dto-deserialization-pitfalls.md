@@ -3,18 +3,19 @@
 ## 📋 Описание
 
 **Статус**: ✅ Документировано
-**Дата**: 2026-05-06
+**Дата**: 2026-05-06 (исходные 3 поля) · 2026-05-20 (доп. 1 поле — `TypedImportWbsRaw.Status`)
 
 Visary возвращает одно и то же поле **разными типами** в зависимости от контекста.
 Когда DTO жёстко типизирован (`string?`/`VisaryRef?`/`int?`), любой такой случай ⇒ `JsonException` ⇒ **HTTP 500** на нашей стороне.
 
-В этой сессии нашли и починили **3 таких поля**, всё через переключение на `JsonElement?`:
+Накопленный список случаев — все через переключение на `JsonElement?`:
 
 | Сущность | Поле | Было | Стало | Кейс падения |
 |----------|------|------|-------|--------------|
 | `OrganizationRaw` | `Status` | `string?` | `JsonElement?` | API возвращает числовой код (`10`) |
 | `RoomRaw` | `RoomCategory` | `VisaryRef?` | `JsonElement?` | listview даёт скаляр, crud — объект |
 | `ConstructionSiteIndicatorRaw` | `MainSource` | `string?` | `JsonElement?` | то строка, то число |
+| `TypedImportWbsRaw` | `Status` | `string?` | `JsonElement?` | приходит **числом** (`50`); классификация — по таблице кодов 10/20/30/40/50, см. [doc 94 v1.3](94-finmodel-auto-budget-before-gf.md). Инцидент ID=9442: 100 безмолвных `JsonException` в polling-е → 5-минутный таймаут на завершённом за секунды импорте |
 
 ---
 
@@ -177,6 +178,8 @@ public sealed class RoomRaw
 |------|--------------|
 | [Visary.Api.Client/Dto/VisaryEntities.cs](../Visary.Api.Client/Dto/VisaryEntities.cs) | `*Raw` DTO для listview (с `JsonElement?` для проблемных полей) |
 | [Visary.Api.Client/Dto/Generated/](../Visary.Api.Client/Dto/Generated/) | `*Full` DTO для crud-by-id, генерируются из `visary_api.fields` |
+| [Visary.Api.Client/Dto/VisaryCrudRequests.cs](../Visary.Api.Client/Dto/VisaryCrudRequests.cs) | `TypedImportWbsRaw.Status: JsonElement?` (число) — добавлено 2026-05-20 |
+| [KiloImportService.Api/Budget/BudgetVisaryUploader.cs](../KiloImportService.Api/Budget/BudgetVisaryUploader.cs) | Классификаторы `IsSuccessStatus`/`IsFailureStatus` для `TypedImportWbsRaw.Status`: сначала числовой код по таблице 10/20/30/40/50, потом текстовый fallback по корням слов — см. [doc 94 v1.3](94-finmodel-auto-budget-before-gf.md) |
 | [scripts/generate-visary-dtos.ps1](../scripts/generate-visary-dtos.ps1) | Генератор: `null`-поля → `JsonElement?` (без угадывания) |
 
 ---
