@@ -128,7 +128,19 @@ export interface ApiImportReport {
   };
   /** Все листы сессии с числом строк — для рисования сворачиваемых заголовков. */
   sheetTotals: ApiSheetTotal[];
+  /**
+   * Счётчики по action-меткам (created/updated/skipped) по ВСЕЙ сессии,
+   * не по текущей странице. Категоризация по главной сущности строки —
+   * см. doc 98 v1.1. У старого backend'а поля может не быть → `undefined`.
+   */
+  actionTotals?: ApiActionTotals;
   errors: ApiImportError[];
+}
+
+export interface ApiActionTotals {
+  created: number;
+  updated: number;
+  skipped: number;
 }
 
 /** Ответ `POST /api/imports` — sessionId + начальный статус. */

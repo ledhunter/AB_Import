@@ -19,7 +19,15 @@ interface Props {
   ) => void;
 }
 
-type Filter = 'all' | 'invalid' | 'valid' | 'applied' | 'failed';
+type Filter =
+  | 'all'
+  | 'invalid'
+  | 'valid'
+  | 'applied'
+  | 'failed'
+  | 'created'
+  | 'updated'
+  | 'skipped';
 
 const ROW_STATUS_LABEL: Record<RowStatus, string> = {
   Pending: 'Ожидает',
@@ -37,12 +45,45 @@ const ROW_STATUS_COLOR: Record<RowStatus, 'green' | 'red' | 'orange' | 'grey'> =
   Failed: 'red',
 };
 
+/**
+ * Action-фильтры — по реальному действию над ГЛАВНОЙ сущностью строки
+ * (помещение). Строка может содержать побочные метки («ДДУ создан»,
+ * «Корпус найден», «Застройщик переиспользован» …), но при подсчёте
+ * нас интересует ровно одно: помещение создано, обновлено или skip-нуто.
+ * Иначе фильтры будут пересекаться — строка с PATCH Room + CREATE SA
+ * попала бы и в «Созданные», и в «Обновлённые», сумма превысила бы
+ * `Applied`. Метки совпадают с теми, что пишет
+ * [RoomsFormImportMapper.cs](../../../KiloImportService.Api/Domain/Mapping/RoomsFormImportMapper.cs)
+ * — `«Помещение создано (№…)»` / `«Помещение обновлено (№…)»` /
+ * `«Без изменений — пропуск (snapshot)»`.
+ *
+ * Категории взаимоисключающие → сумма counts.created + updated + skipped
+ * ≤ Applied (равенство — когда каждая Applied-строка относится к
+ * помещению; для not-RoomsForm импортов часть строк может не иметь
+ * ни одной из этих меток).
+ */
+function actionMatchesCreated(actions: readonly string[]): boolean {
+  return actions.some((a) => /Помещение создан/i.test(a));
+}
+function actionMatchesUpdated(actions: readonly string[]): boolean {
+  return actions.some((a) => /Помещение обновлен/i.test(a));
+}
+function actionMatchesSkipped(actions: readonly string[]): boolean {
+  // «Без изменений — пропуск (snapshot)» — единственная метка skip-а из
+  // RoomApplySnapshotStore diff-hash (doc 96). На случай переименований
+  // матчим оба корня — «Без изменений» и «пропуск».
+  return actions.some((a) => /Без изменений|пропуск/i.test(a));
+}
+
 function matchesFilter(row: UiReportRow, filter: Filter): boolean {
   if (filter === 'all') return true;
   if (filter === 'valid') return row.status === 'Valid' || row.status === 'Applied';
   if (filter === 'invalid') return row.status === 'Invalid';
   if (filter === 'applied') return row.status === 'Applied';
   if (filter === 'failed') return row.status === 'Failed';
+  if (filter === 'created') return actionMatchesCreated(row.actions);
+  if (filter === 'updated') return actionMatchesUpdated(row.actions);
+  if (filter === 'skipped') return actionMatchesSkipped(row.actions);
   return false;
 }
 
@@ -78,11 +119,19 @@ export const SessionRowsTable = ({ report, onPageChange }: Props) => {
     return sheets;
   }, [report.sheetTotals]);
 
-  // Имя листа `null` (одностраничный импорт) запретим к сворачиванию — там
-  // и сворачивать нечего, и backend исключение по null не поддерживает.
-  const canCollapseAny = allSheets.length > 1;
+  // Сворачивание разрешено для любого именованного листа — даже единственного.
+  // Раньше требовали `>1`, но это лишало пользователя возможности скрыть
+  // тысячи строк одного листа (типичный случай файлов «Помещения»: один лист
+  // «Квартира» на 6000+ строк). Имя `null` (одностраничный импорт без листов)
+  // по-прежнему запрещаем — backend исключение по null не поддерживает.
+  const canCollapseAny = allSheets.length >= 1;
 
   const counts = useMemo(() => {
+    // Status-based счётчики — по ВИДИМОЙ странице (как и раньше): backend
+    // не агрегирует Invalid/Failed/etc по всей сессии, кроме `successRows`
+    // / `errorRows` в карточках сверху. Для action-фильтров есть отдельный
+    // session-wide `report.actionTotals` (doc 98 v1.2) — там сервер уже
+    // прошёлся по jsonb-меткам всех Applied-строк сессии.
     const byStatus: Record<RowStatus, number> = {
       Pending: 0,
       Valid: 0,
@@ -97,8 +146,11 @@ export const SessionRowsTable = ({ report, onPageChange }: Props) => {
       valid: byStatus.Valid + byStatus.Applied,
       applied: byStatus.Applied,
       failed: byStatus.Failed,
+      created: report.actionTotals.created,
+      updated: report.actionTotals.updated,
+      skipped: report.actionTotals.skipped,
     };
-  }, [report.rows]);
+  }, [report.rows, report.actionTotals]);
 
   const filtered = useMemo(
     () => report.rows.filter((r) => matchesFilter(r, filter)),
@@ -222,6 +274,36 @@ export const SessionRowsTable = ({ report, onPageChange }: Props) => {
             onClick={() => setFilter('failed')}
           >
             Не применилось
+          </FilterButton>
+        )}
+        {/* Action-фильтры по `row.actions` — что реально произошло с записью
+            в Visary. Показываем кнопки только когда такие строки есть на
+            текущей странице, иначе пустые табы дезинформируют. См. doc 98. */}
+        {counts.created > 0 && (
+          <FilterButton
+            active={filter === 'created'}
+            count={counts.created}
+            onClick={() => setFilter('created')}
+          >
+            Созданные
+          </FilterButton>
+        )}
+        {counts.updated > 0 && (
+          <FilterButton
+            active={filter === 'updated'}
+            count={counts.updated}
+            onClick={() => setFilter('updated')}
+          >
+            Обновлённые
+          </FilterButton>
+        )}
+        {counts.skipped > 0 && (
+          <FilterButton
+            active={filter === 'skipped'}
+            count={counts.skipped}
+            onClick={() => setFilter('skipped')}
+          >
+            Пропущенные
           </FilterButton>
         )}
       </div>
