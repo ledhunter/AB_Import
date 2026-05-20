@@ -130,11 +130,13 @@ export const ImportHistoryPage = () => {
         <HistoryFilters
           status={history.query.status}
           importTypeCode={history.query.importTypeCode}
+          projectId={history.query.projectId}
           importTypes={importTypes.data}
           total={history.total}
           loading={history.loading}
           onStatusChange={(status) => history.setFilters({ status })}
           onTypeChange={(importTypeCode) => history.setFilters({ importTypeCode })}
+          onProjectChange={(projectId) => history.setFilters({ projectId })}
           onRefresh={() => void history.refresh()}
         />
       </div>
@@ -147,6 +149,11 @@ export const ImportHistoryPage = () => {
         error={history.error}
         importTypes={importTypes.data}
         selectedIds={selectedIds}
+        hasActiveFilters={
+          history.query.status != null ||
+          history.query.importTypeCode != null ||
+          history.query.projectId != null
+        }
         onOpen={setOpenedSessionId}
         onToggleOne={toggleOne}
         onToggleAllOnPage={toggleAllOnPage}

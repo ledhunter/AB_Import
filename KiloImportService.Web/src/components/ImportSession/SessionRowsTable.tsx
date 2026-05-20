@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Status } from '@alfalab/core-components/status';
 import { Typography } from '@alfalab/core-components/typography';
 import { Pagination } from '@alfalab/core-components/pagination';
@@ -8,10 +8,15 @@ interface Props {
   report: UiReport;
   /**
    * Колбэк пагинации: вызывается при клике пользователя на номер страницы
-   * (0-based — как в Alfa Pagination). Если не передан — пагинация
-   * отображается, но в read-only режиме (без кликов).
+   * (0-based — как в Alfa Pagination). Также вызывается при изменении набора
+   * свёрнутых листов (`options.excludeSheets`) — backend пересчитает `total`
+   * с учётом исключённых листов, чтобы пагинация считалась только по видимым
+   * строкам. Если не передан — пагинация отображается, но в read-only режиме.
    */
-  onPageChange?: (skip: number) => void;
+  onPageChange?: (
+    skip: number,
+    options?: { excludeSheets?: string[] },
+  ) => void;
 }
 
 type Filter = 'all' | 'invalid' | 'valid' | 'applied' | 'failed';
@@ -43,6 +48,39 @@ function matchesFilter(row: UiReportRow, filter: Filter): boolean {
 
 export const SessionRowsTable = ({ report, onPageChange }: Props) => {
   const [filter, setFilter] = useState<Filter>('all');
+  /**
+   * Свёрнутые пользователем листы. Хранятся как Set имён листов (включая
+   * специальный ключ `''` для строк без листа). Изменение этого state
+   * триггерит перезагрузку отчёта через `onPageChange` с обновлённым
+   * `excludeSheets` — иначе пагинация считала бы скрытые строки.
+   */
+  const [collapsedSheets, setCollapsedSheets] = useState<Set<string>>(
+    () => new Set(),
+  );
+
+  // Карта всех листов сессии с их полными счётчиками (без учёта excludeSheets).
+  // Нужна, чтобы в заголовке свёрнутого листа всё равно показывать "20 стр.".
+  const totalsBySheet = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const t of report.sheetTotals ?? []) {
+      map.set(t.sheet ?? '', t.total);
+    }
+    return map;
+  }, [report.sheetTotals]);
+
+  // Все известные листы (для отрисовки заголовков даже свёрнутых),
+  // сортируем как сервер: по имени, как в `OrderBy(r => r.Sheet)`.
+  const allSheets = useMemo<string[]>(() => {
+    const sheets = (report.sheetTotals ?? [])
+      .map((t) => t.sheet ?? '')
+      .filter((s) => s.length > 0);
+    sheets.sort((a, b) => a.localeCompare(b, 'ru'));
+    return sheets;
+  }, [report.sheetTotals]);
+
+  // Имя листа `null` (одностраничный импорт) запретим к сворачиванию — там
+  // и сворачивать нечего, и backend исключение по null не поддерживает.
+  const canCollapseAny = allSheets.length > 1;
 
   const counts = useMemo(() => {
     const byStatus: Record<RowStatus, number> = {
@@ -68,29 +106,71 @@ export const SessionRowsTable = ({ report, onPageChange }: Props) => {
   );
 
   /**
-   * Группируем строки по листу для многолистовых импортов.
-   * Если sheet у всех строк null/пустой — выводим одну плоскую группу без заголовка.
-   * Порядок групп = порядок появления (rows уже отсортированы по (sheet, rowNumber)).
+   * Группируем строки текущей страницы по листу. Backend уже исключил
+   * свёрнутые листы из выборки — здесь дополнительная фильтрация не нужна,
+   * но мы дорисуем «пустые» заголовки для свёрнутых листов, чтобы
+   * пользователь видел их и мог развернуть.
    */
-  const grouped = useMemo(() => {
-    const groups: { sheet: string | null; rows: UiReportRow[] }[] = [];
+  const groups = useMemo(() => {
+    const visible: { sheet: string | null; rows: UiReportRow[] }[] = [];
     const indexBySheet = new Map<string, number>();
     for (const r of filtered) {
       const key = r.sheet ?? '';
       const idx = indexBySheet.get(key);
       if (idx === undefined) {
-        indexBySheet.set(key, groups.length);
-        groups.push({ sheet: r.sheet, rows: [r] });
+        indexBySheet.set(key, visible.length);
+        visible.push({ sheet: r.sheet, rows: [r] });
       } else {
-        groups[idx].rows.push(r);
+        visible[idx].rows.push(r);
       }
     }
-    return groups;
+    return visible;
   }, [filtered]);
 
   // Показывать ли заголовки листов: если есть хотя бы один непустой sheet
   // или строки разнесены по нескольким группам.
-  const showSheetHeaders = grouped.some((g) => g.sheet && g.sheet.length > 0) || grouped.length > 1;
+  const showSheetHeaders =
+    groups.some((g) => g.sheet && g.sheet.length > 0) ||
+    groups.length > 1 ||
+    allSheets.length > 1;
+
+  // Известные backend'у листы, не присутствующие на текущей странице
+  // (например, они либо свёрнуты, либо на другой странице с тем же фильтром).
+  // Свёрнутые — рисуем как пустые заголовки с возможностью развернуть.
+  const collapsedHeaders = useMemo(
+    () =>
+      allSheets.filter(
+        (sheet) =>
+          collapsedSheets.has(sheet) &&
+          !groups.some((g) => (g.sheet ?? '') === sheet),
+      ),
+    [allSheets, collapsedSheets, groups],
+  );
+
+  // Идемпотентная отправка excludeSheets в backend при изменении set.
+  // Используем ref, чтобы избежать двойной перезагрузки при первом render'е
+  // (изначальный state — пустой Set, отправлять excludeSheets=[] не нужно,
+  // backend и так отдал бы то же самое).
+  const lastSentRef = useRef<string>('');
+  useEffect(() => {
+    const sorted = Array.from(collapsedSheets).sort();
+    const key = sorted.join('|');
+    if (key === lastSentRef.current) return;
+    lastSentRef.current = key;
+    // skip=0 — после изменения списка свёрнутых пагинация теряет смысл,
+    // удобнее вернуть пользователя в начало с уже пересчитанным total.
+    onPageChange?.(0, { excludeSheets: sorted });
+    setFilter('all');
+  }, [collapsedSheets, onPageChange]);
+
+  const toggleSheet = (sheet: string) => {
+    setCollapsedSheets((prev) => {
+      const next = new Set(prev);
+      if (next.has(sheet)) next.delete(sheet);
+      else next.add(sheet);
+      return next;
+    });
+  };
 
   return (
     <div className="report-table">
@@ -155,7 +235,7 @@ export const SessionRowsTable = ({ report, onPageChange }: Props) => {
               <th>Сообщения</th>
             </tr>
           </thead>
-          {filtered.length === 0 ? (
+          {filtered.length === 0 && collapsedHeaders.length === 0 ? (
             <tbody>
               <tr>
                 <td colSpan={3} style={{ textAlign: 'center', padding: 24 }}>
@@ -166,64 +246,83 @@ export const SessionRowsTable = ({ report, onPageChange }: Props) => {
               </tr>
             </tbody>
           ) : (
-            grouped.map((group, gi) => (
-              <tbody key={group.sheet ?? `__nosheet__${gi}`}>
-                {showSheetHeaders && (
-                  <tr className="sheet-header-row">
-                    <td colSpan={3}>
-                      <span className="sheet-header-row__title">
-                        Лист: {group.sheet || '— без листа —'}
-                      </span>
-                      <span className="sheet-header-row__count">
-                        {group.rows.length} стр.
-                      </span>
-                    </td>
-                  </tr>
-                )}
-                {group.rows.map((row) => (
-                  <tr
-                    key={`${row.sheet ?? ''}::${row.rowNumber}`}
-                    className={rowClassByStatus(row.status)}
-                  >
-                    <td>{row.rowNumber}</td>
-                    <td>
-                      <Status color={ROW_STATUS_COLOR[row.status]} view="soft">
-                        {ROW_STATUS_LABEL[row.status]}
-                      </Status>
-                    </td>
-                    <td>
-                      {row.errors.length > 0 && (
-                        <div className="messages messages--error" style={{ marginTop: 0, marginBottom: row.actions.length > 0 ? 8 : 0 }}>
-                          {row.errors.map((e, i) => (
-                            <div className="message-row" key={i}>
-                              <span className="message-field">
-                                {e.columnName ?? e.errorCode}
-                              </span>
-                              <span>{e.message}</span>
+            <>
+              {groups.map((group, gi) => {
+                const sheetKey = group.sheet ?? '';
+                const total = totalsBySheet.get(sheetKey) ?? group.rows.length;
+                return (
+                  <tbody key={group.sheet ?? `__nosheet__${gi}`}>
+                    {showSheetHeaders && (
+                      <SheetHeaderRow
+                        sheet={group.sheet}
+                        total={total}
+                        collapsed={false}
+                        canToggle={canCollapseAny && !!group.sheet}
+                        onToggle={() => group.sheet && toggleSheet(group.sheet)}
+                      />
+                    )}
+                    {group.rows.map((row) => (
+                      <tr
+                        key={`${row.sheet ?? ''}::${row.rowNumber}`}
+                        className={rowClassByStatus(row.status)}
+                      >
+                        <td>{row.rowNumber}</td>
+                        <td>
+                          <Status color={ROW_STATUS_COLOR[row.status]} view="soft">
+                            {ROW_STATUS_LABEL[row.status]}
+                          </Status>
+                        </td>
+                        <td>
+                          {row.errors.length > 0 && (
+                            <div className="messages messages--error" style={{ marginTop: 0, marginBottom: row.actions.length > 0 ? 8 : 0 }}>
+                              {row.errors.map((e, i) => (
+                                <div className="message-row" key={i}>
+                                  <span className="message-field">
+                                    {e.columnName ?? e.errorCode}
+                                  </span>
+                                  <span>{e.message}</span>
+                                </div>
+                              ))}
                             </div>
-                          ))}
-                        </div>
-                      )}
-                      {row.actions.length > 0 && (
-                        <div className="messages messages--success" style={{ marginTop: 0 }}>
-                          {row.actions.map((a, i) => (
-                            <div className="message-row" key={i}>
-                              <span className="message-field">Действие</span>
-                              <span>{a}</span>
+                          )}
+                          {row.actions.length > 0 && (
+                            <div className="messages messages--success" style={{ marginTop: 0 }}>
+                              {row.actions.map((a, i) => (
+                                <div className="message-row" key={i}>
+                                  <span className="message-field">Действие</span>
+                                  <span>{a}</span>
+                                </div>
+                              ))}
                             </div>
-                          ))}
-                        </div>
-                      )}
-                      {row.errors.length === 0 && row.actions.length === 0 && (
-                        <Typography.Text view="primary-small" color="secondary" tag="span">
-                          —
-                        </Typography.Text>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            ))
+                          )}
+                          {row.errors.length === 0 && row.actions.length === 0 && (
+                            <Typography.Text view="primary-small" color="secondary" tag="span">
+                              —
+                            </Typography.Text>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                );
+              })}
+              {/* Заголовки свёрнутых листов — рисуем под видимыми группами, чтобы
+                  пользователь видел, что лист исключён, и мог его развернуть. */}
+              {collapsedHeaders.length > 0 && (
+                <tbody>
+                  {collapsedHeaders.map((sheet) => (
+                    <SheetHeaderRow
+                      key={`__collapsed__${sheet}`}
+                      sheet={sheet}
+                      total={totalsBySheet.get(sheet) ?? 0}
+                      collapsed={true}
+                      canToggle={true}
+                      onToggle={() => toggleSheet(sheet)}
+                    />
+                  ))}
+                </tbody>
+              )}
+            </>
           )}
         </table>
       </div>
@@ -247,7 +346,8 @@ export const SessionRowsTable = ({ report, onPageChange }: Props) => {
             }}
           >
             <Typography.Text view="primary-small" color="secondary" tag="span">
-              Показано {rangeFrom}–{rangeTo} из {total} строк.
+              Показано {rangeFrom}–{rangeTo} из {total} строк
+              {collapsedSheets.size > 0 ? ' (с учётом свёрнутых листов)' : ''}.
             </Typography.Text>
             {pagesCount > 1 && (
               <Pagination
@@ -258,7 +358,9 @@ export const SessionRowsTable = ({ report, onPageChange }: Props) => {
                   // может попасть на пустой набор (страница есть, но в текущем фильтре —
                   // ни одной строки) и подумать, что переход не сработал.
                   setFilter('all');
-                  onPageChange?.(pageIndex * take);
+                  onPageChange?.(pageIndex * take, {
+                    excludeSheets: Array.from(collapsedSheets).sort(),
+                  });
                 }}
               />
             )}
@@ -274,6 +376,54 @@ function rowClassByStatus(s: RowStatus): string {
   if (s === 'Pending') return '';
   return '';
 }
+
+interface SheetHeaderRowProps {
+  sheet: string | null;
+  total: number;
+  collapsed: boolean;
+  canToggle: boolean;
+  onToggle: () => void;
+}
+
+const SheetHeaderRow = ({
+  sheet,
+  total,
+  collapsed,
+  canToggle,
+  onToggle,
+}: SheetHeaderRowProps) => (
+  <tr className={`sheet-header-row${collapsed ? ' sheet-header-row--collapsed' : ''}`}>
+    <td colSpan={3}>
+      {canToggle ? (
+        <button
+          type="button"
+          className="sheet-header-row__toggle"
+          onClick={onToggle}
+          aria-expanded={!collapsed}
+          aria-label={collapsed ? 'Развернуть лист' : 'Свернуть лист'}
+        >
+          <span className="sheet-header-row__chevron" aria-hidden="true">
+            {collapsed ? '▸' : '▾'}
+          </span>
+          <span className="sheet-header-row__title">
+            Лист: {sheet || '— без листа —'}
+          </span>
+          <span className="sheet-header-row__count">{total} стр.</span>
+          {collapsed && (
+            <span className="sheet-header-row__hint">— свёрнут</span>
+          )}
+        </button>
+      ) : (
+        <>
+          <span className="sheet-header-row__title">
+            Лист: {sheet || '— без листа —'}
+          </span>
+          <span className="sheet-header-row__count">{total} стр.</span>
+        </>
+      )}
+    </td>
+  </tr>
+);
 
 interface FilterButtonProps {
   active: boolean;

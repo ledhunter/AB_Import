@@ -22,8 +22,15 @@ export interface UseImportSessionDetailState {
   loading: boolean;
   error: string | null;
   reload: () => Promise<void>;
-  /** Переключение страницы построчного отчёта (skip строк от начала). */
-  loadReportPage: (skip: number) => Promise<void>;
+  /**
+   * Переключение страницы построчного отчёта (skip строк от начала). Опциональный
+   * <c>excludeSheets</c> — список свёрнутых пользователем листов; исключаются из
+   * выборки и из <c>total</c> для корректной клиент-пагинации.
+   */
+  loadReportPage: (
+    skip: number,
+    options?: { excludeSheets?: string[] },
+  ) => Promise<void>;
 }
 
 /** Статусы, при которых имеет смысл подтягивать отчёт. */
@@ -43,11 +50,19 @@ export function useImportSessionDetail(
   const [error, setError] = useState<string | null>(null);
 
   const abortRef = useRef<AbortController | null>(null);
+  // Запоминаем последний пользовательский набор excludeSheets — чтобы reload/смена
+  // страницы продолжали учитывать ту же конфигурацию свёрнутых листов.
+  const excludeSheetsRef = useRef<string[]>([]);
 
-  const load = useCallback(async (id: string, skip = 0) => {
+  const load = useCallback(async (
+    id: string,
+    skip = 0,
+    excludeSheets: string[] = excludeSheetsRef.current,
+  ) => {
     abortRef.current?.abort();
     const ctrl = new AbortController();
     abortRef.current = ctrl;
+    excludeSheetsRef.current = excludeSheets;
 
     setLoading(true);
     setError(null);
@@ -64,6 +79,7 @@ export function useImportSessionDetail(
           signal: ctrl.signal,
           skip,
           take: REPORT_PAGE_SIZE,
+          excludeSheets,
         });
         if (ctrl.signal.aborted) return;
         setReport(toUiReport(apiReport, ui));
@@ -91,7 +107,10 @@ export function useImportSessionDetail(
       setError(null);
       return;
     }
-    void load(sessionId);
+    // Новая открытая сессия — сбрасываем фильтр свёрнутых листов, иначе
+    // выбор пользователя «утечёт» между разными сессиями истории.
+    excludeSheetsRef.current = [];
+    void load(sessionId, 0, []);
     return () => abortRef.current?.abort();
   }, [sessionId, load]);
 
@@ -100,8 +119,10 @@ export function useImportSessionDetail(
   }, [sessionId, load]);
 
   const loadReportPage = useCallback(
-    async (skip: number) => {
-      if (sessionId) await load(sessionId, skip);
+    async (skip: number, options?: { excludeSheets?: string[] }) => {
+      if (!sessionId) return;
+      const exclude = options?.excludeSheets ?? excludeSheetsRef.current;
+      await load(sessionId, skip, exclude);
     },
     [sessionId, load],
   );

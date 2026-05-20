@@ -6,9 +6,13 @@
 **Дата**: 2026-05-18
 **Дополняет**: [14-imports-backend-integration.md](14-imports-backend-integration.md), [73-import-history-page.md](73-import-history-page.md)
 
-Раньше UI отчёта показывал только первую страницу из 100 строк («Показано
-100 из 187 строк»). На длинных импортах (6000+ помещений в файле Ежевики/
-Волги) пользователь физически не мог дотянуться до строк после 100-й.
+Раньше UI отчёта показывал только первую страницу («Показано 100 из 187
+строк»). На длинных импортах (6000+ помещений в файле Ежевики/Волги)
+пользователь физически не мог дотянуться до строк после 100-й.
+
+> 🆕 **2026-05-20**: размер страницы уменьшен со 100 до **50** строк
+> (см. [95-history-project-filter-and-collapsible-sheets.md](95-history-project-filter-and-collapsible-sheets.md)).
+> На многолистовых отчётах 50 строк удобнее для навигации внутри одного листа.
 
 Сервер `GET /api/imports/{id}/report` уже поддерживал `skip`/`take` (см.
 [14-imports-backend-integration](14-imports-backend-integration.md)), но
@@ -25,7 +29,7 @@
 
 ```ts
 // useImportSession.ts
-export const REPORT_PAGE_SIZE = 100;
+export const REPORT_PAGE_SIZE = 50;
 
 const loadReport = useCallback(async (sessionId: string, skip = 0) => {
     /* … */
@@ -89,8 +93,9 @@ const rangeTo = Math.min(total, skip + report.rows.length);
   в `>= pagesCount` (Alfa Pagination ругается в логи).
 - **Пагинация — только при `pagesCount > 1`**. Один экран не нуждается
   в навигации, range-индикатор остаётся для контекста.
-- **`REPORT_PAGE_SIZE = 100`** — синхронизирован с backend (controller
-  без `take` отдаёт первые 100). Если меняешь — меняй обе стороны.
+- **`REPORT_PAGE_SIZE = 50`** — синхронизирован с backend (controller
+  без `take` отдаёт первые 50 — см. `ImportsController.GetReport`,
+  параметр `take = 50`). Если меняешь — меняй обе стороны.
 
 ---
 
@@ -122,8 +127,8 @@ const [page, setPage] = useState(0);  // ← рассинхрон с серве�
 // НЕПРАВИЛЬНО — задублировать `REPORT_PAGE_SIZE` в двух хуках. Если
 // захочется поменять (например, до 50 для мобилок) — забудешь в одном
 // месте, и hooks-а будут просить разные `take`, отчёт «мигает».
-const REPORT_PAGE_SIZE = 100;  // в useImportSession.ts
-const REPORT_PAGE_SIZE = 100;  // в useImportSessionDetail.ts  ← дубль
+const REPORT_PAGE_SIZE = 50;  // в useImportSession.ts
+const REPORT_PAGE_SIZE = 50;  // в useImportSessionDetail.ts  ← дубль
 ```
 
 ---

@@ -20,6 +20,8 @@ export interface ImportsHistoryFilters {
   status?: string;
   /** id типа импорта: `'rooms' | 'finmodel' | ...`. */
   importTypeCode?: string;
+  /** ID проекта Visary для фильтрации (undefined — «Все проекты»). */
+  projectId?: number;
   skip?: number;
   take?: number;
 }
@@ -31,7 +33,7 @@ export interface UseImportsHistoryState {
   error: string | null;
   /** Текущее значение пагинации/фильтров (для отрисовки контролов). */
   query: Required<Pick<ImportsHistoryFilters, 'skip' | 'take'>> &
-    Pick<ImportsHistoryFilters, 'status' | 'importTypeCode'>;
+    Pick<ImportsHistoryFilters, 'status' | 'importTypeCode' | 'projectId'>;
   refresh: () => Promise<void>;
   setFilters: (next: ImportsHistoryFilters) => void;
 }
@@ -50,6 +52,7 @@ export function useImportsHistory(
     take: initial.take ?? DEFAULT_TAKE,
     status: initial.status,
     importTypeCode: initial.importTypeCode,
+    projectId: initial.projectId,
   });
 
   const abortRef = useRef<AbortController | null>(null);
@@ -68,6 +71,7 @@ export function useImportsHistory(
           take: q.take,
           status: q.status,
           importTypeCode: q.importTypeCode,
+          projectId: q.projectId,
           signal: ctrl.signal,
         });
         if (ctrl.signal.aborted) return;
@@ -104,6 +108,7 @@ export function useImportsHistory(
       status: 'status' in next ? next.status : prev.status,
       importTypeCode:
         'importTypeCode' in next ? next.importTypeCode : prev.importTypeCode,
+      projectId: 'projectId' in next ? next.projectId : prev.projectId,
     }));
   }, []);
 

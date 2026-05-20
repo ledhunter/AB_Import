@@ -121,6 +121,29 @@ onChange={({ selected }) => {
 setSelectedProject({ key: String(selected.key) }); // ❌ без content
 ```
 
+### Ошибка 4: считать `searchProps.onChange` обычным input-handler'ом
+
+```tsx
+// НЕПРАВИЛЬНО — Alfa Select передаёт уже извлечённую СТРОКУ, а не SyntheticEvent.
+// Падает с `TypeError: Cannot read properties of undefined (reading 'value')`
+// при первой же попытке набрать символ в поиске.
+searchProps={{
+  onChange: (e) => setProjectSearch(e.target.value),  // ❌
+}}
+
+// ПРАВИЛЬНО — сигнатура `(value: string) => void`.
+searchProps={{
+  onChange: (value: string) => setProjectSearch(value),  // ✅
+}}
+```
+
+Инцидент: 2026-05-20 в `HistoryFilters.tsx:122` (фильтр истории импортов по
+проекту) — handler писали по аналогии с обычным `<input onChange>`, при
+открытии Select-а сразу падал TypeError, страница исчезала из DOM,
+у пользователя «не было возможности вернуться» к выбору. Лечится только
+правкой сигнатуры — `placeholder` тоже надо переносить в
+`componentProps: { placeholder: '…' }`, иначе он молча игнорируется.
+
 ---
 
 ## 🎯 Когда применять

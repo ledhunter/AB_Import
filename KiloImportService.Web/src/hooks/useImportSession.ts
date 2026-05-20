@@ -72,14 +72,22 @@ export interface UseImportSessionState {
   reset: () => void;
   /**
    * Перейти на страницу отчёта (по `skip` строк от начала, размер страницы
-   * фиксирован — <c>REPORT_PAGE_SIZE</c>). Использует currentSessionId,
-   * молча no-op если сессии нет.
+   * фиксирован — <c>REPORT_PAGE_SIZE</c>). Опциональный <c>excludeSheets</c>
+   * исключает указанные листы из выборки и `total` (для клиентского
+   * сворачивания листов в UI). Использует currentSessionId, молча no-op
+   * если сессии нет.
    */
-  loadReportPage: (skip: number) => Promise<void>;
+  loadReportPage: (skip: number, options?: { excludeSheets?: string[] }) => Promise<void>;
 }
 
-/** Размер страницы построчного отчёта (совпадает с тем, что прислыпывает API при пустом take). */
-export const REPORT_PAGE_SIZE = 100;
+/**
+ * Размер страницы построчного отчёта. Синхронизирован с backend-дефолтом
+ * (<c>ImportsController.GetReport</c>): если меняешь — меняй обе стороны.
+ * Уменьшено со 100 до 50 (2026-05-20) для более удобной навигации по
+ * многолистовым отчётам — см.
+ * <c>doc_project/95-history-project-filter-and-collapsible-sheets.md</c>.
+ */
+export const REPORT_PAGE_SIZE = 50;
 
 const FINAL_STATUSES = new Set(['Applied', 'Failed', 'Cancelled'] as const);
 const REPORT_LOAD_STATUSES = new Set([
@@ -124,17 +132,29 @@ export function useImportSession(): UseImportSessionState {
     };
   }, []);
 
+  // Запомненный набор свёрнутых листов — нужен, чтобы pullSession (вызывается из
+  // SignalR-хэндлеров) перезагружал отчёт с тем же фильтром. Иначе после прихода
+  // финального статуса свёрнутые листы «развернутся» сами.
+  const excludeSheetsRef = useRef<string[]>([]);
+
   /** Загрузить актуальный отчёт. Не падает наружу — пишет в state.error. */
-  const loadReport = useCallback(async (sessionId: string, skip = 0) => {
+  const loadReport = useCallback(async (
+    sessionId: string,
+    skip = 0,
+    excludeSheets: string[] = excludeSheetsRef.current,
+  ) => {
     reportAbortRef.current?.abort();
     const ctrl = new AbortController();
     reportAbortRef.current = ctrl;
+
+    excludeSheetsRef.current = excludeSheets;
 
     try {
       const apiReport = await getImportReport(sessionId, {
         signal: ctrl.signal,
         skip,
         take: REPORT_PAGE_SIZE,
+        excludeSheets,
       });
       if (ctrl.signal.aborted) return;
       const currentSession = sessionLatestRef.current;
@@ -142,7 +162,7 @@ export function useImportSession(): UseImportSessionState {
         return; // переключились на новую сессию, отчёт уже неактуален
       }
       setReport(toUiReport(apiReport, currentSession));
-      console.info(`${LOG_TAG} report loaded: skip=${skip} rows=${apiReport.rows.length} errors=${apiReport.errors.length}`);
+      console.info(`${LOG_TAG} report loaded: skip=${skip} rows=${apiReport.rows.length} errors=${apiReport.errors.length} excludeSheets=[${excludeSheets.join(',')}]`);
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
       const message = err instanceof Error ? err.message : String(err);
@@ -152,10 +172,14 @@ export function useImportSession(): UseImportSessionState {
   }, []);
 
   /** Переключение страницы отчёта — публичный метод для UI. */
-  const loadReportPage = useCallback(async (skip: number) => {
+  const loadReportPage = useCallback(async (
+    skip: number,
+    options?: { excludeSheets?: string[] },
+  ) => {
     const sid = sessionIdRef.current;
     if (!sid) return;
-    await loadReport(sid, skip);
+    const exclude = options?.excludeSheets ?? excludeSheetsRef.current;
+    await loadReport(sid, skip, exclude);
   }, [loadReport]);
 
   /** Pull session state из backend (для синхронизации, fallback при потере SignalR). */
@@ -197,6 +221,8 @@ export function useImportSession(): UseImportSessionState {
       setReport(null);
       setSession(null);
       setPhase('uploading');
+      // Сбрасываем фильтр свёрнутых листов: новый импорт начинается с чистой картины.
+      excludeSheetsRef.current = [];
 
       let sessionId: string;
       try {

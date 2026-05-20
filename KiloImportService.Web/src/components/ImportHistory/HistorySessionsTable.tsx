@@ -12,6 +12,8 @@ interface Props {
   error: string | null;
   importTypes: ApiImportTypeInfo[];
   selectedIds: Set<string>;
+  /** True, если в `useImportsHistory.query` есть хоть один фильтр (status/type/project). */
+  hasActiveFilters: boolean;
   onOpen: (sessionId: string) => void;
   onToggleOne: (sessionId: string) => void;
   onToggleAllOnPage: (select: boolean) => void;
@@ -26,6 +28,7 @@ export const HistorySessionsTable = ({
   error,
   importTypes,
   selectedIds,
+  hasActiveFilters,
   onOpen,
   onToggleOne,
   onToggleAllOnPage,
@@ -50,7 +53,9 @@ export const HistorySessionsTable = ({
     return (
       <div style={{ padding: 32, textAlign: 'center' }}>
         <Typography.Text view="primary-medium" color="secondary" tag="div">
-          Сессий импорта пока нет. Запустите первый импорт на вкладке «Импорт».
+          {hasActiveFilters
+            ? 'По выбранным фильтрам нет сессий импорта. Сбросьте фильтры, чтобы увидеть всю историю.'
+            : 'Сессий импорта пока нет. Запустите первый импорт на вкладке «Импорт».'}
         </Typography.Text>
       </div>
     );
@@ -70,6 +75,7 @@ export const HistorySessionsTable = ({
             </th>
             <th style={{ width: 170 }}>Начало</th>
             <th>Файл</th>
+            <th style={{ width: 200 }}>Проект</th>
             <th style={{ width: 160 }}>Тип</th>
             <th style={{ width: 170 }}>Статус</th>
             <th style={{ width: 100 }}>Всего</th>
@@ -81,7 +87,7 @@ export const HistorySessionsTable = ({
         <tbody>
           {loading && items.length === 0 ? (
             <tr>
-              <td colSpan={9} style={{ textAlign: 'center', padding: 24 }}>
+              <td colSpan={10} style={{ textAlign: 'center', padding: 24 }}>
                 <Typography.Text view="primary-small" color="secondary" tag="span">
                   Загрузка истории…
                 </Typography.Text>
@@ -115,6 +121,24 @@ export const HistorySessionsTable = ({
                       </Typography.Text>
                     ) : null}
                   </div>
+                </td>
+                <td>
+                  {s.projectId == null ? (
+                    <Typography.Text view="primary-small" color="secondary" tag="span">
+                      —
+                    </Typography.Text>
+                  ) : (
+                    // Имя берём из локального кэша; если кэш пуст — показываем «#id»,
+                    // чтобы пользователь хотя бы видел, что проект был указан.
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      <Typography.Text view="primary-small" tag="span">
+                        {s.projectName ?? `Проект #${s.projectId}`}
+                      </Typography.Text>
+                      <Typography.Text view="primary-small" color="secondary" tag="span">
+                        ID: {s.projectId}
+                      </Typography.Text>
+                    </div>
+                  )}
                 </td>
                 <td>
                   <Typography.Text view="primary-small" tag="span">

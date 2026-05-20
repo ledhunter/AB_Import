@@ -14,6 +14,7 @@ import type {
   ApiGeneratedFile,
   ApiImportStageKind,
   ApiImportStatus,
+  ApiSheetTotal,
   ApiStagedRowStatus,
 } from './api';
 
@@ -113,11 +114,21 @@ export interface UiReportRow {
   actions: string[];
 }
 
+/** Карта листов сессии: имя + полное число строк (по всей сессии, без фильтров). */
+export type UiSheetTotal = ApiSheetTotal;
+
 export interface UiReport {
   session: UiSession;
   rows: UiReportRow[];
   fileLevelErrors: UiRowError[]; // rowNumber === 0
+  /** Учитывает excludeSheets — пагинация считается только по видимым строкам. */
   rowsPagination: { skip: number; take: number; total: number };
+  /**
+   * Полная карта листов сессии (включая свёрнутые). Используется UI'ем для
+   * рисования заголовков сворачиваемых листов с числом строк, даже когда
+   * сами строки исключены из выборки.
+   */
+  sheetTotals: UiSheetTotal[];
 }
 
 /**
@@ -138,4 +149,8 @@ export interface UiSessionSummary {
   successRows: number;
   errorRows: number;
   errorMessage: string | null;
+  /** ID проекта Visary (null — не был указан при загрузке). */
+  projectId: number | null;
+  /** Название проекта (из локального кэша). null если кэш не содержит этой записи. */
+  projectName: string | null;
 }
