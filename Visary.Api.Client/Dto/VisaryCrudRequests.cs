@@ -284,12 +284,38 @@ public sealed class TypedImportWbsCreateRequest
     public string File { get; set; } = string.Empty;
 }
 
+/// <summary>
+/// Снэпшот записи <c>typedimportwbs</c> для опроса статуса фоновой обработки импорта
+/// бюджета в Visary. Заполняется ответом <c>GET /api/visary/crud/typedimportwbs/{id}</c>
+/// (а также крошечной формой при создании через <c>POST /api/visary/crud/typedimportwbs</c>,
+/// где приходит только <see cref="ID"/>).
+/// </summary>
+/// <remarks>
+/// Поле <see cref="Status"/> объявлено как <see cref="System.Text.Json.JsonElement"/>?,
+/// потому что Visary шлёт его разными типами (наблюдали: число, строка, объект-обёртка
+/// <c>{ID, Title}</c>). Если объявить <c>string?</c>, десериализатор бросит JsonException
+/// на каждом polling-запросе → polling «зависает» до таймаута даже когда импорт давно
+/// завершён успешно (см. doc 94 v1.2 и инцидент с typedimportwbs ID=9442). Классификация
+/// статуса (success/failure/in-progress) делается <c>BudgetVisaryUploader</c> поверх
+/// <see cref="JsonElement"/>: строка → корни слов «успеш»/«предупреж»/«ошибк»; объект →
+/// читаем поле Title/Name и применяем те же корни; число → пока неизвестна полная
+/// таблица кодов Visary, поэтому логируем raw и считаем «in-progress» (до следующей
+/// итерации/таймаута). См. тот же паттерн в <c>RoomFull.RoomCategory</c>,
+/// <c>ConstructionSiteFull.Status</c>.
+/// <para/>
+/// <see cref="CountErrors"/> и <see cref="CountWarnings"/> nullable: при создании
+/// записи Visary возвращает только ID — остальные поля приходят на последующих GET.
+/// </remarks>
 public sealed class TypedImportWbsRaw
 {
     public int ID { get; set; }
     public int? ImportType { get; set; }
     public string? File { get; set; }
-    public string? Status { get; set; }
+    public System.Text.Json.JsonElement? Status { get; set; }
+    public int? CountErrors { get; set; }
+    public int? CountWarnings { get; set; }
+    public DateTime? StartDate { get; set; }
+    public DateTime? FinishDate { get; set; }
 }
 
 /// <summary>

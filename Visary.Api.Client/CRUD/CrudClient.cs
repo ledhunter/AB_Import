@@ -86,12 +86,20 @@ public interface ICrudClient
     /// Создать запись <c>typedimportwbs</c> — TypedJournal-задание импорта бюджета (XLSX)
     /// из файла, уже загруженного в файловое хранилище. Поле <c>File</c> в request — это
     /// link-токен, возвращённый <see cref="FileStorage.IFileStorageClient.GetFileLinkAsync"/>.
-    /// Visary триггерит фоновую джобу импорта; статус можно опрашивать через
-    /// <c>GET /api/visary/crud/typedimportwbs/{id}</c> (этой методики пока нет — добавить
-    /// при необходимости, по аналогии с GetWbsByIdAsync).
+    /// Visary триггерит фоновую джобу импорта; статус опрашивается через
+    /// <see cref="GetTypedImportWbsByIdAsync"/>.
     /// </summary>
     Task<TypedImportWbsRaw> CreateTypedImportWbsAsync(
         TypedImportWbsCreateRequest request, CancellationToken ct = default);
+
+    /// <summary>
+    /// Прочитать текущее состояние <c>typedimportwbs</c> (поле <see cref="TypedImportWbsRaw.Status"/>
+    /// и счётчики ошибок/предупреждений). Используется автоматическим pipeline загрузки
+    /// бюджета для polling-а статуса перед запуском импорта ГФ Главы 1.
+    /// HAR (Context/har импорт бюджета.txt) подтверждает endpoint
+    /// <c>GET /api/visary/crud/typedimportwbs/{id}</c>.
+    /// </summary>
+    Task<TypedImportWbsRaw> GetTypedImportWbsByIdAsync(int id, CancellationToken ct = default);
 
     /// <summary>
     /// Привязывает Organization участником Site. Соответствует шагу из puml
@@ -498,6 +506,9 @@ public sealed class CrudClient : VisaryHttpBase<CrudClient>, ICrudClient
             result.ID, request.ConstructionSiteID);
         return result;
     }
+
+    public Task<TypedImportWbsRaw> GetTypedImportWbsByIdAsync(int id, CancellationToken ct)
+        => GetCrudByIdAsync<TypedImportWbsRaw>(VisaryMnemonics.TypedImportWbs, id, ct);
 
     // ─── Organization ↔ Site link ────────────────────────────────────────────
 

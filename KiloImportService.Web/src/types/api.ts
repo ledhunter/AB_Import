@@ -51,14 +51,12 @@ export interface ApiGeneratedFile {
   kind: string;
   label: string;
   description: string;
-  /**
-   * URL для скачивания файла (GET). `null` для action-кнопок без скачивания
-   * (например, kind="budget-upload" — заливка в Visary FileStorage + typedimportwbs).
-   */
+  /** URL для скачивания файла (GET). */
   downloadUrl: string | null;
   /**
-   * URL для POST-действия (kind="budget-upload" — загрузка бюджета в Visary).
-   * Если задан — UI рисует кнопку «Загрузить в Visary», вызывает POST и показывает результат.
+   * Зарезервировано под action-кнопки (POST без скачивания). Сейчас неактивно: загрузка
+   * бюджета в Visary происходит автоматически на стадии Apply (FinModelImportMapper),
+   * поэтому backend поле не выставляет. Сохранено для совместимости с будущими сценариями.
    */
   actionUrl?: string | null;
   fileName: string;
