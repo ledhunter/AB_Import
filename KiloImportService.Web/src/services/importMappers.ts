@@ -163,19 +163,13 @@ export function toUiReport(api: ApiImportReport, session: UiSession): UiReport {
     actions: r.actions ?? [],
   }));
 
-  // Подбираем «осиротевшие» ошибки — для пар (sheet, rowNumber), которых нет в rows.
-  const seenKeys = new Set(rows.map((r) => rowKey(r.sheet, r.rowNumber)));
-  for (const [key, errors] of errorsByRow.entries()) {
-    if (!seenKeys.has(key) && errors.length > 0) {
-      rows.push({
-        rowNumber: errors[0].rowNumber,
-        sheet: errors[0].sheet,
-        status: 'Invalid',
-        errors,
-        actions: [],
-      });
-    }
-  }
+  // Раньше тут подмешивали «осиротевшие» ошибки (rowNumber, не попавший в `api.rows`
+  // текущей страницы), пушили их отдельными строками. Это раздувало страницу до
+  // `take + N_orphan_errors` (например, скрин «1–693 из 1735»: 50 + 643 ошибочных).
+  // Пагинация перестаёт быть «по 50 строк» — а заказчик именно этого хотел.
+  // Теперь страница содержит ровно те `rows`, что вернул backend; ошибка показывается
+  // у своей строки (через `errorsByRow.get`), а строки-без-rows — на странице,
+  // где эти rowNumber окажутся в выборке. См. doc_project/102-page-size-exact-50.md.
   rows.sort((a, b) => {
     const sa = a.sheet ?? '';
     const sb = b.sheet ?? '';

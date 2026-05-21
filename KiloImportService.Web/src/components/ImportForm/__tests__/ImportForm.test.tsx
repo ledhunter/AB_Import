@@ -46,4 +46,19 @@ describe('ImportForm', () => {
 
     expect(onSiteChange).not.toHaveBeenCalled();
   });
+
+  it('скрывает Select "Объект строительства" при showSiteSelect=false (импорт rooms)', () => {
+    render(
+      <ImportForm
+        projectId={1}
+        siteId={null}
+        onProjectChange={jest.fn()}
+        onSiteChange={jest.fn()}
+        showSiteSelect={false}
+      />
+    );
+
+    expect(screen.getByRole('combobox', { name: 'Проект' })).toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'Объект строительства' })).not.toBeInTheDocument();
+  });
 });

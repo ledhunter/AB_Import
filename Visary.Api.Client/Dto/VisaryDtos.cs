@@ -42,6 +42,11 @@ public sealed class ConstructionSiteRaw
     public int? ConstructionProjectId { get; set; }
     public string? ConstructionPermissionNumber { get; set; }
     public string? ConstructionProjectNumber { get; set; }
+    // Visary listview шлёт StageNumber числом (`"StageNumber": 1`), а CRUD-Full — int? в DTO.
+    // Без Flexible-конвертера listview/constructionsite падал с «JSON value could not be
+    // converted to System.String. Path: $.Data[0].StageNumber» — см. doc 101 и
+    // Common/FlexibleStringJsonConverter.cs.
+    [System.Text.Json.Serialization.JsonConverter(typeof(Visary.Api.Common.FlexibleStringJsonConverter))]
     public string? StageNumber { get; set; }
     public int? RegionId { get; set; }
     public int? TownId { get; set; }
