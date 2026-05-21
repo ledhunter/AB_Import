@@ -72,6 +72,26 @@ public sealed class OrganizationRaw
     public string? OGRN { get; set; }
     public string? KPP { get; set; }
     public bool? Hidden { get; set; }
+    // Группа компаний (companygroup). В listview Visary возвращает поле "Group" как
+    // {ID, Title, Hidden} при привязке через PATCH /crud/organization. В колонках уже
+    // запрашиваем "Group" (OrganizationColumns), но в первой версии DTO поле было
+    // опущено — добавили под FinModel CompanyGroup-flow (doc 100).
+    public VisaryRef? Group { get; set; }
+}
+
+/// <summary>
+/// Минимальный DTO «Группа компаний» (<c>companygroup</c>) — справочник материнских
+/// холдингов, к которым привязываются дочерние Organization (поле <c>Group</c>).
+/// Используется в FinModel-импорте: по значению «Группа компаний» из E14 листа
+/// Inputs ищем запись в Visary, при единственном попадании — PATCH-им организацию-
+/// застройщик (см. doc_project/100-finmodel-companygroup-link.md).
+/// </summary>
+public sealed class CompanyGroupRaw
+{
+    public int ID { get; set; }
+    public string? Title { get; set; }
+    public string? Code { get; set; }
+    public bool? Hidden { get; set; }
 }
 
 public sealed class RoomRaw

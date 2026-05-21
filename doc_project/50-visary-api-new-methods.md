@@ -132,14 +132,19 @@ Task<ListViewResponse<RoomRaw>> GetRoomsBySiteAsync(...)
 
 #### `GetOrganizationsByClientIdAsync(string clientId)`
 
-**Назначение**: найти организацию по `ClientID` (ПИН).
+**Назначение**: найти организацию по `ClientID` (ПИН/ИНН).
 
 | | |
 |---|---|
-| **Вход** | `clientId` — ПИН организации |
+| **Вход** | `clientId` — ПИН или ИНН организации |
 | **Выход** | `ListViewResponse<OrganizationRaw>` |
 | **Endpoint** | `POST /api/visary/listview/organization` |
 | **Фильтр** | `["ClientID","=","<clientId>"]` |
+
+> ℹ️ Используется в импорте «Помещения» (по ПИНу застройщика из строки файла) **и**
+> в импорте «Финмодель» (по ИНН из раздела «Основные данные»). См. doc [99](./99-finmodel-organization-link.md).
+> Visary `=` иногда матчит подстрокой при пробелах → дополнительный локальный фильтр
+> `Trim()+OrdinalIgnoreCase` на стороне вызывающего.
 
 ---
 
@@ -499,6 +504,36 @@ await crudClient.CreateShareAgreementAsync(new ShareAgreementCreateRequest
 
 ---
 
+### Организация (Organization)
+
+#### `CreateOrganizationAsync(OrganizationCreateRequest request)`
+
+**Назначение**: создать запись `organization` в Visary, когда поиск по `ClientID`
+(ПИН/ИНН) ничего не вернул. Используется импортом «Финмодель» в составе flow
+«Основные данные» (см. doc [99](./99-finmodel-organization-link.md)).
+
+| | |
+|---|---|
+| **Вход** | `OrganizationCreateRequest { Title, ClientID, INN, KPP?, OGRN? }` |
+| **Выход** | `OrganizationRaw` (с присвоенным `ID`) |
+| **Endpoint** | `POST /api/visary/crud/organization` |
+
+```csharp
+var created = await crud.CreateOrganizationAsync(new OrganizationCreateRequest
+{
+    Title    = "ООО СЗ Скай",
+    ClientID = "6319038948",    // ИНН — он же ключ поиска в listview
+    INN      = "6319038948",    // дублируем: разные формы Visary читают разные поля
+}, ct);
+// → created.ID = 9442
+```
+
+> ⚠️ **Всегда передавать `ClientID`**, даже если в форме видно отдельное поле `INN`.
+> `listview/organization?Filter=["ClientID","=",...]` ищет именно по `ClientID`;
+> без него повторный импорт того же ИНН будет создавать дубль за дублем.
+
+---
+
 ## 🔑 Общий тип VisaryRef
 
 Используется во всех entity и request DTO как ссылка на связанную сущность:
@@ -638,6 +673,15 @@ public sealed class RoomRaw
 
 ## 📝 История версий
 
+- **1.3** (2026-05-20):
+  - Добавлен `ICrudClient.CreateOrganizationAsync` (POST `/api/visary/crud/organization`)
+    с DTO `OrganizationCreateRequest { Title, ClientID, INN, KPP?, OGRN? }`. Используется
+    импортом Финмодели по разделу «Основные данные»: если по ИНН организация не
+    нашлась через `GetOrganizationsByClientIdAsync`, создаём её сами, после чего
+    привязываем к объекту через `projectmanagement`. Подробности —
+    [99-finmodel-organization-link.md](./99-finmodel-organization-link.md).
+  - Дополнен раздел про `GetOrganizationsByClientIdAsync`: теперь явно отмечен
+    второй сценарий использования (Финмодель по ИНН, а не только Rooms по ПИНу).
 - **1.2** (2026-05-19):
   - Добавлена сущность **`CostItem`** (мнемоника `costitem`) — строка ГФ подстатьи ИСР.
     DTO: `CostItemRaw`, `CostItemPeriod`, `CostItemCreateRequest`, `CostItemPatchRequest`,

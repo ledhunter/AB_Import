@@ -52,6 +52,16 @@ public interface IListViewClient
         string clientId, CancellationToken ct = default);
 
     /// <summary>
+    /// Поиск группы компаний (<c>companygroup</c>) по точному наименованию.
+    /// POST <c>/api/visary/listview/companygroup</c> с
+    /// <c>Filter ["Title","=","{title}"]</c>. Используется FinModel-импортом для
+    /// привязки организации-застройщика к материнской группе (поле <c>Group</c>);
+    /// см. doc_project/100-finmodel-companygroup-link.md.
+    /// </summary>
+    Task<ListViewResponse<CompanyGroupRaw>> GetCompanyGroupsByTitleAsync(
+        string title, CancellationToken ct = default);
+
+    /// <summary>
     /// Список <c>projectmanagement</c>-записей, привязанных к объекту строительства
     /// через manytomany (POST <c>/api/visary/listview/constructionsite/manytomany/projectmanagement?associationId={siteId}</c>).
     /// Возвращает все роли (Застройщик, Технический заказчик, …); фильтрация по
@@ -187,6 +197,12 @@ public sealed class ListViewClient : VisaryHttpBase<ListViewClient>, IListViewCl
 
     private static readonly string[] ProjectManagementColumns =
         ["ID", "Project", "Role", "Organization", "DateStart", "DateEnd", "Affiliation", "Title", "Version"];
+
+    // Колонки для companygroup: минимум для резолва Title → ID. Поле Hidden — Visary
+    // отдаёт его для всех справочников; запрашиваем явно, чтобы по умолчанию иметь
+    // возможность отбросить скрытые записи на стороне вызывающего.
+    private static readonly string[] CompanyGroupColumns =
+        ["ID", "Title", "Code", "Hidden"];
 
     private static readonly string[] RoomColumns =
         ["ID", "Title", "Site", "Section", "Number", "Floor", "Kind", "RoomsNumber",
@@ -483,6 +499,33 @@ public sealed class ListViewClient : VisaryHttpBase<ListViewClient>, IListViewCl
         return PostListViewAsync<OrganizationRaw>(
             $"{BaseUrl}/api/visary/listview/{VisaryMnemonics.Organization}",
             body, $"{VisaryMnemonics.Organization} clientId={clientId}", ct);
+    }
+
+    // ─── CompanyGroup ────────────────────────────────────────────────────────
+
+    public Task<ListViewResponse<CompanyGroupRaw>> GetCompanyGroupsByTitleAsync(
+        string title, CancellationToken ct)
+    {
+        // Точное "=" по Title. На практике Visary матчит без учёта хвостовых пробелов
+        // (так же, как для ДДУ — см. doc 76). Если получим >1 запись с одинаковым
+        // Title, не угадываем — вызывающий должен среагировать как «не нашли».
+        var body = new
+        {
+            Mnemonic = VisaryMnemonics.CompanyGroup,
+            PageSkip = 0,
+            PageSize = Options.DefaultPageSize,
+            Columns = CompanyGroupColumns,
+            Filter = FilterByString("Title", title),
+            SearchPhrase = (string?)null,
+            Sorts = SortsNullSentinel,
+            Hidden = false,
+            Summaries = Array.Empty<object>(),
+        };
+
+        _log.LogDebug("Visary → GET {Mnemonic} title='{Title}'", VisaryMnemonics.CompanyGroup, title);
+        return PostListViewAsync<CompanyGroupRaw>(
+            $"{BaseUrl}/api/visary/listview/{VisaryMnemonics.CompanyGroup}",
+            body, $"{VisaryMnemonics.CompanyGroup} title={title}", ct);
     }
 
     // ─── ProjectManagement ──────────────────────────────────────────────────

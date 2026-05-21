@@ -50,7 +50,25 @@ public sealed record KeyValueVertical(
     string ValueStartColumn,
     StageCountReference? StageCount = null,
     BudgetSectionHint? Budget = null,
-    ChapterScheduleHint? ChapterSchedule = null) : FileLayoutHint;
+    ChapterScheduleHint? ChapterSchedule = null,
+    IReadOnlyList<SingleValueOverride>? SingleValues = null) : FileLayoutHint;
+
+/// <summary>
+/// Override-ячейка для KV-vertical: значение параметра <paramref name="KeyText"/>
+/// берётся не из колонки этапа (как для всех остальных параметров), а из ОДНОЙ
+/// конкретной колонки <paramref name="ValueColumn"/> той же строки. Применяется
+/// ко всем эмитируемым <see cref="ParsedRow"/> (значение одинаково на всех этапах).
+///
+/// Пример (FinModel, doc 100): «Группа компаний» лежит в C14, а её значение —
+/// не в этапных колонках H/I/J, а в E14. Чтобы не ломать общую раскладку, маппер
+/// объявляет <c>SingleValueOverride("Группа компаний", "E")</c>. Парсер при сборке
+/// <c>Cells["Группа компаний"]</c> для каждого этапа подставляет содержимое E14
+/// (через ту же строку, что нашлась по KeyColumn). Если строки с таким key нет —
+/// override молча игнорируется, чтобы шаблоны без этой строки продолжали работать.
+/// </summary>
+/// <param name="KeyText">Текст-ключ из <see cref="KeyValueVertical.KeyColumn"/> (например, «Группа компаний»).</param>
+/// <param name="ValueColumn">Буква колонки со значением для этого ключа (например, «E»).</param>
+public sealed record SingleValueOverride(string KeyText, string ValueColumn);
 
 /// <summary>
 /// Ссылка на ячейку с количеством этапов: на листе <paramref name="SheetName"/> в столбце

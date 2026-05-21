@@ -112,6 +112,29 @@ public interface ICrudClient
         int siteId, int organizationId, CancellationToken ct = default);
 
     /// <summary>
+    /// Создать запись <c>organization</c> в Visary. Используется импортом Финмодели,
+    /// когда по ИНН (ClientID) не нашлось существующей организации — создаём новую
+    /// с парой полей Title + ClientID, затем привязываем к проекту через
+    /// <see cref="CreateProjectManagementAsync"/>.
+    /// POST <c>/api/visary/crud/organization</c>.
+    /// </summary>
+    Task<OrganizationRaw> CreateOrganizationAsync(
+        OrganizationCreateRequest request, CancellationToken ct = default);
+
+    /// <summary>
+    /// Записать привязку организации к группе компаний (поле <c>Group</c>).
+    /// Используется FinModel-импортом (doc 100): когда по ИНН найдена/создана
+    /// организация-застройщик и в файле указано наименование ГК, мы PATCH-им
+    /// её с <c>Group: {ID, Title, Hidden:false}</c>. RowVersion и текущее значение
+    /// <c>Group</c> читаются через GET <c>/crud/organization/{id}</c> (<see cref="OrganizationFull"/>).
+    /// </summary>
+    /// <param name="organizationId">ID организации в Visary.</param>
+    /// <param name="groupId">ID группы компаний (из <c>companygroup</c>).</param>
+    /// <param name="groupTitle">Наименование группы (для тела запроса, как принято в Visary UI).</param>
+    Task<bool> UpdateOrganizationGroupAsync(
+        int organizationId, int groupId, string groupTitle, CancellationToken ct = default);
+
+    /// <summary>
     /// Создать запись <c>projectmanagement</c> (связка «Проект ↔ Организация ↔ Роль»).
     /// Соответствует POST <c>/api/visary/crud/projectmanagement</c>.
     /// </summary>
@@ -523,6 +546,52 @@ public sealed class CrudClient : VisaryHttpBase<CrudClient>, ICrudClient
         await HandleErrorAsync(response, ct);
         _log.LogInformation("CrudClient.LinkOrganizationToSiteAsync: siteId={SiteId} orgId={OrgId} success",
             siteId, organizationId);
+        return true;
+    }
+
+    public async Task<OrganizationRaw> CreateOrganizationAsync(
+        OrganizationCreateRequest request, CancellationToken ct)
+    {
+        _log.LogDebug(
+            "Visary → POST {Mnemonic} title='{Title}' clientId='{ClientId}'",
+            VisaryMnemonics.Organization, request.Title, request.ClientID);
+        var result = await PostCrudAsync<OrganizationRaw>(
+            $"{BaseUrl}/api/visary/crud/{VisaryMnemonics.Organization}",
+            request, VisaryMnemonics.Organization, ct);
+        _log.LogInformation(
+            "CrudClient.CreateOrganizationAsync: created id={Id} title='{Title}' clientId='{ClientId}'",
+            result.ID, result.Title, result.ClientID);
+        return result;
+    }
+
+    public async Task<bool> UpdateOrganizationGroupAsync(
+        int organizationId, int groupId, string groupTitle, CancellationToken ct)
+    {
+        // Тот же паттерн, что в UpdateSiteFinishingMaterialAsync / UpdateSiteAddressAsync:
+        // GET /crud/organization/{id} ради актуального RowVersion → PATCH с
+        // forceUpdate=false + Group как VisaryRef ({ ID, Title, Hidden:false }).
+        // Title в теле — копия имени группы, как в Visary UI (с ним PATCH идёт чище в
+        // логах сервера: видно, ЧТО за группу мы хотим привязать; ID — авторитативен).
+        // См. doc_project/100-finmodel-companygroup-link.md.
+        var current = await GetCrudByIdAsync<OrganizationFull>(
+            VisaryMnemonics.Organization, organizationId, ct);
+        if (current is null)
+            throw new KeyNotFoundException(
+                $"Organization с ID={organizationId} не найдена в Visary");
+
+        var body = new
+        {
+            ID = organizationId,
+            current.RowVersion,
+            Group = new { ID = groupId, Title = groupTitle, Hidden = false },
+        };
+        await PatchCrudAsync(
+            $"{BaseUrl}/api/visary/crud/{VisaryMnemonics.Organization}/{organizationId}?forceUpdate=false",
+            body, $"{VisaryMnemonics.Organization}/{organizationId}", ct);
+
+        _log.LogInformation(
+            "CrudClient.UpdateOrganizationGroupAsync: orgId={OrgId} groupId={GroupId} title='{Title}' success",
+            organizationId, groupId, groupTitle);
         return true;
     }
 

@@ -303,6 +303,9 @@ public class ProjectsCacheServiceTests
         public Task<ListViewResponse<OrganizationRaw>> GetOrganizationsByClientIdAsync(string clientId, CancellationToken ct)
             => throw new NotImplementedException();
 
+        public Task<ListViewResponse<CompanyGroupRaw>> GetCompanyGroupsByTitleAsync(string title, CancellationToken ct)
+            => throw new NotImplementedException();
+
         public Task<ListViewResponse<RoomRaw>> GetRoomsBySiteAsync(int siteId, string? uniqueNumberFilter, CancellationToken ct)
             => throw new NotImplementedException();
 
