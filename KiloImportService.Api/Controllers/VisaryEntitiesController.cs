@@ -146,11 +146,12 @@ public sealed class VisaryEntitiesController : ControllerBase
     public async Task<IActionResult> ListDeals(
         [FromQuery] int? projectId,
         [FromQuery] string? lmIdFilter,
+        [FromQuery] string? docNumberFilter,
         CancellationToken ct)
     {
         var result = projectId.HasValue
-            ? await _lv.GetDealsByProjectAsync(projectId.Value, lmIdFilter, ct)
-            : await _lv.GetDealsAsync(lmIdFilter, ct);
+            ? await _lv.GetDealsByProjectAsync(projectId.Value, lmIdFilter, docNumberFilter, ct)
+            : await _lv.GetDealsAsync(lmIdFilter, docNumberFilter, ct);
         return Ok(result);
     }
 

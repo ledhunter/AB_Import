@@ -112,10 +112,21 @@ public sealed class VisaryEntitiesControllerTests
     public async Task ListDeals_with_projectId_calls_GetDealsByProjectAsync()
     {
         var (c, lv, _) = NewController();
-        lv.Setup(x => x.GetDealsByProjectAsync(4584, "lm-1", default))
+        lv.Setup(x => x.GetDealsByProjectAsync(4584, "lm-1", null, default))
           .ReturnsAsync(EmptyList<DealRaw>());
 
-        await c.ListDeals(projectId: 4584, lmIdFilter: "lm-1", default);
+        await c.ListDeals(projectId: 4584, lmIdFilter: "lm-1", docNumberFilter: null, default);
+        lv.VerifyAll();
+    }
+
+    [Fact]
+    public async Task ListDeals_with_projectId_and_docNumber_passes_both_filters()
+    {
+        var (c, lv, _) = NewController();
+        lv.Setup(x => x.GetDealsByProjectAsync(4584, "lm-1", "DN-7", default))
+          .ReturnsAsync(EmptyList<DealRaw>());
+
+        await c.ListDeals(projectId: 4584, lmIdFilter: "lm-1", docNumberFilter: "DN-7", default);
         lv.VerifyAll();
     }
 
@@ -123,10 +134,23 @@ public sealed class VisaryEntitiesControllerTests
     public async Task ListDeals_without_projectId_calls_GetDealsAsync()
     {
         var (c, lv, _) = NewController();
-        lv.Setup(x => x.GetDealsAsync(null, default))
+        lv.Setup(x => x.GetDealsAsync(null, null, default))
           .ReturnsAsync(EmptyList<DealRaw>());
 
-        await c.ListDeals(projectId: null, lmIdFilter: null, default);
+        await c.ListDeals(projectId: null, lmIdFilter: null, docNumberFilter: null, default);
+        lv.VerifyAll();
+    }
+
+    [Fact]
+    public async Task ListDeals_without_projectId_passes_both_filters()
+    {
+        // doc 104 v1.2: глобальный listview/deal должен получать оба фильтра, если они
+        // заданы в query, — фронт может звать proxy и для нового FinModel-fallback-кейса.
+        var (c, lv, _) = NewController();
+        lv.Setup(x => x.GetDealsAsync("L-1", "DN-7", default))
+          .ReturnsAsync(EmptyList<DealRaw>());
+
+        await c.ListDeals(projectId: null, lmIdFilter: "L-1", docNumberFilter: "DN-7", default);
         lv.VerifyAll();
     }
 

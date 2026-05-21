@@ -125,6 +125,35 @@ public sealed class OrganizationCreateRequest
     public string? OGRN { get; set; }
 }
 
+/// <summary>
+/// Тело POST <c>/api/visary/crud/deal</c>. Минимальный набор для создания сделки
+/// в проекте из импорта Финмодели, когда pre-check
+/// (<see cref="ListView.IListViewClient.GetDealsByProjectAsync"/>) не нашёл сделки
+/// по паре <see cref="LmID"/> + <see cref="DocNumber"/>.
+/// <para>
+/// Visary ожидает указания проекта в ДВУХ местах одновременно: scalar
+/// <c>ConstructionProjectID</c> и nested ref <c>ConstructionProject:{ID:…}</c>.
+/// Это особенность серверного API — нельзя выбрать одно из двух (см. живой запрос
+/// в doc 104 v1.1).
+/// </para>
+/// <para>
+/// ⚠️ <b>Title — временный костыль.</b> Заказчик подтвердил, что Visary сейчас
+/// требует непустой Title (иначе 400), но в будущем требование уйдёт. См. memory
+/// entry <c>project_finmodel_deal_create_title_hack</c>. Когда сервер начнёт
+/// принимать <c>null</c>/отсутствие Title — удалить и поле из DTO, и подстановку
+/// «-» в <c>FinModelImportMapper.EnsureDealExistsInProjectAsync</c>.
+/// </para>
+/// </summary>
+public sealed class DealCreateRequest
+{
+    public int ConstructionProjectID { get; set; }
+    public VisaryRef? ConstructionProject { get; set; }
+    public string? DocNumber { get; set; }
+    public string? LmID { get; set; }
+    /// <summary>Временно обязателен в Visary; см. XML-doc класса.</summary>
+    public string? Title { get; set; }
+}
+
 public sealed class IndicatorValuePatchRequest
 {
     // Включено в body для optimistic locking — `forceUpdate=false` требует, чтобы клиент

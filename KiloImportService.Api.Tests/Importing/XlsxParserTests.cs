@@ -648,6 +648,69 @@ public class XlsxParserTests
     }
 
     [SkippableFact]
+    public async Task KeyValueVertical_ControlValueRef_InjectsValueIntoEveryStageRow()
+    {
+        // doc 104 v1.3: «Номер КД» c листа Control (F=key, G=value) подставляется
+        // в Cells["Номер договора"] каждого ParsedRow, независимо от этапа.
+        Skip.IfNot(SkipReason is null, SkipReason);
+        using var wb = new XLWorkbook();
+        var ctrl = wb.Worksheets.Add("Control");
+        ctrl.Cell(4, 6).Value = "Выбрать количество этапов";
+        ctrl.Cell(4, 7).Value = 2;
+        ctrl.Cell(10, 6).Value = "Номер КД";
+        ctrl.Cell(10, 7).Value = "ДГ-CTRL-1";
+        var inputs = wb.Worksheets.Add("Inputs");
+        inputs.Cell(28, 3).Value = "Тип отделки";
+        inputs.Cell(28, 8).Value = "Черновая";
+        inputs.Cell(28, 9).Value = "Чистовая";
+        var ms = new MemoryStream();
+        wb.SaveAs(ms);
+        ms.Position = 0;
+
+        var result = await _parser.ParseAsync(ms,
+            new KeyValueVertical("Inputs", "C", "H",
+                StageCount: new StageCountReference("Control", "F", "G", "Выбрать количество этапов"),
+                ControlValues: new[]
+                {
+                    new ControlValueRef("Control", "F", "G", "Номер КД", "Номер договора"),
+                }));
+
+        Assert.Empty(result.Errors);
+        Assert.Equal(2, result.Rows.Count);
+        Assert.All(result.Rows, r => Assert.Equal("ДГ-CTRL-1", r.Cells["Номер договора"]));
+    }
+
+    [SkippableFact]
+    public async Task KeyValueVertical_ControlValueRef_Missing_SilentlySkipped()
+    {
+        // Если на Control нет строки «Номер КД» — подстановка молча пропускается
+        // (опциональная семантика, как у SingleValueOverride). Шаблоны без поля работают.
+        Skip.IfNot(SkipReason is null, SkipReason);
+        using var wb = new XLWorkbook();
+        var ctrl = wb.Worksheets.Add("Control");
+        ctrl.Cell(4, 6).Value = "Выбрать количество этапов";
+        ctrl.Cell(4, 7).Value = 1;
+        var inputs = wb.Worksheets.Add("Inputs");
+        inputs.Cell(28, 3).Value = "Тип отделки";
+        inputs.Cell(28, 8).Value = "Черновая";
+        var ms = new MemoryStream();
+        wb.SaveAs(ms);
+        ms.Position = 0;
+
+        var result = await _parser.ParseAsync(ms,
+            new KeyValueVertical("Inputs", "C", "H",
+                StageCount: new StageCountReference("Control", "F", "G", "Выбрать количество этапов"),
+                ControlValues: new[]
+                {
+                    new ControlValueRef("Control", "F", "G", "Номер КД", "Номер договора"),
+                }));
+
+        Assert.Empty(result.Errors);
+        Assert.Single(result.Rows);
+        Assert.False(result.Rows[0].Cells.ContainsKey("Номер договора"));
+    }
+
+    [SkippableFact]
     public async Task Tabular_NoAnchors_LegacyBehavior()
     {
         // Если анкоры НЕ заданы — поведение legacy: первая строка = заголовок,

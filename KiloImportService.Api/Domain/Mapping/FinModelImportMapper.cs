@@ -86,6 +86,21 @@ public sealed class FinModelImportMapper : IImportMapper
         SingleValues: new[]
         {
             new SingleValueOverride(KeyText: "Группа компаний", ValueColumn: "E"),
+        },
+        // «Номер КД» лежит не на Inputs, а на управляющем листе Control в той же
+        // (F=key, G=value)-раскладке, что и «Выбрать количество этапов» (см. doc 104
+        // v1.3). Парсер находит строку по тексту «Номер КД» в колонке F и подставляет
+        // значение из колонки G как Cells["Номер договора"] во все эмитируемые
+        // ParsedRow — чтобы маппер мог читать его тем же ReadCellTrimmed-кодом, что
+        // и обычные параметры Inputs.
+        ControlValues: new[]
+        {
+            new ControlValueRef(
+                SheetName: "Control",
+                KeyColumn: "F",
+                ValueColumn: "G",
+                ParameterName: "Номер КД",
+                OutputKey: "Номер договора"),
         });
 
     private static readonly string[] FinishingTypeAliases =
@@ -125,6 +140,17 @@ public sealed class FinModelImportMapper : IImportMapper
     // без раздела «Основные данные» / без этой строки продолжают работать.
     private static readonly string[] CompanyGroupAliases =
         ["Группа компаний", "ГК", "CompanyGroup", "Group"];
+
+    // «Номер договора» — pre-check на наличие сделки (Deal) в выбранном проекте перед
+    // любыми изменениями Объекта (см. doc 104). С v1.3 значение приходит с управляющего
+    // листа «Control», поле «Номер КД» — парсер кладёт его в Cells["Номер договора"]
+    // каждой строки через ControlValueRef. LmID **не используется** во flow:
+    // фильтр Visary listview/deal и payload CreateDealAsync идут только по DocNumber
+    // (по запросу заказчика 2026-05-21 v1.3). Если/когда понадобится вернуть LmID —
+    // достаточно добавить алиасы и колонку обратно; код фильтра/payload готов через
+    // опциональные параметры IListViewClient.GetDeals* и DealCreateRequest.LmID.
+    private static readonly string[] DocNumberAliases =
+        ["Номер договора", "№ договора", "Номер Договора", "DocNumber", "Doc Number"];
 
     // Domain.Model.Enums.ProjectStage: 50 = Expertise (Экспертиза).
     // Источник: FinModel/Альфа Банк. Управление проектами.drawio.xml — диаграмма enum'а.
@@ -310,6 +336,11 @@ public sealed class FinModelImportMapper : IImportMapper
         // ГК-flow пропускается; если есть и значение пустое — column присутствует, но
         // ReadCellTrimmed вернёт null и LinkCompanyGroup пропустится.
         var fileCompanyGroupCol = FindColumn(allColumns, CompanyGroupAliases);
+        // «Номер договора» — опциональная одиночная колонка. С v1.3 значение приходит
+        // с управляющего листа Control (поле «Номер КД» в F-колонке), парсер
+        // подставляет его как Cells["Номер договора"] во все ParsedRow. Pre-check Deal
+        // в проекте делается в ApplyAsync; здесь только читаем значение.
+        var fileDocNumberCol = FindColumn(allColumns, DocNumberAliases);
         var indicatorCols    = Indicators
             .Select(p => (Param: p, Col: FindColumn(allColumns, p.Aliases)))
             .ToArray();
@@ -321,6 +352,7 @@ public sealed class FinModelImportMapper : IImportMapper
                        || fileInnCol is not null
                        || fileBorrowerCol is not null
                        || fileCompanyGroupCol is not null
+                       || fileDocNumberCol is not null
                        || indicatorCols.Any(x => x.Col is not null);
 
         if (!anyFound)
@@ -331,6 +363,7 @@ public sealed class FinModelImportMapper : IImportMapper
                 .Concat(InnAliases)
                 .Concat(BorrowerOrganizationAliases)
                 .Concat(CompanyGroupAliases)
+                .Concat(DocNumberAliases)
                 .Concat(Indicators.SelectMany(p => p.Aliases))
                 .ToArray();
             fileErrors.Add(BuildColumnNotFoundError(allColumns, allAliases,
@@ -415,6 +448,17 @@ public sealed class FinModelImportMapper : IImportMapper
                 companyGroupValue = cgRaw.Trim();
             }
 
+            // «Номер договора» — опциональная одиночная колонка (с v1.3 — из листа
+            // Control). Если колонки нет — pre-check Deal пропускается; если есть и
+            // значение пустое — value_empty. LmID больше не используется (см. doc 104 v1.3).
+            string? docNumberValue = null;
+            if (fileDocNumberCol is not null)
+            {
+                docNumberValue = ReadCellTrimmed(
+                    row, fileDocNumberCol,
+                    DocNumberAliases, "Номер договора", rowErrors);
+            }
+
             var indicatorValues = new Dictionary<string, double>();
             foreach (var (param, col) in indicatorCols)
             {
@@ -439,6 +483,7 @@ public sealed class FinModelImportMapper : IImportMapper
                 Inn                    = innValue,
                 BorrowerTitle          = borrowerTitleValue,
                 CompanyGroupTitle      = companyGroupValue,
+                DocNumber              = docNumberValue,
                 Indicators             = indicatorValues,
             });
 
@@ -484,9 +529,20 @@ public sealed class FinModelImportMapper : IImportMapper
         bool paramsApplied = false;
         if (paramRows.Count > 0)
         {
-            var paramApply = await ApplyParametersAsync(siteId, paramRows, errors, ct);
-            applied += paramApply;
-            paramsApplied = paramApply > 0;
+            // Pre-check: до любых записей в Объекте проверяем, что в выбранном проекте
+            // есть Visary Deal с таким же (LmID, DocNumber). Колонки опциональны: если
+            // в файле их нет — чек skip-ается (return true). При несовпадении —
+            // row-error «deal_not_found» на каждой param-строке (фронт привяжет к
+            // ячейкам), ApplyParametersAsync пропускается. Бюджет и ГФ продолжаются
+            // самостоятельно — они работают на уровне Project/WBS, не Site. См. doc 104.
+            var dealOk = await EnsureDealExistsInProjectAsync(
+                siteId, paramRows, visaryDb, errors, rowActions, ct);
+            if (dealOk)
+            {
+                var paramApply = await ApplyParametersAsync(siteId, paramRows, errors, ct);
+                applied += paramApply;
+                paramsApplied = paramApply > 0;
+            }
         }
 
         // budget upload status — управляет тем, можно ли запускать ГФ Главы 1.
@@ -800,6 +856,192 @@ public sealed class FinModelImportMapper : IImportMapper
             errors.Add(ParamError("visary_update_error",
                 $"Ошибка обновления в Visary: {ex.Message}"));
             return 0;
+        }
+    }
+
+    /// <summary>
+    /// Ensure-семантика: до записей в Объект гарантируем наличие сделки (Deal) в выбранном
+    /// проекте по <c>DocNumber</c>. Если сделка найдена в проекте — продолжаем; если
+    /// глобально нашлась, но в другом проекте — row-error и skip параметров; если нигде
+    /// нет — СОЗДАЁМ её через POST <c>/api/visary/crud/deal</c> и продолжаем. Возвращает
+    /// <c>true</c>, если сделка есть в этом проекте (найдена или создана); <c>false</c> —
+    /// если найдена в чужом проекте либо если listview/create-вызов упал.
+    /// </summary>
+    /// <remarks>
+    /// История поведения:
+    /// <list type="bullet">
+    ///   <item>v1.0 (2026-05-21): отсутствие сделки → row-error «deal_not_found» + skip Apply.</item>
+    ///   <item>v1.1 (2026-05-21): по уточнению заказчика — сделку создаём сами с
+    ///         минимальным payload. <c>Title:"-"</c> — временный костыль.</item>
+    ///   <item>v1.2 (2026-05-21): между «не нашли в проекте» и «создаём» добавлен
+    ///         глобальный fallback-listview; «сделка в чужом проекте» → row-error
+    ///         <c>deal_in_other_project</c> + skip Apply.</item>
+    ///   <item>v1.3 (2026-05-21): <c>DocNumber</c> теперь читается с управляющего листа
+    ///         «Control» (поле «Номер КД») — см. <see cref="ControlValueRef"/>. LmID
+    ///         больше не передаётся в фильтрах и payload (по запросу заказчика);
+    ///         сравнение и create — только по <c>DocNumber</c>.</item>
+    /// </list>
+    /// </remarks>
+    private async Task<bool> EnsureDealExistsInProjectAsync(
+        int siteId,
+        IReadOnlyList<MappedRow> paramRows,
+        VisaryDbContext visaryDb,
+        List<RowError> errors,
+        List<RowActionLog> rowActions,
+        CancellationToken ct)
+    {
+        var firstRow = paramRows[0];
+        var root = firstRow.MappedValues.RootElement;
+        var docNumber = root.TryGetProperty("DocNumber", out var dnEl)
+                        && dnEl.ValueKind == JsonValueKind.String
+                        ? dnEl.GetString()
+                        : null;
+
+        // «Номер договора» отсутствует/пуст (нет строки «Номер КД» в Control, или ячейка
+        // пустая) — pre-check не делаем. Шаблоны без этого поля продолжают работать.
+        if (string.IsNullOrWhiteSpace(docNumber))
+            return true;
+
+        // Резолвим Project Объекта. Visary mirror в локальном Postgres всегда содержит
+        // ConstructionProjectId для Site (поле NOT NULL в схеме Data."ConstructionSite").
+        var projectId = await visaryDb.ConstructionSites
+            .Where(s => s.Id == siteId)
+            .Select(s => (int?)s.ConstructionProjectId)
+            .FirstOrDefaultAsync(ct);
+        if (projectId is null || projectId == 0)
+        {
+            _log.LogWarning(
+                "FinModelImportMapper: deal pre-check skipped — projectId не найден для siteId={SiteId}",
+                siteId);
+            return true;
+        }
+
+        ListViewResponse<DealRaw> deals;
+        try
+        {
+            deals = await _listViewClient.GetDealsByProjectAsync(
+                projectId.Value, lmIdFilter: null, docNumberFilter: docNumber, ct);
+        }
+        catch (Exception ex)
+        {
+            _log.LogError(ex,
+                "FinModelImportMapper: deal pre-check call failed for projectId={ProjectId} docNumber='{DocNumber}'",
+                projectId.Value, docNumber);
+            foreach (var pr in paramRows)
+            {
+                errors.Add(new RowError(
+                    "Номер договора", "deal_check_error",
+                    $"Не удалось проверить сделку в проекте (№={docNumber}): {ex.Message}",
+                    pr.SourceRowNumber, pr.Sheet));
+            }
+            return false;
+        }
+
+        var match = deals.Data.FirstOrDefault(d =>
+            string.Equals(d.DocNumber?.Trim(), docNumber.Trim(), StringComparison.Ordinal));
+
+        if (match is not null)
+        {
+            _log.LogInformation(
+                "FinModelImportMapper: deal found in projectId={ProjectId} — dealId={DealId}, Title='{Title}'",
+                projectId.Value, match.ID, match.Title);
+            rowActions.Add(new RowActionLog(
+                firstRow.SourceRowNumber, firstRow.Sheet,
+                new[] { $"Сделка найдена в проекте: ID={match.ID}, № «{match.DocNumber}»." }));
+            return true;
+        }
+
+        // Сделки нет в текущем проекте — пробуем найти её глобально (см. doc 104 v1.2).
+        // Если она существует в чужом проекте, в Visary нельзя «перепривязать» сделку
+        // импортом, и нельзя создать дубликат с тем же DocNumber — поэтому выходим
+        // с row-error и пропускаем Apply параметров.
+        ListViewResponse<DealRaw> globalDeals;
+        try
+        {
+            globalDeals = await _listViewClient.GetDealsAsync(
+                lmIdFilter: null, docNumberFilter: docNumber, ct);
+        }
+        catch (Exception ex)
+        {
+            _log.LogError(ex,
+                "FinModelImportMapper: deal global pre-check failed (docNumber='{DocNumber}')",
+                docNumber);
+            foreach (var pr in paramRows)
+            {
+                errors.Add(new RowError(
+                    "Номер договора", "deal_check_error",
+                    $"Не удалось проверить сделку в общем списке (№={docNumber}): {ex.Message}",
+                    pr.SourceRowNumber, pr.Sheet));
+            }
+            return false;
+        }
+
+        var globalMatch = globalDeals.Data.FirstOrDefault(d =>
+            string.Equals(d.DocNumber?.Trim(), docNumber.Trim(), StringComparison.Ordinal));
+
+        if (globalMatch is not null)
+        {
+            var otherProjectId    = globalMatch.ConstructionProject?.ID;
+            var otherProjectTitle = globalMatch.ConstructionProject?.Title;
+            // Текст ошибки делаем самодостаточным — пользователь должен понять, в каком
+            // именно проекте уже живёт «его» DocNumber, чтобы либо поправить файл,
+            // либо отдельно мигрировать сделку в нужный проект.
+            string projectClause = (otherProjectId, otherProjectTitle) switch
+            {
+                (int id, string t) when !string.IsNullOrWhiteSpace(t)
+                    => $"проектом «{t}» (ID={id})",
+                (int id, _) => $"проектом ID={id}",
+                _           => "другим проектом",
+            };
+            _log.LogWarning(
+                "FinModelImportMapper: deal exists globally but belongs to other project — dealId={DealId}, otherProjectId={OtherProjectId}",
+                globalMatch.ID, otherProjectId);
+            foreach (var pr in paramRows)
+            {
+                errors.Add(new RowError(
+                    "Номер договора", "deal_in_other_project",
+                    $"Сделка (№ «{docNumber}») связана с {projectClause}. Импорт параметров пропущен.",
+                    pr.SourceRowNumber, pr.Sheet));
+            }
+            return false;
+        }
+
+        // Сделка не найдена ни в проекте, ни глобально — создаём её сами в проекте.
+        // ⚠️ Title="-" — временный костыль. Заказчик подтвердил, что Visary сейчас требует
+        // непустой Title (иначе 400), но в будущем требование уйдёт. Когда сервер начнёт
+        // принимать null/отсутствующий Title — удалить из payload здесь И поле Title из
+        // DealCreateRequest. См. memory entry project_finmodel_deal_create_title_hack.
+        // LmID не передаём (v1.3) — только DocNumber.
+        _log.LogInformation(
+            "FinModelImportMapper: deal not found in projectId={ProjectId} (DocNumber='{DocNumber}') — создаём",
+            projectId.Value, docNumber);
+        try
+        {
+            var created = await _visaryClient.CreateDealAsync(new DealCreateRequest
+            {
+                ConstructionProjectID = projectId.Value,
+                ConstructionProject   = new VisaryRef { ID = projectId.Value },
+                DocNumber             = docNumber,
+                Title                 = "-", // TODO: удалить, когда Visary перестанет требовать Title
+            }, ct);
+            rowActions.Add(new RowActionLog(
+                firstRow.SourceRowNumber, firstRow.Sheet,
+                new[] { $"Сделка создана в проекте: ID={created.ID}, № «{docNumber}»." }));
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _log.LogError(ex,
+                "FinModelImportMapper: deal create failed for projectId={ProjectId} docNumber='{DocNumber}'",
+                projectId.Value, docNumber);
+            foreach (var pr in paramRows)
+            {
+                errors.Add(new RowError(
+                    "Номер договора", "deal_create_error",
+                    $"Не удалось создать сделку в проекте (№ «{docNumber}»): {ex.Message}",
+                    pr.SourceRowNumber, pr.Sheet));
+            }
+            return false;
         }
     }
 

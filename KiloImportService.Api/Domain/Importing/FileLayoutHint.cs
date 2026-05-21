@@ -51,7 +51,8 @@ public sealed record KeyValueVertical(
     StageCountReference? StageCount = null,
     BudgetSectionHint? Budget = null,
     ChapterScheduleHint? ChapterSchedule = null,
-    IReadOnlyList<SingleValueOverride>? SingleValues = null) : FileLayoutHint;
+    IReadOnlyList<SingleValueOverride>? SingleValues = null,
+    IReadOnlyList<ControlValueRef>? ControlValues = null) : FileLayoutHint;
 
 /// <summary>
 /// Override-ячейка для KV-vertical: значение параметра <paramref name="KeyText"/>
@@ -80,6 +81,31 @@ public sealed record StageCountReference(
     string KeyColumn,
     string ValueColumn,
     string ParameterName);
+
+/// <summary>
+/// Ссылка на «скалярное» значение, лежащее не в основном KV-листе, а на отдельном
+/// управляющем листе (обычно «Control»). На листе <paramref name="SheetName"/> в столбце
+/// <paramref name="KeyColumn"/> ищется строка с текстом <paramref name="ParameterName"/>
+/// (case-insensitive, Trim); значение берётся из <paramref name="ValueColumn"/> той же
+/// строки и подставляется в каждый эмитируемый <see cref="ParsedRow"/> как
+/// <c>Cells[<paramref name="OutputKey"/>]</c>.
+///
+/// Если лист не найден / скрыт / строка с таким <c>ParameterName</c> не существует —
+/// подстановка молча пропускается (как и у <see cref="SingleValueOverride"/>), чтобы
+/// старые шаблоны без «Номер КД» продолжали работать. Используется FinModel-импортом
+/// для чтения «Номер КД» с листа «Control» в `Cells["Номер договора"]` (см. doc 104 v1.3).
+/// </summary>
+/// <param name="SheetName">Имя управляющего листа (обычно <c>"Control"</c>).</param>
+/// <param name="KeyColumn">Буква колонки с названием параметра (обычно <c>"F"</c>).</param>
+/// <param name="ValueColumn">Буква колонки со значением (обычно <c>"G"</c>).</param>
+/// <param name="ParameterName">Текст-ключ, по которому ищется строка (например, «Номер КД»).</param>
+/// <param name="OutputKey">Под каким ключом значение попадёт в <see cref="ParsedRow.Cells"/> (например, «Номер договора»).</param>
+public sealed record ControlValueRef(
+    string SheetName,
+    string KeyColumn,
+    string ValueColumn,
+    string ParameterName,
+    string OutputKey);
 
 /// <summary>
 /// Подсказка для парсера: на листе <see cref="KeyValueVertical.SheetName"/> ниже

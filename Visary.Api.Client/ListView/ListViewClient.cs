@@ -53,11 +53,28 @@ public interface IListViewClient
     Task<ListViewResponse<ConstructionSiteIndicatorValueRaw>> GetIndicatorValuesByIndicatorAsync(
         int indicatorId, CancellationToken ct = default);
 
+    /// <summary>
+    /// Сделки (<c>deal</c>) внутри проекта строительства. POST
+    /// <c>listview/deal/onetomany/ConstructionProject?associationId={projectId}</c>.
+    /// При указании обоих фильтров формируется составной filter
+    /// <c>[["LmID","=",X],"and",["DocNumber","=",Y]]</c> — используется FinModel-импортом
+    /// для pre-check существования сделки до записей в Объекте (см. doc 104).
+    /// </summary>
     Task<ListViewResponse<DealRaw>> GetDealsByProjectAsync(
-        int projectId, string? lmIdFilter = null, CancellationToken ct = default);
+        int projectId, string? lmIdFilter = null, string? docNumberFilter = null,
+        CancellationToken ct = default);
 
+    /// <summary>
+    /// Глобальный <c>listview/deal</c>. Параметры опциональны: при обоих заданных собирается
+    /// <c>[["LmID","=",X],"and",["DocNumber","=",Y]]</c> через <see cref="ListViewClient.FilterAnd"/>;
+    /// при одном — простой <c>=</c>-фильтр; без обоих — пустой Filter (первая страница).
+    /// FinModel использует этот метод как fallback после <see cref="GetDealsByProjectAsync"/>:
+    /// если сделки нет в текущем проекте, но она нашлась глобально — значит она привязана
+    /// к чужому проекту (см. doc 104 v1.2).
+    /// </summary>
     Task<ListViewResponse<DealRaw>> GetDealsAsync(
-        string? lmIdFilter = null, CancellationToken ct = default);
+        string? lmIdFilter = null, string? docNumberFilter = null,
+        CancellationToken ct = default);
 
     Task<ListViewResponse<OrganizationRaw>> GetOrganizationsByClientIdAsync(
         string clientId, CancellationToken ct = default);
@@ -467,44 +484,68 @@ public sealed class ListViewClient : VisaryHttpBase<ListViewClient>, IListViewCl
     // ─── Deals ───────────────────────────────────────────────────────────────
 
     public Task<ListViewResponse<DealRaw>> GetDealsByProjectAsync(
-        int projectId, string? lmIdFilter, CancellationToken ct)
+        int projectId, string? lmIdFilter, string? docNumberFilter, CancellationToken ct)
     {
+        // Filter собирается из 0/1/2 частей: при двух — соединяем через FilterAnd,
+        // получая JSON-форму [["LmID","=",X],"and",["DocNumber","=",Y]].
+        var parts = new List<string>(2);
+        if (!string.IsNullOrWhiteSpace(lmIdFilter))
+            parts.Add(FilterByString("LmID", lmIdFilter));
+        if (!string.IsNullOrWhiteSpace(docNumberFilter))
+            parts.Add(FilterByString("DocNumber", docNumberFilter));
+        string? filter = parts.Count == 0 ? null
+            : parts.Aggregate((a, b) => FilterAnd(a, b));
+
         var body = new
         {
             Mnemonic = VisaryMnemonics.Deal,
             PageSkip = 0,
             PageSize = Options.LargePageSize,
             Columns = DealColumns,
-            Filter = lmIdFilter != null ? FilterByString("LmID", lmIdFilter) : null,
+            Filter = filter,
             SearchPhrase = (string?)null,
             Sorts = SortsNullSentinel,
             Hidden = false,
             Summaries = Array.Empty<object>(),
         };
 
-        _log.LogDebug("Visary → GET {Mnemonic}/onetomany/ConstructionProject projectId={ProjectId}",
-            VisaryMnemonics.Deal, projectId);
+        _log.LogDebug(
+            "Visary → GET {Mnemonic}/onetomany/ConstructionProject projectId={ProjectId} lmId='{LmId}' docNumber='{DocNumber}'",
+            VisaryMnemonics.Deal, projectId, lmIdFilter, docNumberFilter);
         return PostListViewAsync<DealRaw>(
             $"{BaseUrl}/api/visary/listview/{VisaryMnemonics.Deal}/onetomany/ConstructionProject?associationId={projectId}",
             body, $"{VisaryMnemonics.Deal}/onetomany/ConstructionProject id={projectId}", ct);
     }
 
-    public Task<ListViewResponse<DealRaw>> GetDealsAsync(string? lmIdFilter, CancellationToken ct)
+    public Task<ListViewResponse<DealRaw>> GetDealsAsync(
+        string? lmIdFilter, string? docNumberFilter, CancellationToken ct)
     {
+        // Тот же приём, что в GetDealsByProjectAsync: 0/1/2 части → опционально склеиваем
+        // через FilterAnd. Без аргументов получается «весь список» (первая страница) —
+        // используется проксей-контроллером VisaryEntitiesController для UI-дропдауна.
+        var parts = new List<string>(2);
+        if (!string.IsNullOrWhiteSpace(lmIdFilter))
+            parts.Add(FilterByString("LmID", lmIdFilter));
+        if (!string.IsNullOrWhiteSpace(docNumberFilter))
+            parts.Add(FilterByString("DocNumber", docNumberFilter));
+        string? filter = parts.Count == 0 ? null
+            : parts.Aggregate((a, b) => FilterAnd(a, b));
+
         var body = new
         {
             Mnemonic = VisaryMnemonics.Deal,
             PageSkip = 0,
             PageSize = Options.DefaultPageSize,
             Columns = DealColumns,
-            Filter = lmIdFilter != null ? FilterByString("LmID", lmIdFilter) : null,
+            Filter = filter,
             SearchPhrase = (string?)null,
             Sorts = SortsNullSentinel,
             Hidden = false,
             Summaries = Array.Empty<object>(),
         };
 
-        _log.LogDebug("Visary → GET {Mnemonic} lmId='{LmId}'", VisaryMnemonics.Deal, lmIdFilter);
+        _log.LogDebug("Visary → GET {Mnemonic} lmId='{LmId}' docNumber='{DocNumber}'",
+            VisaryMnemonics.Deal, lmIdFilter, docNumberFilter);
         return PostListViewAsync<DealRaw>(
             $"{BaseUrl}/api/visary/listview/{VisaryMnemonics.Deal}", body, VisaryMnemonics.Deal, ct);
     }
