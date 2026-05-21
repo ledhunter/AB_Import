@@ -298,10 +298,10 @@ public class ProjectsCacheServiceTests
             int indicatorId, CancellationToken ct)
             => throw new NotImplementedException();
 
-        public Task<ListViewResponse<DealRaw>> GetDealsByProjectAsync(int projectId, string? lmIdFilter, CancellationToken ct)
+        public Task<ListViewResponse<DealRaw>> GetDealsByProjectAsync(int projectId, string? lmIdFilter, string? docNumberFilter, CancellationToken ct)
             => throw new NotImplementedException();
 
-        public Task<ListViewResponse<DealRaw>> GetDealsAsync(string? lmIdFilter, CancellationToken ct)
+        public Task<ListViewResponse<DealRaw>> GetDealsAsync(string? lmIdFilter, string? docNumberFilter, CancellationToken ct)
             => throw new NotImplementedException();
 
         public Task<ListViewResponse<OrganizationRaw>> GetOrganizationsByClientIdAsync(string clientId, CancellationToken ct)

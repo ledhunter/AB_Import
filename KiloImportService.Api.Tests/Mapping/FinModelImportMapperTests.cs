@@ -184,6 +184,18 @@ public class FinModelImportMapperTests : IDisposable
                 It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
 
+        // Default-fallback для глобального listview/deal (doc 104 v1.2): пустой ответ
+        // эквивалентен «сделка нигде не существует» — переход к CreateDealAsync.
+        // Тесты с fallback-сценарием «связана с другим проектом» переопределяют этот setup.
+        _mockListView
+            .Setup(c => c.GetDealsAsync(
+                It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ListViewResponse<DealRaw>
+            {
+                Data = new List<DealRaw>(),
+                Total = 0,
+            });
+
         // Эталонный справочник статей бюджета грузится из embedded-ресурса
         // KiloImportService.Api → используем реальный provider (без сети, in-process).
         var budgetRef = new BudgetReferenceProvider(
@@ -206,6 +218,9 @@ public class FinModelImportMapperTests : IDisposable
         {
             Id = 123,
             Title = "Тестовый объект",
+            // ConstructionProjectId требуется Deal-pre-check'ом (см. EnsureDealExistsInProjectAsync).
+            // Старые тесты не задают DocNumber/LmId — pre-check skip-ается, поведение не меняется.
+            ConstructionProjectId = 4584,
             Hidden = false,
         });
         _dbContext.SaveChanges();
@@ -1234,5 +1249,263 @@ public class FinModelImportMapperTests : IDisposable
 
         Assert.Contains(apply.Errors, e => e.ErrorCode == "company_group_link_error");
         _mockCrud.Verify(c => c.UpdateSiteFinishingMaterialAsync(123, 3, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    // ─── Deal pre-check (см. doc 104) ────────────────────────────────────────
+    //
+    // ApplyAsync до любых изменений Объекта проверяет наличие сделки в выбранном
+    // проекте по DocNumber. С v1.3 значение приходит с управляющего листа «Control»
+    // (поле «Номер КД»); парсер кладёт его в Cells["Номер договора"] каждой
+    // ParsedRow через ControlValueRef. LmID не используется во flow.
+    // Колонка опциональна — шаблоны без неё продолжают работать (см.
+    // ApplyAsync_NoDealColumnsInFile_*).
+
+    private static ParsedRow RowWithDeal(
+        string docNumber = "ДГ-2025-117",
+        string finishing = "Черновая",
+        string estate    = "Комфорт")
+        => new(SourceRowNumber: 2, Sheet: "inputs",
+            Cells: new Dictionary<string, string>
+            {
+                ["Тип отделки"]         = finishing,
+                ["Класс жилья"]         = estate,
+                ["Площадь застройки"]   = "100",
+                ["Плотность застройки"] = "0.5",
+                ["Строительный адрес"]  = "ул. Ленина, 1",
+                // С v1.3 «Номер договора» подставляется парсером с листа Control
+                // (см. ControlValueRef в LayoutHint). В юнит-тестах парсер не
+                // используется — кладём значение в Cells вручную под тем же ключом.
+                ["Номер договора"]      = docNumber,
+            });
+
+    [Fact]
+    public async Task ValidateAsync_DocNumberColumn_PopulatesMappedValues()
+    {
+        var result = await _mapper.ValidateAsync(
+            Ctx(), new[] { RowWithDeal(docNumber: "ДГ-7") }, _dbContext, default);
+
+        Assert.True(result.Rows[0].IsValid);
+        var root = result.Rows[0].MappedValues.RootElement;
+        Assert.Equal("ДГ-7", root.GetProperty("DocNumber").GetString());
+        // LmID больше не сериализуется в MappedValues (v1.3).
+        Assert.False(root.TryGetProperty("LmId", out _));
+    }
+
+    [Fact]
+    public async Task ApplyAsync_DealFound_AllowsParametersApply()
+    {
+        _mockListView
+            .Setup(c => c.GetDealsByProjectAsync(4584, null, "ДГ-2025-117", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ListViewResponse<DealRaw>
+            {
+                Data = new() { new() { ID = 9100, DocNumber = "ДГ-2025-117", Title = "Сделка #9100" } },
+                Total = 1,
+            });
+
+        var validation = await _mapper.ValidateAsync(
+            Ctx(), new[] { RowWithDeal() }, _dbContext, default);
+        var apply = await _mapper.ApplyAsync(Ctx(), _dbContext, validation.Rows, default);
+
+        Assert.Equal(1, apply.AppliedCount);
+        Assert.DoesNotContain(apply.Errors, e => e.ErrorCode == "deal_not_found");
+        _mockCrud.Verify(c => c.UpdateSiteFinishingMaterialAsync(123, 3, It.IsAny<CancellationToken>()), Times.Once);
+        Assert.NotNull(apply.RowActions);
+        Assert.Contains(apply.RowActions!, a => a.Actions.Any(s => s.Contains("Сделка найдена")));
+        // LmID не должен фигурировать ни в фильтрах, ни в журнале (v1.3).
+        _mockListView.Verify(c => c.GetDealsByProjectAsync(
+            It.IsAny<int>(), It.Is<string?>(s => !string.IsNullOrEmpty(s)),
+            It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ApplyAsync_DealNotFoundInProject_CreatesDealAndContinuesWithParameters()
+    {
+        _mockListView
+            .Setup(c => c.GetDealsByProjectAsync(4584, null, "ДГ-NEW", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ListViewResponse<DealRaw>
+            {
+                Data = new List<DealRaw>(),
+                Total = 0,
+            });
+        _mockCrud
+            .Setup(c => c.CreateDealAsync(It.IsAny<DealCreateRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new DealRaw
+            {
+                ID = 9311, DocNumber = "ДГ-NEW", Title = "-",
+            });
+
+        var validation = await _mapper.ValidateAsync(
+            Ctx(), new[] { RowWithDeal(docNumber: "ДГ-NEW") }, _dbContext, default);
+        var apply = await _mapper.ApplyAsync(Ctx(), _dbContext, validation.Rows, default);
+
+        Assert.Equal(1, apply.AppliedCount);
+        Assert.DoesNotContain(apply.Errors, e => e.ErrorCode == "deal_not_found" || e.ErrorCode == "deal_create_error");
+        // payload без LmID (v1.3) + Title="-" костыль.
+        _mockCrud.Verify(c => c.CreateDealAsync(
+            It.Is<DealCreateRequest>(r =>
+                r.ConstructionProjectID == 4584 &&
+                r.ConstructionProject != null && r.ConstructionProject.ID == 4584 &&
+                r.DocNumber == "ДГ-NEW" &&
+                r.LmID == null &&
+                r.Title == "-"),
+            It.IsAny<CancellationToken>()), Times.Once);
+        _mockCrud.Verify(c => c.UpdateSiteFinishingMaterialAsync(123, 3, It.IsAny<CancellationToken>()), Times.Once);
+        Assert.NotNull(apply.RowActions);
+        Assert.Contains(apply.RowActions!, a => a.Actions.Any(s => s.Contains("Сделка создана") && s.Contains("9311")));
+    }
+
+    [Fact]
+    public async Task ApplyAsync_DealCreateFails_BlocksParametersAndAddsRowError()
+    {
+        _mockListView
+            .Setup(c => c.GetDealsByProjectAsync(4584, It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ListViewResponse<DealRaw>
+            {
+                Data = new List<DealRaw>(),
+                Total = 0,
+            });
+        _mockCrud
+            .Setup(c => c.CreateDealAsync(It.IsAny<DealCreateRequest>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new HttpRequestException("Visary 500"));
+
+        var validation = await _mapper.ValidateAsync(
+            Ctx(), new[] { RowWithDeal() }, _dbContext, default);
+        var apply = await _mapper.ApplyAsync(Ctx(), _dbContext, validation.Rows, default);
+
+        Assert.Equal(0, apply.AppliedCount);
+        var err = Assert.Single(apply.Errors, e => e.ErrorCode == "deal_create_error");
+        Assert.Contains("Visary 500", err.Message);
+        _mockCrud.Verify(c => c.UpdateSiteFinishingMaterialAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
+        _mockCrud.Verify(c => c.UpdateSiteAddressAsync(It.IsAny<int>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ApplyAsync_DealLinkedToOtherProject_SkipsParamsAndAddsRowError()
+    {
+        // doc 104 v1.2: если сделки нет в текущем проекте, но она нашлась глобально —
+        // импорт не должен ни создавать дубликат, ни писать параметры в Объект.
+        _mockListView
+            .Setup(c => c.GetDealsByProjectAsync(4584, null, "ДГ-OTHER", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ListViewResponse<DealRaw>
+            {
+                Data = new List<DealRaw>(),
+                Total = 0,
+            });
+        _mockListView
+            .Setup(c => c.GetDealsAsync(null, "ДГ-OTHER", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ListViewResponse<DealRaw>
+            {
+                Data = new()
+                {
+                    new()
+                    {
+                        ID = 9999,
+                        DocNumber = "ДГ-OTHER",
+                        Title = "Чужая сделка",
+                        ConstructionProject = new VisaryRef { ID = 7001, Title = "Другой проект" },
+                    },
+                },
+                Total = 1,
+            });
+
+        var validation = await _mapper.ValidateAsync(
+            Ctx(), new[] { RowWithDeal(docNumber: "ДГ-OTHER") }, _dbContext, default);
+        var apply = await _mapper.ApplyAsync(Ctx(), _dbContext, validation.Rows, default);
+
+        Assert.Equal(0, apply.AppliedCount);
+        var err = Assert.Single(apply.Errors, e => e.ErrorCode == "deal_in_other_project");
+        Assert.Contains("Другой проект", err.Message);
+        Assert.Contains("7001", err.Message);
+        // LmID не должен «протечь» в текст ошибки (v1.3).
+        Assert.DoesNotContain("LmID", err.Message);
+        _mockCrud.Verify(c => c.CreateDealAsync(
+            It.IsAny<DealCreateRequest>(), It.IsAny<CancellationToken>()), Times.Never);
+        _mockCrud.Verify(c => c.UpdateSiteFinishingMaterialAsync(
+            It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
+        _mockCrud.Verify(c => c.UpdateSiteAddressAsync(
+            It.IsAny<int>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ApplyAsync_DealGlobalListViewThrows_AddsCheckErrorAndBlocksParams()
+    {
+        _mockListView
+            .Setup(c => c.GetDealsByProjectAsync(4584, It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ListViewResponse<DealRaw>
+            {
+                Data = new List<DealRaw>(),
+                Total = 0,
+            });
+        _mockListView
+            .Setup(c => c.GetDealsAsync(It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new HttpRequestException("Visary 504"));
+
+        var validation = await _mapper.ValidateAsync(
+            Ctx(), new[] { RowWithDeal() }, _dbContext, default);
+        var apply = await _mapper.ApplyAsync(Ctx(), _dbContext, validation.Rows, default);
+
+        Assert.Equal(0, apply.AppliedCount);
+        var err = Assert.Single(apply.Errors, e => e.ErrorCode == "deal_check_error");
+        Assert.Contains("Visary 504", err.Message);
+        Assert.Contains("общем списке", err.Message);
+        _mockCrud.Verify(c => c.CreateDealAsync(
+            It.IsAny<DealCreateRequest>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ApplyAsync_NoDealColumnsInFile_SkipsCheckAndAppliesParams()
+    {
+        // Старый шаблон без колонки «Номер договора» (нет «Номер КД» в Control)
+        // — pre-check не делается.
+        var validation = await _mapper.ValidateAsync(
+            Ctx(), new[] { Row() }, _dbContext, default);
+        var apply = await _mapper.ApplyAsync(Ctx(), _dbContext, validation.Rows, default);
+
+        Assert.Equal(1, apply.AppliedCount);
+        _mockListView.Verify(c => c.GetDealsByProjectAsync(
+            It.IsAny<int>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+        _mockListView.Verify(c => c.GetDealsAsync(
+            It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+        _mockCrud.Verify(c => c.UpdateSiteFinishingMaterialAsync(123, 3, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ApplyAsync_DealListViewThrows_AddsCheckErrorAndBlocksParams()
+    {
+        _mockListView
+            .Setup(c => c.GetDealsByProjectAsync(4584, It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new HttpRequestException("Visary 503"));
+
+        var validation = await _mapper.ValidateAsync(
+            Ctx(), new[] { RowWithDeal() }, _dbContext, default);
+        var apply = await _mapper.ApplyAsync(Ctx(), _dbContext, validation.Rows, default);
+
+        Assert.Equal(0, apply.AppliedCount);
+        Assert.Contains(apply.Errors, e => e.ErrorCode == "deal_check_error" && e.Message.Contains("Visary 503"));
+        _mockCrud.Verify(c => c.UpdateSiteFinishingMaterialAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ValidateAsync_EmptyDocNumberValue_EmitsValueEmpty()
+    {
+        // Колонка «Номер договора» присутствует (например, парсер нашёл строку «Номер КД»
+        // в Control), но ячейка пустая → value_empty на единственное значение.
+        var row = new ParsedRow(2, "inputs", new Dictionary<string, string>
+        {
+            ["Тип отделки"]         = "Черновая",
+            ["Класс жилья"]         = "Комфорт",
+            ["Площадь застройки"]   = "100",
+            ["Плотность застройки"] = "0.5",
+            ["Строительный адрес"]  = "ул. Ленина, 1",
+            ["Номер договора"]      = "",
+        });
+
+        var result = await _mapper.ValidateAsync(Ctx(), new[] { row }, _dbContext, default);
+
+        Assert.False(result.Rows[0].IsValid);
+        Assert.Contains(result.Rows[0].Errors,
+            e => e.ErrorCode == "value_empty" && e.Message.Contains("Номер договора"));
     }
 }

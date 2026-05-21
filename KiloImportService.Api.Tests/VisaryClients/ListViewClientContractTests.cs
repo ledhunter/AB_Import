@@ -73,7 +73,7 @@ public sealed class ListViewClientContractTests
         // ⚠️ GetIndicatorsBySiteAsync здесь не подходит — он использует FilterByStringContains
         // (Title в Visary может содержать хвостовые пробелы, см. doc 67).
         if (field == "LmID")
-            await client.GetDealsAsync(value, default);
+            await client.GetDealsAsync(value, null, default);
         else
             await client.ListTownsAsync(value, default);
 
@@ -118,6 +118,63 @@ public sealed class ListViewClientContractTests
         Assert.Contains("\"Mnemonic\":\"town\"", body);
         Assert.Contains("\"PageSize\":500", body); // LargePageSize дефолт
         Assert.Contains("\"Filter\":\"[\\u0022Title\\u0022,\\u0022=\\u0022,\\u0022Mosc\\u0022]\"", body);
+    }
+
+    [Fact]
+    public async Task GetDealsByProjectAsync_with_both_filters_emits_and_combined_filter()
+    {
+        // Defence-in-depth: финмодель-импорт делает pre-check сделки в проекте по паре
+        // (LmID, DocNumber); серверный Visary не примет «=» с двумя полями отдельно,
+        // нужен AND-объединённый фильтр (см. doc 104).
+        var (client, handler) = TestVisaryClientFactory.NewListView();
+        handler.EnqueueJson(EmptyListResponse);
+
+        await client.GetDealsByProjectAsync(4584, lmIdFilter: "L-1", docNumberFilter: "DN-7", default);
+
+        var req = Assert.Single(handler.Requests);
+        Assert.Equal(
+            $"{Base}/api/visary/listview/deal/onetomany/ConstructionProject?associationId=4584",
+            req.RequestUri!.ToString());
+        var body = handler.RequestBodies[0]!;
+        var doc = JsonDocument.Parse(body);
+        var filter = doc.RootElement.GetProperty("Filter").GetString();
+        Assert.Equal("[[\"LmID\",\"=\",\"L-1\"],\"and\",[\"DocNumber\",\"=\",\"DN-7\"]]", filter);
+    }
+
+    [Fact]
+    public async Task GetDealsByProjectAsync_with_no_filters_omits_filter_from_body()
+    {
+        var (client, handler) = TestVisaryClientFactory.NewListView();
+        handler.EnqueueJson(EmptyListResponse);
+
+        await client.GetDealsByProjectAsync(4584, lmIdFilter: null, docNumberFilter: null, default);
+
+        var body = handler.RequestBodies[0]!;
+        // System.Text.Json при сериализации анонимного объекта со значением null
+        // пропускает поле полностью (DefaultIgnoreCondition.WhenWritingNull). Visary
+        // трактует отсутствие Filter как «фильтр не задан» — то же поведение, что и раньше.
+        var doc = JsonDocument.Parse(body);
+        if (doc.RootElement.TryGetProperty("Filter", out var filterEl))
+            Assert.Equal(JsonValueKind.Null, filterEl.ValueKind);
+    }
+
+    [Fact]
+    public async Task GetDealsAsync_with_both_filters_hits_global_url_with_and_filter()
+    {
+        // doc 104 v1.2: FinModel-импорт делает fallback-вызов глобального listview/deal
+        // после неудачного поиска в проекте. Должен использоваться общий URL без
+        // /onetomany/ConstructionProject и составной (LmID and DocNumber) фильтр.
+        var (client, handler) = TestVisaryClientFactory.NewListView();
+        handler.EnqueueJson(EmptyListResponse);
+
+        await client.GetDealsAsync(lmIdFilter: "L-1", docNumberFilter: "DN-7", default);
+
+        var req = Assert.Single(handler.Requests);
+        Assert.Equal($"{Base}/api/visary/listview/deal", req.RequestUri!.ToString());
+        var body = handler.RequestBodies[0]!;
+        var doc = JsonDocument.Parse(body);
+        var filter = doc.RootElement.GetProperty("Filter").GetString();
+        Assert.Equal("[[\"LmID\",\"=\",\"L-1\"],\"and\",[\"DocNumber\",\"=\",\"DN-7\"]]", filter);
     }
 
     [Theory]

@@ -102,13 +102,16 @@ Task<ListViewResponse<RoomRaw>> GetRoomsBySiteAsync(...)
 
 ### Сделки
 
-#### `GetDealsByProjectAsync(int projectId, string? lmIdFilter = null)`
+#### `GetDealsByProjectAsync(int projectId, string? lmIdFilter = null, string? docNumberFilter = null)`
 
-**Назначение**: найти сделки внутри проекта (onetomany).
+**Назначение**: найти сделки внутри проекта (onetomany). С v1.4 (2026-05-21) принимает
+второй необязательный фильтр по `DocNumber` — при наличии обоих формирует составной
+filter `[["LmID","=",X],"and",["DocNumber","=",Y]]` через `FilterAnd`. Используется
+FinModel-импортом для ensure-сделки в проекте (см. [doc 104](./104-finmodel-deal-precheck.md)).
 
 | | |
 |---|---|
-| **Вход** | `projectId` — ID проекта; `lmIdFilter` — опциональная фильтрация по `LmID` |
+| **Вход** | `projectId`; `lmIdFilter` — `LmID`; `docNumberFilter` — `DocNumber` |
 | **Выход** | `ListViewResponse<DealRaw>` |
 | **Endpoint** | `POST /api/visary/listview/deal/onetomany/ConstructionProject?associationId={projectId}` |
 
@@ -534,6 +537,41 @@ var created = await crud.CreateOrganizationAsync(new OrganizationCreateRequest
 
 ---
 
+### Сделка (Deal)
+
+#### `CreateDealAsync(DealCreateRequest request)`
+
+**Назначение**: создать сделку (`deal`) в проекте, когда pre-check
+`GetDealsByProjectAsync(projectId, lmId, docNumber)` не нашёл сделки по паре.
+Используется FinModel-импортом в составе ensure-сделки (см. [doc 104](./104-finmodel-deal-precheck.md)).
+
+| | |
+|---|---|
+| **Вход** | `DealCreateRequest { ConstructionProjectID, ConstructionProject:{ID}, DocNumber, LmID, Title }` |
+| **Выход** | `DealRaw` (с присвоенным `ID`) |
+| **Endpoint** | `POST /api/visary/crud/deal` |
+
+```csharp
+var created = await crud.CreateDealAsync(new DealCreateRequest
+{
+    ConstructionProjectID = 4584,
+    ConstructionProject   = new VisaryRef { ID = 4584 },  // 👈 дублируется scalar+ref
+    DocNumber             = "ДГ-2025-117",
+    LmID                  = "LM-4584-117",
+    Title                 = "-",    // ⚠️ временный костыль, см. doc 104 «Title hack»
+}, ct);
+```
+
+> ⚠️ **Visary требует `ConstructionProjectID` И `ConstructionProject:{ID}`** одновременно —
+> scalar и nested-ref. Только одно из двух → 400.
+>
+> ⚠️ **Title — временный костыль.** Сейчас Visary 400, если Title `null`/отсутствует.
+> Заказчик подтвердил, что в будущем требование уйдёт. Когда снимут — удалить присваивание
+> в `FinModelImportMapper.EnsureDealExistsInProjectAsync` и поле из DTO. См. memory
+> `project_finmodel_deal_create_title_hack`.
+
+---
+
 ## 🔑 Общий тип VisaryRef
 
 Используется во всех entity и request DTO как ссылка на связанную сущность:
@@ -672,6 +710,18 @@ public sealed class RoomRaw
 ---
 
 ## 📝 История версий
+
+- **1.4** (2026-05-21):
+  - `IListViewClient.GetDealsByProjectAsync` принимает дополнительный
+    `docNumberFilter` — при двух фильтрах формирует составной filter
+    `[["LmID","=",X],"and",["DocNumber","=",Y]]` через `FilterAnd`.
+  - Добавлен `ICrudClient.CreateDealAsync(DealCreateRequest)` —
+    `POST /api/visary/crud/deal`. DTO передаёт проект **дважды**: scalar
+    `ConstructionProjectID` + nested ref `ConstructionProject:{ID}`. Поле
+    `Title = "-"` — временный костыль (Visary 400 при null), будет удалено по
+    согласованию с сервером. Используется FinModel-импортом для ensure-сделки
+    в проекте, см. [104-finmodel-deal-precheck.md](./104-finmodel-deal-precheck.md).
+  - Прокси `GET /api/visary/deals` принимает третий query-параметр `docNumberFilter`.
 
 - **1.3** (2026-05-20):
   - Добавлен `ICrudClient.CreateOrganizationAsync` (POST `/api/visary/crud/organization`)

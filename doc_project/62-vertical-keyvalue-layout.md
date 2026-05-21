@@ -109,6 +109,10 @@ private static ParseResult ParseKeyValueVertical(XLWorkbook wb, KeyValueVertical
 - **`SourceRowNumber` = индекс колонки-значения** (H=8, I=9, …). В отчёте пользователь видит, какая именно колонка дала строку.
 - **`Sheet = "Inputs (H)"`** — добавляем буквенный идентификатор колонки, чтобы трассировать конкретный этап в UI.
 - **Парсер НЕ поддерживает `KeyValueVertical` для CSV/XLS/XLSB** — возвращает file-level `parse_failure` с понятным сообщением. Шаблон — XLSX-only.
+- **Расширения раскладки**: значения вне основной (Key, Value-by-stage)-сетки задаются опциональными хинтами `KeyValueVertical`:
+    - `SingleValues: SingleValueOverride[]` — значение в той же строке, но в **другой колонке** того же листа (например, «Группа компаний» в E14, ключ в C14 — см. [doc 100](./100-finmodel-companygroup-link.md)).
+    - `ControlValues: ControlValueRef[]` — значение на **другом листе** (обычно «Control», поле (Key, Value) — например, «Номер КД»→`Cells["Номер договора"]`; см. [doc 105](./105-control-value-ref.md)).
+  Оба хинта подставляют значение в `Cells[OutputKey]` каждого ParsedRow и опциональны (нет — молча skip). Маппер дальше работает с ними как с обычной колонкой через `FindColumn`.
 
 ---
 
@@ -151,7 +155,7 @@ if (sheet.Name != "Inputs") return error;
 
 | Компонент | Файл | Назначение |
 |-----------|------|-----------|
-| Контракт | [Domain/Importing/FileLayoutHint.cs](../KiloImportService.Api/Domain/Importing/FileLayoutHint.cs) | `Tabular` / `KeyValueVertical` / `StageCountReference` |
+| Контракт | [Domain/Importing/FileLayoutHint.cs](../KiloImportService.Api/Domain/Importing/FileLayoutHint.cs) | `Tabular` / `KeyValueVertical` / `StageCountReference` / `SingleValueOverride` / `ControlValueRef` |
 | Парсер | [Domain/Importing/Parsers/XlsxParser.cs](../KiloImportService.Api/Domain/Importing/Parsers/XlsxParser.cs) | Метод `ParseKeyValueVertical` + helper `ReadStageCount` |
 | Контракт парсера | [Domain/Importing/IFileParser.cs](../KiloImportService.Api/Domain/Importing/IFileParser.cs) | `ParseAsync(stream, FileLayoutHint?, ct)` |
 | Контракт маппера | [Domain/Mapping/IImportMapper.cs](../KiloImportService.Api/Domain/Mapping/IImportMapper.cs) | `FileLayoutHint LayoutHint => FileLayoutHint.Default` |

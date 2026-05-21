@@ -106,7 +106,7 @@ public sealed class VisaryListViewLiveTests
     public async Task GetDealsAsync_deserializes_without_error()
     {
         SkipIfNoToken();
-        var resp = await VisaryLiveClientFactory.NewListView().GetDealsAsync(null, default);
+        var resp = await VisaryLiveClientFactory.NewListView().GetDealsAsync(null, null, default);
         Assert.NotNull(resp);
     }
 

@@ -122,6 +122,16 @@ public interface ICrudClient
         OrganizationCreateRequest request, CancellationToken ct = default);
 
     /// <summary>
+    /// Создать сделку (<c>deal</c>) внутри проекта. POST <c>/api/visary/crud/deal</c>.
+    /// Используется FinModel-импортом, когда pre-check сделки в проекте
+    /// (см. <see cref="ListView.IListViewClient.GetDealsByProjectAsync"/>) не нашёл
+    /// сделки по паре <c>LmID</c>+<c>DocNumber</c> — сделка создаётся прямо здесь,
+    /// чтобы продолжить применение параметров Объекта. См. doc 104 v1.1.
+    /// </summary>
+    Task<DealRaw> CreateDealAsync(
+        DealCreateRequest request, CancellationToken ct = default);
+
+    /// <summary>
     /// Записать привязку организации к группе компаний (поле <c>Group</c>).
     /// Используется FinModel-импортом (doc 100): когда по ИНН найдена/создана
     /// организация-застройщик и в файле указано наименование ГК, мы PATCH-им
@@ -561,6 +571,21 @@ public sealed class CrudClient : VisaryHttpBase<CrudClient>, ICrudClient
         _log.LogInformation(
             "CrudClient.CreateOrganizationAsync: created id={Id} title='{Title}' clientId='{ClientId}'",
             result.ID, result.Title, result.ClientID);
+        return result;
+    }
+
+    public async Task<DealRaw> CreateDealAsync(
+        DealCreateRequest request, CancellationToken ct)
+    {
+        _log.LogDebug(
+            "Visary → POST {Mnemonic} projectId={ProjectId} docNumber='{DocNumber}' lmId='{LmId}'",
+            VisaryMnemonics.Deal, request.ConstructionProjectID, request.DocNumber, request.LmID);
+        var result = await PostCrudAsync<DealRaw>(
+            $"{BaseUrl}/api/visary/crud/{VisaryMnemonics.Deal}",
+            request, VisaryMnemonics.Deal, ct);
+        _log.LogInformation(
+            "CrudClient.CreateDealAsync: created id={Id} projectId={ProjectId} docNumber='{DocNumber}' lmId='{LmId}'",
+            result.ID, request.ConstructionProjectID, result.DocNumber, result.LmID);
         return result;
     }
 

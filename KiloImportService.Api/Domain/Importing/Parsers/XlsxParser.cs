@@ -473,6 +473,35 @@ public sealed class XlsxParser : IFileParser
             }
         }
 
+        // ControlValueRefs — скалярные значения с управляющего листа (обычно «Control»):
+        // например, «Номер КД» с листа Control попадает в Cells["Номер договора"] каждого
+        // ParsedRow. Семантика «найти строку по тексту-ключу в колонке-ключе и взять
+        // значение из соседней колонки» совпадает со StageCountReference; не нашли —
+        // молча пропускаем, как у SingleValueOverride. См. doc 104 v1.3.
+        if (layout.ControlValues is { Count: > 0 } controlRefs)
+        {
+            foreach (var cv in controlRefs)
+            {
+                var ctrlSheet = workbook.Worksheets.FirstOrDefault(w =>
+                    w.Visibility == XLWorksheetVisibility.Visible
+                    && string.Equals(w.Name, cv.SheetName, StringComparison.OrdinalIgnoreCase));
+                if (ctrlSheet is null) continue;
+                if (!TryParseColumnLetter(cv.KeyColumn, out var cvKeyCol)) continue;
+                if (!TryParseColumnLetter(cv.ValueColumn, out var cvValCol)) continue;
+                var ctrlRange = ctrlSheet.RangeUsed();
+                if (ctrlRange is null) continue;
+                int ctrlLastRow = ctrlRange.LastRow().RowNumber();
+                for (int r = 1; r <= ctrlLastRow; r++)
+                {
+                    var name = ctrlSheet.Cell(r, cvKeyCol).GetString().Trim();
+                    if (!name.Equals(cv.ParameterName, StringComparison.OrdinalIgnoreCase)) continue;
+                    var value = ctrlSheet.Cell(r, cvValCol).GetString() ?? string.Empty;
+                    overrideValues.Add((cv.OutputKey, value));
+                    break;
+                }
+            }
+        }
+
         for (int c = valueStartCol; c <= stopCol; c++)
         {
             ct.ThrowIfCancellationRequested();
