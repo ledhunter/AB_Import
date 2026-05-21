@@ -10,6 +10,13 @@ interface Props {
   siteId: number | null;
   onProjectChange: (id: number | null) => void;
   onSiteChange: (id: number | null) => void;
+  /**
+   * Показывать Select «Объект строительства». Для импорта «Помещения» (rooms)
+   * Site не выбирается — он резолвится per-row по (НПС, Этап) в проекте
+   * (см. doc_project/101-rooms-multi-site-by-project.md). По умолчанию true
+   * для обратной совместимости с другими типами импорта (Финмодель и пр.).
+   */
+  showSiteSelect?: boolean;
 }
 
 const errorRow = (message: string, onRetry: () => void) => (
@@ -50,6 +57,7 @@ export const ImportForm = ({
   siteId,
   onProjectChange,
   onSiteChange,
+  showSiteSelect = true,
 }: Props) => {
   // Контролируемая строка поиска для Select.searchProps.
   const [projectSearch, setProjectSearch] = useState('');
@@ -191,35 +199,37 @@ export const ImportForm = ({
           : null}
       </div>
 
-      <div className="field">
-        <Select
-          label="Объект строительства"
-          placeholder={sitePlaceholder}
-          options={siteOptions}
-          selected={siteId !== null ? String(siteId) : null}
-          onChange={async ({ selected }) => {
-            const newSiteId = selected ? Number(selected.key) : null;
-            if (newSiteId) {
-              try {
-                await syncSite(newSiteId, projectId!);
-              } catch (err) {
-                console.error('[ImportForm] Failed to sync site', newSiteId, err);
-                if (err instanceof Error) {
-                  alert(`Ошибка синхронизации объекта: ${err.message}`);
+      {showSiteSelect && (
+        <div className="field">
+          <Select
+            label="Объект строительства"
+            placeholder={sitePlaceholder}
+            options={siteOptions}
+            selected={siteId !== null ? String(siteId) : null}
+            onChange={async ({ selected }) => {
+              const newSiteId = selected ? Number(selected.key) : null;
+              if (newSiteId) {
+                try {
+                  await syncSite(newSiteId, projectId!);
+                } catch (err) {
+                  console.error('[ImportForm] Failed to sync site', newSiteId, err);
+                  if (err instanceof Error) {
+                    alert(`Ошибка синхронизации объекта: ${err.message}`);
+                  }
+                  return;
                 }
-                return;
               }
-            }
-            onSiteChange(newSiteId);
-          }}
-          onOpen={handleSitesOpen}
-          disabled={!projectId || sites.status === 'loading'}
-          block
-        />
-        {sites.status === 'error' && sites.error
-          ? errorRow(sites.error, sites.refetch)
-          : null}
-      </div>
+              onSiteChange(newSiteId);
+            }}
+            onOpen={handleSitesOpen}
+            disabled={!projectId || sites.status === 'loading'}
+            block
+          />
+          {sites.status === 'error' && sites.error
+            ? errorRow(sites.error, sites.refetch)
+            : null}
+        </div>
+      )}
     </div>
   );
 };

@@ -100,6 +100,23 @@ public class ImportsController : ControllerBase
             {
                 scope.ServiceProvider.GetRequiredService<ILogger<ImportsController>>()
                     .LogError(ex, "ParseAndValidate failed for session {SessionId}", sessionId);
+                // Без этого статус остаётся «Validating», UI висит «в процессе»,
+                // а Cancel-endpoint видит «нет активного CTS» и не может перевести
+                // в финальный статус (см. doc_project/103-cancel-and-stuck-status.md).
+                try
+                {
+                    await pipeline.ForceFinalizeAsync(
+                        sessionId, ImportStatus.Failed,
+                        $"Фоновая обработка упала: {ex.Message}",
+                        default);
+                }
+                catch (Exception finalizeEx)
+                {
+                    scope.ServiceProvider.GetRequiredService<ILogger<ImportsController>>()
+                        .LogError(finalizeEx,
+                            "ForceFinalize after ParseAndValidate-exception failed for session {SessionId}",
+                            sessionId);
+                }
             }
             finally
             {
@@ -499,13 +516,19 @@ public class ImportsController : ControllerBase
             return Accepted(new { sessionId = id, status = "CancelRequested" });
         }
 
-        // Активной задачи нет (Pending до старта фона / уже завершилась).
-        // Помечаем сессию как Cancelled только для не-финальных статусов.
-        if (session.Status is ImportStatus.Pending or ImportStatus.Validated)
+        // Активной задачи нет — либо ещё не стартовала, либо уже завершилась.
+        // Раньше переводили в Cancelled только Pending/Validated, а зависшие
+        // Parsing/Validating/Applying молча игнорировали — UI «жал Отменить»
+        // и видел, что ничего не происходит (фоновая task упала, статус застрял).
+        // Теперь финализируем любой не-финальный статус через ForceFinalizeAsync,
+        // который шлёт SignalR-событие, чтобы UI вышел из «в процессе».
+        if (session.Status is not (ImportStatus.Applied or ImportStatus.Failed or ImportStatus.Cancelled))
         {
-            session.Status = ImportStatus.Cancelled;
-            session.CompletedAt = DateTimeOffset.UtcNow;
-            await _db.SaveChangesAsync(ct);
+            await _pipeline.ForceFinalizeAsync(
+                id, ImportStatus.Cancelled,
+                "Импорт отменён пользователем (фоновая задача уже не активна).",
+                ct);
+            return Ok(new { sessionId = id, status = ImportStatus.Cancelled.ToString() });
         }
         return Ok(new { sessionId = id, status = session.Status.ToString() });
     }

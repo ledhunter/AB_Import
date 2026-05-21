@@ -18,6 +18,17 @@ public interface IListViewClient
     Task<ListViewResponse<ConstructionSiteRaw>> GetSitesByProjectAsync(
         int projectId, CancellationToken ct = default);
 
+    /// <summary>
+    /// Поиск ОКС внутри проекта по ключам (НПС, Этап) — нужен импорту Помещений,
+    /// который теперь резолвит Site per-row (см. doc_project/101-rooms-multi-site-by-project.md).
+    /// POST <c>listview/constructionsite/onetomany/Project?associationId={projectId}</c>
+    /// с <c>Filter [["ConstructionProjectNumber","=",X],"and",["StageNumber","=",Y]]</c>.
+    /// Параметры опциональны: если оба null — эквивалентно <see cref="GetSitesByProjectAsync"/>.
+    /// </summary>
+    Task<ListViewResponse<ConstructionSiteRaw>> GetSitesByProjectAndKeysAsync(
+        int projectId, string? projectNumber, string? stageNumber,
+        CancellationToken ct = default);
+
     Task<ConstructionSiteRaw?> GetSiteByIdAsync(
         int siteId, CancellationToken ct = default);
 
@@ -173,7 +184,7 @@ public sealed class ListViewClient : VisaryHttpBase<ListViewClient>, IListViewCl
 
     private static readonly string[] SiteColumns =
         ["ID", "Title", "ConstructionProjectId", "ConstructionPermissionNumber",
-         "ConstructionProjectNumber", "RegionId", "TownId", "Address",
+         "ConstructionProjectNumber", "StageNumber", "RegionId", "TownId", "Address",
          "Hidden", "Version", "FinishingMaterialId"];
 
     private static readonly string[] IndicatorColumns =
@@ -313,22 +324,43 @@ public sealed class ListViewClient : VisaryHttpBase<ListViewClient>, IListViewCl
     // ─── Sites ───────────────────────────────────────────────────────────────
 
     public Task<ListViewResponse<ConstructionSiteRaw>> GetSitesByProjectAsync(int projectId, CancellationToken ct)
+        => GetSitesByProjectAndKeysAsync(projectId, projectNumber: null, stageNumber: null, ct);
+
+    public Task<ListViewResponse<ConstructionSiteRaw>> GetSitesByProjectAndKeysAsync(
+        int projectId, string? projectNumber, string? stageNumber, CancellationToken ct)
     {
+        // Собираем AND-фильтр только из непустых ключей (паттерн FindSitesAsync).
+        var parts = new List<string>(2);
+        if (!string.IsNullOrWhiteSpace(projectNumber))
+            parts.Add(FilterByString("ConstructionProjectNumber", projectNumber));
+        if (!string.IsNullOrWhiteSpace(stageNumber))
+            parts.Add(FilterByString("StageNumber", stageNumber));
+        string? filter = parts.Count == 0 ? null
+            : parts.Aggregate((a, b) => FilterAnd(a, b));
+
+        // ВАЖНО: Visary onetomany-эндпоинт требует Filter-ключ в body, даже если он null
+        // (как в эталонном запросе из задачи). Передаём его всегда.
         var body = new
         {
             Mnemonic = VisaryMnemonics.Site,
             PageSkip = 0,
             PageSize = Options.LargePageSize,
             Columns = SiteColumns,
+            Filter = filter,
             SearchPhrase = (string?)null,
+            Sorts = SortsNullSentinel,
+            Hidden = false,
             Summaries = Array.Empty<object>(),
         };
 
-        _log.LogDebug("Visary → GET listview/{Mnemonic}/onetomany/Project projectId={ProjectId}",
-            VisaryMnemonics.Site, projectId);
+        _log.LogDebug(
+            "Visary → POST listview/{Mnemonic}/onetomany/Project projectId={ProjectId} proj='{P}' stage='{S}'",
+            VisaryMnemonics.Site, projectId, projectNumber, stageNumber);
         return PostListViewAsync<ConstructionSiteRaw>(
             $"{BaseUrl}/api/visary/listview/{VisaryMnemonics.Site}/onetomany/Project?associationId={projectId}",
-            body, $"{VisaryMnemonics.Site}/onetomany/Project id={projectId}", ct);
+            body,
+            $"{VisaryMnemonics.Site}/onetomany/Project id={projectId} proj={projectNumber} stage={stageNumber}",
+            ct);
     }
 
     public Task<ConstructionSiteRaw?> GetSiteByIdAsync(int siteId, CancellationToken ct)

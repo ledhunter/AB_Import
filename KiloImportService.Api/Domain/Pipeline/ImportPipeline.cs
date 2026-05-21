@@ -438,6 +438,45 @@ public sealed class ImportPipeline
     }
 
     /// <summary>
+    /// Принудительно завершает «зависшую» сессию: ставит статус <paramref name="finalStatus"/>
+    /// и шлёт SignalR-событие, чтобы UI вышел из «в процессе». Используется:
+    ///   • Upload-фоновой задачей при unhandled exception в ParseAndValidate
+    ///     (раньше exception проглатывался и status оставался <c>Validating</c>);
+    ///   • Cancel-endpoint'ом, когда CTS уже снят, но статус в БД промежуточный
+    ///     (Parsing/Validating/Applying) — пользователь жмёт «Отменить» и видит,
+    ///     что ничего не происходит.
+    /// Защищает от повторной финализации (если уже Applied/Failed/Cancelled — не трогаем).
+    /// </summary>
+    public async Task ForceFinalizeAsync(
+        Guid sessionId, ImportStatus finalStatus, string reason, CancellationToken ct = default)
+    {
+        if (finalStatus is not (ImportStatus.Failed or ImportStatus.Cancelled or ImportStatus.Applied))
+            throw new ArgumentException(
+                $"ForceFinalizeAsync принимает только Failed/Cancelled/Applied, получено {finalStatus}",
+                nameof(finalStatus));
+        try
+        {
+            var session = await _serviceDb.Sessions.FirstOrDefaultAsync(s => s.Id == sessionId, ct);
+            if (session is null) return;
+            if (session.Status is ImportStatus.Applied or ImportStatus.Failed or ImportStatus.Cancelled)
+                return;
+            session.Status = finalStatus;
+            session.CompletedAt = DateTimeOffset.UtcNow;
+            session.ErrorMessage = reason;
+            await _serviceDb.SaveChangesAsync(ct);
+            await _hub.Clients.Group(ImportProgressHub.GroupName(sessionId))
+                .SendAsync("SessionStatus", new { sessionId, status = finalStatus.ToString() }, ct);
+            _log.LogInformation(
+                "Session {SessionId} force-finalized to {Status}: {Reason}",
+                sessionId, finalStatus, reason);
+        }
+        catch (Exception ex)
+        {
+            _log.LogError(ex, "ForceFinalizeAsync failed for session {SessionId}", sessionId);
+        }
+    }
+
+    /// <summary>
     /// Помечает сессию как отменённую — вызывается после <see cref="OperationCanceledException"/>.
     /// Использует НЕсвязанный <see cref="CancellationToken"/> (default), чтобы запись в БД
     /// прошла даже после отмены исходного токена.

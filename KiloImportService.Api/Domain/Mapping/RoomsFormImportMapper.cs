@@ -16,25 +16,23 @@ namespace KiloImportService.Api.Domain.Mapping;
 /// 🏗️ Маппер импорта типа <c>rooms</c> — реестр помещений по файлу
 /// «Пример импорта.xlsx» / «Единая форма 3» (см. <c>RoomImport/</c>).
 ///
-/// Контракт: пользователь УЖЕ выбирает <c>Project</c> и <c>Site</c> (ОКС) в UI;
-/// маппер только валидирует, что строки файла соответствуют выбранному ОКСу,
-/// а затем для каждой подходящей строки находит/создаёт корпус и помещение.
+/// Контракт (см. doc_project/101-rooms-multi-site-by-project.md):
+/// пользователь выбирает <c>Project</c> в UI (Site НЕ выбирает —
+/// для одного файла может быть N разных ОКС). Маппер для каждой строки
+/// файла резолвит Site внутри проекта по ключам (<c>ConstructionProjectNumber</c>, <c>StageNumber</c>)
+/// через <see cref="IListViewClient.GetSitesByProjectAndKeysAsync"/> с
+/// <c>Filter [["ConstructionProjectNumber","=",X],"and",["StageNumber","=",Y]]</c>.
 ///
-/// Per-row проверки (если не пройдены — строка пропускается с лог-сообщением,
-/// «для строки файла {N} не подходит выбранный объект»):
-///   1. ConstructionProjectNumber (Site) == «Номер проекта» (файл)
-///   2. StageNumber (Site)              == «Этап»          (файл)
-///   3. (опц.) ConstructionPermissionNumber (Site) == «Номер разрешения» (файл),
-///      если значение в файле непустое.
+/// Резолв ситуации:
+///   • 1 кандидат — ID сохраняется в <c>MappedValues.SiteId</c>, строка валидна.
+///   • 0 кандидатов — row-error <c>site_not_found_in_project</c>.
+///   • >1 кандидатов — row-error <c>site_ambiguous</c> со списком ID.
+/// РНС из файла больше не блокирует строку — раз Site однозначно резолвится по (НПС,Этап),
+/// расхождение РНС идёт в Debug-лог. PATCH РНС в Site (если в Site пусто) остаётся в Apply.
 ///
-/// Если строка прошла проверку — переходим к поиску корпуса в выбранном Site:
-///   • Из «№ стр/корп» извлекаем числовую часть («лит 1.1» → «1.1»).
-///   • Ищем Section через listview, при отсутствии — создаём
-///     (лог «для строки файла {N} нет подходящего корпуса, поэтому он будет создан»).
-///
-/// Дальнейшая логика (Room/ShareAgreement) сохранена из предыдущей версии маппера
-/// «roomsForm» — она писалась под тот же файл и переиспользуется без изменений
-/// после уточнения сценария.
+/// Apply группирует валидные строки по SiteId; внутри одного Site flow совпадает с
+/// прежним (snapshot diff-skip, sections find-or-create, parallel по (Sheet, Section) —
+/// см. doc_project/96-rooms-incremental-parallel-apply.md).
 /// </summary>
 public sealed class RoomsFormImportMapper : IImportMapper
 {
@@ -74,6 +72,15 @@ public sealed class RoomsFormImportMapper : IImportMapper
     private static readonly HashSet<string> SkippedSheets =
         new(StringComparer.OrdinalIgnoreCase) { "Справочник" };
 
+    /// <summary>
+    /// Результат резолва Site по паре (НПС, Этап) внутри проекта. Один экземпляр на
+    /// уникальную пару — кэш строится в ValidateAsync pre-pass, чтобы не дёргать
+    /// Visary N×N раз на одну и ту же пару из соседних строк.
+    /// </summary>
+    /// <param name="Matches">Найденные кандидаты (0 → site_not_found_in_project, 1 → OK, >1 → site_ambiguous).</param>
+    /// <param name="Error">Текст ошибки сети/Visary, если listview упал. <c>null</c> при успехе.</param>
+    private sealed record SiteResolution(IReadOnlyList<ConstructionSiteRaw> Matches, string? Error = null);
+
     // === Алиасы колонок (case-insensitive) =================================
     // Заголовки взяты из RoomImport/Пример импорта.xlsx (row 1) и
     // RoomImport/Единая форма 3.xlsx (row 2 — человекочитаемые / row 3 — техн.).
@@ -96,6 +103,40 @@ public sealed class RoomsFormImportMapper : IImportMapper
     private static readonly string[] ProjectAreaAliases      = [
         "Площадь (для квартир с балконами и лоджиями с Кб=0,3; Кл=0,5), кв.м.",
         "Площадь", "ProjectArea"];
+    /// <summary>
+    /// Колонка «Общая площадь» в файлах нежилых помещений (машиноместо/кладовая/нежилое).
+    /// Для жилых берётся <see cref="ProjectAreaAliases"/>; для нежилых эта колонка
+    /// уходит в Visary как <c>TotalArea</c>. Без неё нежилые помещения не получали
+    /// ни ProjectArea (колонка пустая), ни TotalArea (поля для маппинга не было).
+    ///
+    /// Заголовки наблюдались в разных вариантах: с/без «Общая», с/без точки,
+    /// с/без запятой. Сравнение в <c>ReadString</c> точное (case-insensitive),
+    /// поэтому каждую форму перечисляем отдельно. «Площадь, кв.м» (без «Общая»)
+    /// — реальный заголовок в Репино-Парк, машиноместо лист.
+    /// </summary>
+    private static readonly string[] TotalAreaAliases        = [
+        "Общая площадь, кв.м.", "Общая площадь, кв.м", "Общая площадь",
+        "Площадь, кв.м.", "Площадь, кв.м", "Площадь кв.м.", "Площадь кв.м",
+        "TotalArea"];
+
+    /// <summary>
+    /// Маркеры Excel-формул, выпавших с ошибкой: <c>#N/A</c>, <c>#REF!</c>, <c>#VALUE!</c>,
+    /// <c>#NAME?</c>, <c>#NUM!</c>, <c>#DIV/0!</c>, <c>#NULL!</c>, <c>#GETTING_DATA</c>.
+    /// Пользователи иногда оставляют такие значения в столбце «№ ДДУ», что приводило
+    /// к тому, что маппер создавал ДДУ с <c>Number="#N/A"</c>, при следующих строках
+    /// находил тот же глобальный ДДУ → orphan-reanimate → Visary возвращал 500 (см. doc 101 v1.1).
+    /// </summary>
+    private static readonly HashSet<string> ExcelErrorMarkers = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "#N/A", "#REF!", "#VALUE!", "#NAME?", "#NUM!", "#DIV/0!", "#NULL!", "#GETTING_DATA",
+    };
+
+    /// <summary>
+    /// Считает строку «пустой» с точки зрения файла: реально пустая или Excel-ошибка.
+    /// Используется для столбцов, чьи значения уходят в Visary как-есть (НПС/Этап/ДДУ/PIN).
+    /// </summary>
+    private static bool IsBlankOrExcelError(string? s)
+        => string.IsNullOrWhiteSpace(s) || ExcelErrorMarkers.Contains(s!.Trim());
     private static readonly string[] CostForOneAliases       = ["Стоимость кв,м/ руб,", "Стоимость кв.м", "CostForOne"];
     private static readonly string[] WholesaleRateAliases    = ["Скидка на опт.", "WholesaleRate"];
     private static readonly string[] MarketCostAliases       = ["Рыночная стоимость, руб.", "MarketCostPerM"];
@@ -138,35 +179,21 @@ public sealed class RoomsFormImportMapper : IImportMapper
     {
         var fileErrors = new List<RowError>();
 
-        // Site обязателен — пользователь выбирает ОКС в UI.
-        if (context.VisarySiteId is null)
+        // Project обязателен — пользователь выбирает только Проект; Site резолвится per-row
+        // по (НПС, Этап) внутри проекта. См. doc_project/101-rooms-multi-site-by-project.md.
+        if (context.VisaryProjectId is null)
         {
-            fileErrors.Add(new RowError(null, "site_required",
-                "Для импорта помещений необходимо выбрать объект строительства (Site)."));
+            fileErrors.Add(new RowError(null, "project_required",
+                "Для импорта помещений необходимо выбрать Проект (объект строительства больше не выбирается — резолвится по строкам файла)."));
             return new ValidationResult([], fileErrors);
         }
-
-        // Загружаем выбранный ОКС, чтобы сверять с ним строки файла.
-        ConstructionSiteFull site;
-        try
+        int projectId = context.VisaryProjectId.Value;
+        if (context.VisarySiteId is not null)
         {
-            site = await _crud.GetSiteByIdFullAsync(context.VisarySiteId.Value, ct);
-        }
-        catch (Exception ex)
-        {
-            _log.LogError(ex, "RoomsForm.Validate: не удалось загрузить Site {SiteId}",
+            _log.LogWarning(
+                "RoomsForm.Validate: получен visarySiteId={SiteId} от UI, но импорт rooms резолвит Site per-row — значение игнорируется.",
                 context.VisarySiteId.Value);
-            fileErrors.Add(new RowError(null, "site_fetch_failed",
-                $"Не удалось получить ОКС {context.VisarySiteId.Value} из Visary: {ex.Message}"));
-            return new ValidationResult([], fileErrors);
         }
-
-        var siteProjectNumber    = (site.ConstructionProjectNumber ?? string.Empty).Trim();
-        var sitePermissionNumber = (site.ConstructionPermissionNumber ?? string.Empty).Trim();
-        var siteStageNumber      = site.StageNumber;
-        _log.LogInformation(
-            "RoomsForm.Validate: siteId={SiteId} projectNum='{P}' stage={S} permission='{Perm}'",
-            site.ID, siteProjectNumber, siteStageNumber, sitePermissionNumber);
 
         // Кэш RoomKind: Title → ID. Берём из живого Visary API (не из локальной visary_db),
         // т.к. seed-данные локальной БД могут не совпадать с реальным справочником на стенде —
@@ -250,6 +277,49 @@ public sealed class RoomsFormImportMapper : IImportMapper
             }
         }
 
+        // ── Pre-pass: резолв Site per уникальной (НПС, Этап) ─────────────────
+        // Собираем все уникальные пары из data-строк (служебные/сводные с пустыми
+        // ключами отфильтруются естественным образом — их (НПС, Этап) обе пустые).
+        // На каждую уникальную пару — один listview-запрос в проекте.
+        var uniqueKeys = new HashSet<(string ProjectNum, string StageRaw)>();
+        foreach (var pr in dataRows)
+        {
+            var pn = (ReadString(pr, ProjectNumberAliases) ?? string.Empty).Trim();
+            var sn = (ReadString(pr, StageNumberAliases)   ?? string.Empty).Trim();
+            if (string.IsNullOrEmpty(pn) && string.IsNullOrEmpty(sn)) continue;
+            uniqueKeys.Add((pn, sn));
+        }
+
+        var siteByKey = new Dictionary<(string ProjectNum, string StageRaw), SiteResolution>();
+        foreach (var (pn, sn) in uniqueKeys)
+        {
+            ct.ThrowIfCancellationRequested();
+            try
+            {
+                var resp = await _listView.GetSitesByProjectAndKeysAsync(projectId, pn, sn, ct);
+                // Доп. локальная фильтрация: Visary "=" нечувствителен к whitespace,
+                // но тип StageNumber в раз. сущностях смешанный — страхуемся Trim+OrdinalIgnoreCase.
+                var matches = resp.Data
+                    .Where(s => string.Equals((s.ConstructionProjectNumber ?? string.Empty).Trim(), pn,
+                        StringComparison.OrdinalIgnoreCase))
+                    .Where(s => string.Equals((s.StageNumber ?? string.Empty).Trim(), sn,
+                        StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+                siteByKey[(pn, sn)] = new SiteResolution(matches);
+                _log.LogInformation(
+                    "RoomsForm.Validate: resolve site (project={ProjectId}, НПС='{P}', Этап='{S}') → matches={N} {IDs}",
+                    projectId, pn, sn, matches.Count,
+                    matches.Count == 0 ? "[]" : "[" + string.Join(",", matches.Select(m => m.ID)) + "]");
+            }
+            catch (Exception ex)
+            {
+                _log.LogError(ex,
+                    "RoomsForm.Validate: resolve site failed (project={ProjectId}, НПС='{P}', Этап='{S}'): {Msg}",
+                    projectId, pn, sn, ex.Message);
+                siteByKey[(pn, sn)] = new SiteResolution(new List<ConstructionSiteRaw>(), ex.Message);
+            }
+        }
+
         var mappedRows = new List<MappedRow>(dataRows.Count);
         foreach (var row in dataRows)
         {
@@ -257,9 +327,14 @@ public sealed class RoomsFormImportMapper : IImportMapper
             var rowErrors = new List<RowError>();
 
             // ── Ключи Site из строки ───────────────────────────────────────
+            // Excel-ошибки («#N/A», «#REF!», …) обнуляем — пользователь оставил
+            // битые формулы в источнике; не пытаемся резолвить/создавать по ним.
             var permission  = ReadString(row, PermissionNumberAliases);
             var projectNum  = ReadString(row, ProjectNumberAliases);
             var stageNumRaw = ReadString(row, StageNumberAliases);
+            if (ExcelErrorMarkers.Contains(permission.Trim()))  permission  = string.Empty;
+            if (ExcelErrorMarkers.Contains(projectNum.Trim()))  projectNum  = string.Empty;
+            if (ExcelErrorMarkers.Contains(stageNumRaw.Trim())) stageNumRaw = string.Empty;
 
             // ── Тихий пропуск сводных/служебных строк ──────────────────────
             // Внутри листа «Квартира» (как в «Ежевика короткая 1.xlsx») сразу под
@@ -267,8 +342,8 @@ public sealed class RoomsFormImportMapper : IImportMapper
             // «План», «Факт» — в первой колонке текст, остальные ячейки заполняются
             // формулами SUBTOTAL/SUMIF. Не считаем их данными: если ВСЕ три
             // идентификационных поля (НПС/РНС/Этап) пустые, строка не может
-            // относиться к ОКС-у. Молча пропускаем — не порождая site_mismatch,
-            // которым иначе захлёбывается отчёт.
+            // относиться к ОКС-у. Молча пропускаем — не порождая ошибки,
+            // которыми иначе захлёбывается отчёт.
             if (string.IsNullOrWhiteSpace(permission)
                 && string.IsNullOrWhiteSpace(projectNum)
                 && string.IsNullOrWhiteSpace(stageNumRaw))
@@ -279,44 +354,70 @@ public sealed class RoomsFormImportMapper : IImportMapper
                 continue;
             }
 
-            // ── Per-row сверка Site (НЕ ИЩЕМ Site, а ВАЛИДИРУЕМ выбранный) ─
-            // Жёсткие проверки: НПС и Этап должны совпадать. Опционально РНС
-            // (если пустой в файле — пропускаем эту проверку, как описано в задаче).
+            // ── Per-row резолв Site внутри Project через кэш ───────────────
             var rowProjectNum = projectNum.Trim();
             int? rowStageNum  = ParseNullableInt(stageNumRaw);
+            var rowStageRaw   = stageNumRaw.Trim();
             var rowPermission = permission.Trim();
 
-            bool projectOk = string.Equals(rowProjectNum, siteProjectNumber, StringComparison.OrdinalIgnoreCase);
-            bool stageOk   = rowStageNum.HasValue && siteStageNumber.HasValue
-                          && rowStageNum.Value == siteStageNumber.Value;
-            // РНС считаем совпадающим в трёх случаях:
-            //   1) в файле РНС пустой — пропускаем проверку;
-            //   2) равно тому, что уже стоит в Site;
-            //   3) в самом Site РНС пустой — тогда непустой РНС из файла НЕ блокирует
-            //      строку: после Validate в Apply мы один раз заполним РНС в ОКСе через
-            //      PatchSiteAsync (см. шаг "Обновление РНС в Site" в room_sa_create.puml).
-            bool permissionOk = string.IsNullOrWhiteSpace(rowPermission)
-                          || string.Equals(rowPermission, sitePermissionNumber, StringComparison.OrdinalIgnoreCase)
-                          || string.IsNullOrWhiteSpace(sitePermissionNumber);
-
-            if (!projectOk || !stageOk || !permissionOk)
+            int? resolvedSiteId = null;
+            string? resolvedSitePermission = null;
+            if (string.IsNullOrEmpty(rowProjectNum) || string.IsNullOrEmpty(rowStageRaw))
             {
-                _log.LogInformation(
-                    "RoomsForm.Validate: row {Row} — site_mismatch: " +
-                    "файл(НПС='{RP}', Этап='{RS}', РНС='{RPerm}') vs site(НПС='{SP}', Этап='{SS}', РНС='{SPerm}')",
-                    row.SourceRowNumber, rowProjectNum, stageNumRaw, rowPermission,
-                    siteProjectNumber, siteStageNumber, sitePermissionNumber);
+                rowErrors.Add(new RowError(null, "site_keys_missing",
+                    $"для строки файла {row.SourceRowNumber} не заданы оба ключа: НПС='{rowProjectNum}', Этап='{rowStageRaw}'."));
+            }
+            else if (siteByKey.TryGetValue((rowProjectNum, rowStageRaw), out var reso))
+            {
+                if (reso.Matches.Count == 1)
+                {
+                    resolvedSiteId = reso.Matches[0].ID;
+                    resolvedSitePermission = reso.Matches[0].ConstructionPermissionNumber;
 
-                rowErrors.Add(new RowError(null, "site_mismatch",
-                    $"для строки файла {row.SourceRowNumber} не подходит выбранный объект"));
+                    // РНС больше не блокирует строку: раз Site уже однозначно резолвлен по (НПС,Этап),
+                    // расхождение лишь информативно. PATCH РНС в Site (если в Site пусто, а в файле есть)
+                    // отдан в Apply.TryUpdateSitePermissionNumberAsync — см. doc 101.
+                    if (!string.IsNullOrEmpty(rowPermission)
+                        && !string.IsNullOrEmpty(resolvedSitePermission)
+                        && !string.Equals(rowPermission, resolvedSitePermission.Trim(), StringComparison.OrdinalIgnoreCase))
+                    {
+                        _log.LogDebug(
+                            "RoomsForm.Validate: row {Row} — РНС из файла '{File}' расходится с Site '{Site}' (siteId={SiteId}). " +
+                            "Не блокируем (site найден по НПС+Этап).",
+                            row.SourceRowNumber, rowPermission, resolvedSitePermission, resolvedSiteId);
+                    }
+                }
+                else if (reso.Matches.Count == 0)
+                {
+                    var msg = reso.Error is null
+                        ? $"в проекте {projectId} не найден объект с НПС='{rowProjectNum}' и Этапом='{rowStageRaw}'."
+                        : $"в проекте {projectId} не удалось получить список объектов: {reso.Error}";
+                    rowErrors.Add(new RowError(null, "site_not_found_in_project", msg));
+                }
+                else
+                {
+                    var ids = string.Join(", ", reso.Matches.Select(m => m.ID));
+                    rowErrors.Add(new RowError(null, "site_ambiguous",
+                        $"в проекте {projectId} найдено несколько объектов с НПС='{rowProjectNum}' и Этапом='{rowStageRaw}' (ID: {ids}). " +
+                        "Уточните данные в Visary."));
+                }
+            }
+            else
+            {
+                // Ключи непустые, но pre-pass их не резолвил — теоретически невозможно.
+                rowErrors.Add(new RowError(null, "site_resolve_unexpected",
+                    $"внутренняя ошибка: пара (НПС='{rowProjectNum}', Этап='{rowStageRaw}') не была обработана в pre-pass."));
+            }
 
+            if (resolvedSiteId is null)
+            {
                 mappedRows.Add(new MappedRow(
                     row.SourceRowNumber,
                     row.Sheet ?? string.Empty,
                     IsValid: false,
                     JsonSerializer.SerializeToDocument(new { Sheet = row.Sheet }),
                     rowErrors));
-                continue; // переходим к следующей строке без дальнейшей валидации
+                continue; // дальнейшая валидация без Site бессмысленна
             }
 
             // ── Поля поиска Room ────────────────────────────────────────────
@@ -379,6 +480,17 @@ public sealed class RoomsFormImportMapper : IImportMapper
             var buildingSection = ReadString(row, BuildingSectionAliases);
             var developerPin    = ReadString(row, DeveloperPinAliases);
             var shareAgreement  = ReadString(row, ShareAgreementAliases);
+            // Excel-ошибки в этих полях — то же, что и пусто. Особенно критично для
+            // `№ ДДУ`: пользователи Репино-Парк оставили колонку с формулой «#N/A»,
+            // маппер пытался создавать SA с `Number="#N/A"` и потом «реанимировать»
+            // тот же глобальный ДДУ id=809 для каждой следующей комнаты, Visary →
+            // HTTP 500. См. doc 101 v1.1 (раздел про Excel-маркеры) и логи инцидента
+            // «найден орфанный/несоответствующий ДДУ id=809 number='#N/A'».
+            if (ExcelErrorMarkers.Contains(developerPin.Trim()))    developerPin    = string.Empty;
+            if (ExcelErrorMarkers.Contains(shareAgreement.Trim()))  shareAgreement  = string.Empty;
+            if (ExcelErrorMarkers.Contains(sectionTitle.Trim()))    sectionTitle    = string.Empty;
+            if (ExcelErrorMarkers.Contains(floor.Trim()))           floor           = string.Empty;
+            if (ExcelErrorMarkers.Contains(buildingSection.Trim())) buildingSection = string.Empty;
 
             // «Колич. комнат» нередко приходит в свободной форме: «1 к.», «1 к», «п1»,
             // «1п», «2-к», «3 ком.», «студия». Берём ПЕРВУЮ непрерывную группу цифр —
@@ -410,6 +522,11 @@ public sealed class RoomsFormImportMapper : IImportMapper
             double? projectArea = TryParseNullableDouble(ReadString(row, ProjectAreaAliases), out var paErr);
             if (paErr != null) rowErrors.Add(new RowError(string.Join(" / ", ProjectAreaAliases), "invalid_number", paErr));
 
+            // Отдельная «Общая площадь, кв.м.» — для нежилых (машиноместо/кладовая/нежилое).
+            // Для жилых она обычно не заполняется (площадь идёт в ProjectArea).
+            double? totalArea = TryParseNullableDouble(ReadString(row, TotalAreaAliases), out var taErr);
+            if (taErr != null) rowErrors.Add(new RowError(string.Join(" / ", TotalAreaAliases), "invalid_number", taErr));
+
             double? costForOne = TryParseNullableDouble(ReadString(row, CostForOneAliases), out var cErr);
             if (cErr != null) rowErrors.Add(new RowError(string.Join(" / ", CostForOneAliases), "invalid_number", cErr));
 
@@ -431,6 +548,9 @@ public sealed class RoomsFormImportMapper : IImportMapper
             var mapped = new Dictionary<string, object?>
             {
                 ["Sheet"]                = row.Sheet,
+                // SiteId резолвлен в pre-pass из (НПС, Этап). Apply группирует
+                // строки по SiteId — каждая группа получает свой snapshot/sections.
+                ["SiteId"]               = resolvedSiteId,
                 ["DeveloperPin"]         = developerPin,
                 ["PermissionNumber"]     = rowPermission,
                 ["ProjectNumber"]        = rowProjectNum,
@@ -446,6 +566,7 @@ public sealed class RoomsFormImportMapper : IImportMapper
                 ["BuildingSection"]      = buildingSection,
                 ["RoomsCount"]           = roomsCount,
                 ["ProjectArea"]          = projectArea,
+                ["TotalArea"]            = totalArea,
                 ["CostForOne"]           = costForOne,
                 ["WholesaleRate"]        = wholesale,
                 ["MarketCostPerM"]       = marketCost,
@@ -505,99 +626,109 @@ public sealed class RoomsFormImportMapper : IImportMapper
             lock (list) list.Add(action);
         }
 
-        if (context.VisarySiteId is null)
+        if (context.VisaryProjectId is null)
         {
-            errors.Add(new RowError(null, "site_required",
-                "Не указан объект строительства (visarySiteId)."));
+            errors.Add(new RowError(null, "project_required",
+                "Не указан проект (visaryProjectId)."));
             return new ApplyResult(0, errors.ToList());
         }
-
-        var siteId = context.VisarySiteId.Value;
         int? projectId = context.VisaryProjectId;
 
-        // ── ① Pre-load snapshots ─────────────────────────────────────────────
-        // Маппер — Singleton, RoomApplySnapshotStore — Scoped (зависит от
-        // ImportServiceDbContext). Открываем короткий scope ради одного SELECT
-        // на сайт; внутри Parallel-цикла дёргать БД не будем — diff/skip целиком
-        // в памяти.
-        ConcurrentDictionary<RoomSnapshotKey, RoomApplySnapshot> snapshotsByKey;
+        var validRows = rows.Where(mr => mr.IsValid).ToList();
+
+        // ── ⓪ Группировка валидных строк по SiteId (резолвлен в Validate) ───
+        // Раньше Site был один на сессию; теперь файл может содержать несколько
+        // ОКС в рамках проекта. Все pre-pass'ы (snapshot/РНС/секции/developer)
+        // выполняются sequential по сайтам — внутри сайта flow прежний.
+        var rowsBySite = validRows
+            .GroupBy(mr => GetIntOrNull(mr.MappedValues.RootElement, "SiteId") ?? 0)
+            .Where(g => g.Key > 0)
+            .ToDictionary(g => g.Key, g => g.ToList());
+        _log.LogInformation(
+            "RoomsForm.Apply: projectId={ProjectId}, validRows={Count}, sites={Sites} [{Ids}]",
+            projectId, validRows.Count, rowsBySite.Count,
+            string.Join(",", rowsBySite.Keys));
+
+        // ── ① Pre-load snapshots для всех задействованных сайтов ────────────
+        var snapshotsByKey = new ConcurrentDictionary<RoomSnapshotKey, RoomApplySnapshot>();
         using (var loadScope = _scopeFactory.CreateScope())
         {
             var store = loadScope.ServiceProvider.GetRequiredService<RoomApplySnapshotStore>();
-            snapshotsByKey = await store.LoadForSiteAsync(siteId, ct);
+            foreach (var sid in rowsBySite.Keys)
+            {
+                var perSite = await store.LoadForSiteAsync(sid, ct);
+                foreach (var kv in perSite) snapshotsByKey[kv.Key] = kv.Value;
+            }
         }
-
-        var validRows = rows.Where(mr => mr.IsValid).ToList();
         _log.LogInformation(
-            "RoomsForm.Apply: siteId={SiteId}, validRows={Count}, snapshotsPreloaded={Snap}",
-            siteId, validRows.Count, snapshotsByKey.Count);
+            "RoomsForm.Apply: snapshotsPreloaded={Snap}", snapshotsByKey.Count);
 
-        // ── ② Pre-pass: РНС в Site (как и раньше, один раз на сессию) ────────
-        await TryUpdateSitePermissionNumberAsync(siteId, rows, ct);
-
-        // ── ③ Pre-pass: Sections sequential ──────────────────────────────────
-        // ConcurrentDictionary — основной цикл потом читает sectionId без блокировок.
-        var sectionCache = new ConcurrentDictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-        var sectionTitlesNeeded = validRows
-            .Select(mr =>
-            {
-                var v = mr.MappedValues.RootElement;
-                return GetStringOrNull(v, "SectionTitleNumeric") ?? GetStringOrNull(v, "SectionTitle");
-            })
-            .Where(t => !string.IsNullOrWhiteSpace(t))
-            .Select(t => t!)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-
-        foreach (var sectionTitle in sectionTitlesNeeded)
+        // ── ② Pre-pass per-site: РНС в Site + Sections + Developer link ─────
+        // Sequential по сайтам — это N короткоживущих pre-pass'ов; параллелизм
+        // оставляем на основной цикл (по группам внутри всех сайтов).
+        var sectionCache = new ConcurrentDictionary<(int SiteId, string Title), int>();
+        foreach (var (sid, siteRows) in rowsBySite)
         {
-            ct.ThrowIfCancellationRequested();
-            var existing = await _listView.GetSectionsBySiteAsync(siteId, sectionTitle, ct);
-            var sectionTitleTrim = sectionTitle.Trim();
-            var match = existing.Data.FirstOrDefault(x =>
-                string.Equals((x.Title ?? string.Empty).Trim(), sectionTitleTrim,
-                    StringComparison.OrdinalIgnoreCase));
-            if (match is not null)
-            {
-                sectionCache[sectionTitle] = match.ID;
-            }
-            else
-            {
-                _log.LogInformation(
-                    "RoomsForm.Apply: корпус не найден — создаём (siteId={SiteId}, title='{Title}')",
-                    siteId, sectionTitle);
-                var created = await _crud.CreateSectionAsync(new SectionCreateRequest
+            await TryUpdateSitePermissionNumberAsync(sid, siteRows, ct);
+
+            var sectionTitlesNeeded = siteRows
+                .Select(mr =>
                 {
-                    ConstructionSiteID = siteId,
-                    ConstructionSite   = new VisaryRef { ID = siteId },
-                    Title              = sectionTitle,
-                    Type               = new VisaryRef { ID = 3, Title = "МЖД" },
-                }, ct);
-                sectionCache[sectionTitle] = created.ID;
+                    var v = mr.MappedValues.RootElement;
+                    return GetStringOrNull(v, "SectionTitleNumeric") ?? GetStringOrNull(v, "SectionTitle");
+                })
+                .Where(t => !string.IsNullOrWhiteSpace(t))
+                .Select(t => t!)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            foreach (var sectionTitle in sectionTitlesNeeded)
+            {
+                ct.ThrowIfCancellationRequested();
+                var existing = await _listView.GetSectionsBySiteAsync(sid, sectionTitle, ct);
+                var sectionTitleTrim = sectionTitle.Trim();
+                var match = existing.Data.FirstOrDefault(x =>
+                    string.Equals((x.Title ?? string.Empty).Trim(), sectionTitleTrim,
+                        StringComparison.OrdinalIgnoreCase));
+                if (match is not null)
+                {
+                    sectionCache[(sid, sectionTitle)] = match.ID;
+                }
+                else
+                {
+                    _log.LogInformation(
+                        "RoomsForm.Apply: корпус не найден — создаём (siteId={SiteId}, title='{Title}')",
+                        sid, sectionTitle);
+                    var created = await _crud.CreateSectionAsync(new SectionCreateRequest
+                    {
+                        ConstructionSiteID = sid,
+                        ConstructionSite   = new VisaryRef { ID = sid },
+                        Title              = sectionTitle,
+                        Type               = new VisaryRef { ID = 3, Title = "МЖД" },
+                    }, ct);
+                    sectionCache[(sid, sectionTitle)] = created.ID;
+                }
             }
+
+            // Developer link per-site sequential (внутри метод тоже sequential).
+            projectId = await ResolveDeveloperLinksAsync(sid, projectId, siteRows, Log, ct);
         }
 
-        // ── ④ Pre-pass: Developer link для уникальных PIN-ов ────────────────
-        // Sequential: создание/привязка PM-записи не идемпотентна в смысле гонок.
-        // Метод возвращает (возможно резолвлённый) projectId — нужен дальше для
-        // CREATE ShareAgreement.
-        projectId = await ResolveDeveloperLinksAsync(siteId, projectId, validRows, Log, ct);
-
-        // ── ⑤ Main: Parallel.ForEachAsync по группам (Sheet, Section) ─────
-        // Группа = (sheet, section). Внутри группы строки sequential — это
-        // защищает Room.find-or-create от создания дубликатов при одинаковом
-        // (Kind, RoomNumber, BuildingSection) в нескольких строках одной секции
-        // (такого не должно быть в нормальном файле, но повторные строки в Excel
-        // встречаются). Между группами — параллельно с потолком ParallelismCap.
+        // ── ⑤ Main: Parallel.ForEachAsync по группам (SiteId, Sheet, Section) ─
+        // Группа = (siteId, sheet, section). Внутри группы строки sequential —
+        // защита Room.find-or-create от дублей при одинаковом (Kind, RoomNumber,
+        // BuildingSection) в нескольких строках одной секции одного сайта.
         var groupsByKey = validRows
             .GroupBy(mr =>
             {
                 var v = mr.MappedValues.RootElement;
+                var sid     = GetIntOrNull(v, "SiteId") ?? 0;
                 var sheet   = GetStringOrNull(v, "Sheet") ?? "<unknown>";
                 var section = GetStringOrNull(v, "SectionTitleNumeric")
                               ?? GetStringOrNull(v, "SectionTitle") ?? string.Empty;
-                return (Sheet: sheet, Section: section);
+                return (SiteId: sid, Sheet: sheet, Section: section);
             })
+            .Where(g => g.Key.SiteId > 0) // на всякий случай: SiteId=0 — Validate провалился
             .ToList();
 
         var snapshotUpserts = new ConcurrentBag<RoomApplySnapshot>();
@@ -612,9 +743,11 @@ public sealed class RoomsFormImportMapper : IImportMapper
             new ParallelOptions { MaxDegreeOfParallelism = parallelism, CancellationToken = ct },
             async (group, gct) =>
         {
+            var siteId = group.Key.SiteId;
             var sheetForRow = group.Key.Sheet;
             var sectionTitle = string.IsNullOrWhiteSpace(group.Key.Section) ? null : group.Key.Section;
-            int? sectionId = sectionTitle is not null && sectionCache.TryGetValue(sectionTitle, out var sid)
+            int? sectionId = sectionTitle is not null
+                && sectionCache.TryGetValue((siteId, sectionTitle), out var sid)
                 ? sid : (int?)null;
 
             // Один list-view запрос за все Room-ы секции — потом per-row только в памяти.
@@ -689,11 +822,21 @@ public sealed class RoomsFormImportMapper : IImportMapper
                         ? uniqueNumber
                         : $"{roomKindTitle} {uniqueNumber}";
 
-                    var areaFromFile = GetDoubleOrNull(v, "ProjectArea");
+                    // Раскладка площади:
+                    //   • Жилые (Residential): ProjectArea ← «Площадь (для квартир …, кв.м.)».
+                    //   • Нежилые (NonResidential/ParkingPlace/OtherNonResidential):
+                    //     TotalArea ← «Общая площадь, кв.м.» (если задана), иначе
+                    //     fallback на ProjectArea — раньше для машиноместа в Visary
+                    //     приходило только `"ProjectArea":0` и `TotalArea` оставался
+                    //     пустым (см. инцидент Репино-Парк, doc 101 v1.1).
+                    var projectAreaFile = GetDoubleOrNull(v, "ProjectArea");
+                    var totalAreaFile   = GetDoubleOrNull(v, "TotalArea");
                     var roomCategory = GetIntOrNull(v, "RoomCategory");
                     var isNonResidential = roomCategory.HasValue && roomCategory.Value != ResidentialRoomCategory;
-                    double? projectAreaForCrud = isNonResidential ? 0d : areaFromFile;
-                    double? totalAreaForCrud   = isNonResidential ? areaFromFile : null;
+                    double? projectAreaForCrud = isNonResidential ? 0d : projectAreaFile;
+                    double? totalAreaForCrud   = isNonResidential
+                        ? (totalAreaFile ?? projectAreaFile)
+                        : null;
 
                     if (roomId is null)
                     {

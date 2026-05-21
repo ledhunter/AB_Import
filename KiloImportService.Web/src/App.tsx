@@ -31,21 +31,26 @@ export default function App() {
     [importTypes.data, importType],
   );
 
+  // Для импорта «Помещения» Site не выбирается в UI — резолвится per-row внутри
+  // проекта по (НПС, Этап). См. doc_project/101-rooms-multi-site-by-project.md.
+  const requiresSite = importType !== 'rooms';
+
   const canSubmit =
     importType !== null &&
     projectId !== null &&
-    siteId !== null &&
+    (!requiresSite || siteId !== null) &&
     file !== null &&
     detectedFormat !== null &&
     importSession.phase === 'idle';
 
   const handleSubmit = async () => {
-    if (!file || !importType || projectId === null || siteId === null) return;
+    if (!file || !importType || projectId === null) return;
+    if (requiresSite && siteId === null) return;
     await importSession.start({
       importTypeCode: importType,
       file,
       projectId,
-      siteId,
+      siteId: requiresSite ? siteId : null,
     });
   };
 
@@ -111,6 +116,7 @@ export default function App() {
               siteId={siteId}
               onProjectChange={setProjectId}
               onSiteChange={setSiteId}
+              showSiteSelect={requiresSite}
             />
 
             <FileUpload

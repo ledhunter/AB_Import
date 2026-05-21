@@ -265,6 +265,10 @@ public class ProjectsCacheServiceTests
             return Task.FromResult(new ListViewResponse<ConstructionSiteRaw> { Total = 0, Data = new() });
         }
 
+        public Task<ListViewResponse<ConstructionSiteRaw>> GetSitesByProjectAndKeysAsync(
+            int projectId, string? projectNumber, string? stageNumber, CancellationToken ct)
+            => throw new NotImplementedException();
+
         public Task<ConstructionSiteRaw?> GetSiteByIdAsync(int siteId, CancellationToken ct)
         {
             SiteByIdCalls.Add((siteId, ""));

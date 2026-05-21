@@ -103,6 +103,22 @@ public class RoomsFormImportMapperApplyTests : IDisposable
                 Total = 0,
             });
 
+        // Validate-фаза: per-row resolve Site через listview по (НПС, Этап) — doc 101.
+        // Дефолтная пара (PRJ-1, 1) → SiteId; (PRJ-2, 2) → SiteIdB (см. multi-site тест).
+        _mockListView.Setup(c => c.GetSitesByProjectAndKeysAsync(
+                ProjectId, "PRJ-1", "1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ListViewResponse<ConstructionSiteRaw>
+            {
+                Data = [new ConstructionSiteRaw
+                {
+                    ID = SiteId,
+                    ConstructionProjectNumber = "PRJ-1",
+                    StageNumber = "1",
+                    ConstructionPermissionNumber = "RNS-1",
+                }],
+                Total = 1,
+            });
+
         // ── ImportServiceDbContext in-memory + DI для RoomApplySnapshotStore ───
         // КРИТИЧНО: имя in-memory БД вычисляется ОДИН раз вне делегата — иначе
         // каждый scope получит свою БД, и snapshot, записанный в первом Apply,
@@ -134,17 +150,292 @@ public class RoomsFormImportMapperApplyTests : IDisposable
         _sp?.Dispose();
     }
 
-    private static MappedRow MakeRow(int row, string sheet, string roomNumber, string buildingSection, double area)
+    private static ParsedRow MakeParsedRow(int row, string sheet, string projectNum, string stage,
+        string roomNumber, string sectionTitle = "1.1", string permission = "RNS-1")
     {
+        var cells = new Dictionary<string, string>
+        {
+            ["Номер проекта"] = projectNum,
+            ["Этап"] = stage,
+            ["Номер разрешения"] = permission,
+            ["Номер помещения/Квартира/Номер квартиры"] = roomNumber,
+            ["Тип/Название/Вид"] = "Квартира",
+            ["№ стр/корп"] = sectionTitle,
+            ["Подъезд/Секция"] = "1",
+            ["Этаж"] = "5",
+            ["Колич. комнат"] = "1",
+            ["Площадь"] = "42",
+        };
+        return new ParsedRow(row, sheet, cells);
+    }
+
+    [Fact]
+    public async Task ApplyAsync_NonResidential_WritesTotalAreaFromFile_NotProjectArea()
+    {
+        // doc 101 v1.1: для нежилых (RoomCategory != 0) площадь идёт в TotalArea
+        // из колонки «Общая площадь, кв.м.»; ProjectArea = 0. Без этого фикса
+        // в Visary улетал только `"ProjectArea":0`, TotalArea оставался пустым.
+        const int ParkingKindId = 4;       // Машиноместо
+        const int ParkingCategory = 2;     // RoomCategory.ParkingPlace
+        const int CreatedParkingRoomId = 9100;
+
+        _mockListView.Setup(c => c.GetRoomsBySectionAsync(SectionId, It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ListViewResponse<RoomRaw> { Data = [], Total = 0 });
+        _mockCrud.Setup(c => c.CreateRoomAsync(It.IsAny<RoomCreateRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new RoomRaw { ID = CreatedParkingRoomId });
+
+        var ctx = new ImportContext(Guid.NewGuid(), ProjectId, null, null);
+        var rows = new[]
+        {
+            MakeRowWithCategory(10, "Машиноместо", "1",
+                kindId: ParkingKindId, roomCategory: ParkingCategory,
+                projectArea: null, totalArea: 13.5),
+        };
+
+        var result = await _mapper.ApplyAsync(ctx, _visaryDb, rows, default);
+        Assert.Equal(1, result.AppliedCount);
+
+        _mockCrud.Verify(c => c.CreateRoomAsync(
+            It.Is<RoomCreateRequest>(r =>
+                r.ProjectArea == 0 &&
+                r.TotalArea == 13.5),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ApplyAsync_NonResidential_FallsBackToProjectArea_WhenTotalAreaEmpty()
+    {
+        // Бизнес-логика fallback: если файл нежилого помещения не содержит
+        // «Общая площадь», но содержит «Площадь» — берём её как TotalArea
+        // (а не теряем). ProjectArea при этом всё равно 0.
+        const int StorageKindId = 5;       // Кладовая
+        const int OtherNonResCategory = 3;
+        const int CreatedStorageRoomId = 9200;
+
+        _mockListView.Setup(c => c.GetRoomsBySectionAsync(SectionId, It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ListViewResponse<RoomRaw> { Data = [], Total = 0 });
+        _mockCrud.Setup(c => c.CreateRoomAsync(It.IsAny<RoomCreateRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new RoomRaw { ID = CreatedStorageRoomId });
+
+        var ctx = new ImportContext(Guid.NewGuid(), ProjectId, null, null);
+        var rows = new[]
+        {
+            MakeRowWithCategory(10, "Кладовая", "1",
+                kindId: StorageKindId, roomCategory: OtherNonResCategory,
+                projectArea: 4.2, totalArea: null),
+        };
+
+        var result = await _mapper.ApplyAsync(ctx, _visaryDb, rows, default);
+        Assert.Equal(1, result.AppliedCount);
+
+        _mockCrud.Verify(c => c.CreateRoomAsync(
+            It.Is<RoomCreateRequest>(r =>
+                r.ProjectArea == 0 &&
+                r.TotalArea == 4.2),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ValidateAsync_NoProjectInContext_ReturnsFileErrorProjectRequired()
+    {
+        // doc 101: Project обязателен (Site больше не выбирается в UI).
+        var ctx = new ImportContext(Guid.NewGuid(), VisaryProjectId: null, VisarySiteId: null, UserId: null);
+        var rows = new[] { MakeParsedRow(2, "Квартира", "PRJ-1", "1", "1") };
+
+        var result = await _mapper.ValidateAsync(ctx, rows, _visaryDb, default);
+
+        Assert.Empty(result.Rows);
+        Assert.Single(result.FileLevelErrors);
+        Assert.Equal("project_required", result.FileLevelErrors[0].ErrorCode);
+    }
+
+    [Fact]
+    public async Task ValidateAsync_ResolvesSiteByProjectNumberAndStage_AndStoresSiteIdInMappedValues()
+    {
+        // Резолв (PRJ-1, 1) через GetSitesByProjectAndKeysAsync → 1 match → SiteId
+        // фиксируется в MappedValues и строка валидна.
+        var ctx = new ImportContext(Guid.NewGuid(), ProjectId, null, null);
+        var rows = new[] { MakeParsedRow(2, "Квартира", "PRJ-1", "1", "1") };
+
+        var result = await _mapper.ValidateAsync(ctx, rows, _visaryDb, default);
+
+        var mapped = Assert.Single(result.Rows);
+        Assert.True(mapped.IsValid, "row должна быть валидной — site найден");
+        var siteIdProp = mapped.MappedValues.RootElement.GetProperty("SiteId").GetInt32();
+        Assert.Equal(SiteId, siteIdProp);
+    }
+
+    [Fact]
+    public async Task ValidateAsync_SiteNotFoundInProject_ReturnsRowErrorSiteNotFound()
+    {
+        // (PRJ-Unknown, 1) → 0 match → row-error site_not_found_in_project.
+        _mockListView.Setup(c => c.GetSitesByProjectAndKeysAsync(
+                ProjectId, "PRJ-Unknown", "9", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ListViewResponse<ConstructionSiteRaw> { Data = [], Total = 0 });
+
+        var ctx = new ImportContext(Guid.NewGuid(), ProjectId, null, null);
+        var rows = new[] { MakeParsedRow(2, "Квартира", "PRJ-Unknown", "9", "1") };
+
+        var result = await _mapper.ValidateAsync(ctx, rows, _visaryDb, default);
+
+        var mapped = Assert.Single(result.Rows);
+        Assert.False(mapped.IsValid);
+        Assert.Contains(mapped.Errors, e => e.ErrorCode == "site_not_found_in_project");
+    }
+
+    [Fact]
+    public async Task ValidateAsync_NonResidential_ReadsTotalAreaFromColumnPloshchadKvm()
+    {
+        // Регрессия: в файле Репино-Парк колонка нежилых называется «Площадь, кв.м»
+        // (без «Общая»). Алиас «Общая площадь, кв.м.» её не матчил, и колонка
+        // «Площадь» из ProjectAreaAliases тоже (точное сравнение).
+        // TotalAreaAliases расширен — теперь читается, и Apply отправляет
+        // в Visary `"TotalArea": 13.5` для машиноместа.
+        _mockListView.Setup(c => c.ListRoomKindsAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ListViewResponse<RoomKindRaw>
+            {
+                Data = [
+                    new RoomKindRaw { ID = RoomKindIdApartment, Title = "Квартира", RoomCategory = 0 },
+                    new RoomKindRaw { ID = 4, Title = "Машиноместо", RoomCategory = 2 },
+                ],
+                Total = 2,
+            });
+
+        var ctx = new ImportContext(Guid.NewGuid(), ProjectId, null, null);
+        var cells = new Dictionary<string, string>
+        {
+            ["Номер проекта"] = "PRJ-1",
+            ["Этап"] = "1",
+            ["Номер помещения/Квартира/Номер квартиры"] = "1",
+            ["Тип/Название/Вид"] = "Машиноместо",
+            ["№ стр/корп"] = "1.1",
+            ["Подъезд/Секция"] = "1",
+            ["Этаж"] = "-1",
+            ["Площадь, кв.м"] = "13,5", // 👈 реальный заголовок Репино-Парк
+        };
+        var rows = new[] { new ParsedRow(10, "Машиноместо", cells) };
+
+        var result = await _mapper.ValidateAsync(ctx, rows, _visaryDb, default);
+
+        var mapped = Assert.Single(result.Rows);
+        Assert.True(mapped.IsValid,
+            "row должна быть валидной — TotalArea читается из «Площадь, кв.м»");
+        var ta = mapped.MappedValues.RootElement.GetProperty("TotalArea").GetDouble();
+        Assert.Equal(13.5, ta);
+    }
+
+    [Fact]
+    public async Task ValidateAsync_ExcelErrorInShareAgreementColumn_IsTreatedAsEmpty()
+    {
+        // doc 101 v1.1: «#N/A» в колонке «№ ДДУ» обнуляется в Validate.
+        // Иначе Apply создаст SA с Number="#N/A" и при следующих строках будет
+        // реанимировать тот же глобальный ДДУ → Visary 500.
+        var ctx = new ImportContext(Guid.NewGuid(), ProjectId, null, null);
+        var cells = new Dictionary<string, string>
+        {
+            ["Номер проекта"] = "PRJ-1",
+            ["Этап"] = "1",
+            ["Номер разрешения"] = "RNS-1",
+            ["Номер помещения/Квартира/Номер квартиры"] = "1",
+            ["Тип/Название/Вид"] = "Квартира",
+            ["№ стр/корп"] = "1.1",
+            ["Подъезд/Секция"] = "1",
+            ["Этаж"] = "5",
+            ["Колич. комнат"] = "1",
+            ["Площадь"] = "42",
+            ["№ ДДУ"] = "#N/A",
+        };
+        var rows = new[] { new ParsedRow(10, "Квартира", cells) };
+
+        var result = await _mapper.ValidateAsync(ctx, rows, _visaryDb, default);
+
+        var mapped = Assert.Single(result.Rows);
+        Assert.True(mapped.IsValid);
+        // ShareAgreementNumber в MappedValues пустой / null — Apply пропустит SA-ветку.
+        var v = mapped.MappedValues.RootElement;
+        var sa = v.TryGetProperty("ShareAgreementNumber", out var saProp)
+            ? (saProp.ValueKind == System.Text.Json.JsonValueKind.Null ? null : saProp.GetString())
+            : null;
+        Assert.True(string.IsNullOrEmpty(sa),
+            $"ShareAgreementNumber должен быть пуст после Excel-фильтра, получено '{sa}'");
+    }
+
+    [Fact]
+    public async Task ValidateAsync_AmbiguousSites_ReturnsRowErrorSiteAmbiguous()
+    {
+        // 2+ кандидата → row-error site_ambiguous с перечислением ID.
+        _mockListView.Setup(c => c.GetSitesByProjectAndKeysAsync(
+                ProjectId, "PRJ-DUP", "5", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ListViewResponse<ConstructionSiteRaw>
+            {
+                Data =
+                [
+                    new ConstructionSiteRaw { ID = 1001, ConstructionProjectNumber = "PRJ-DUP", StageNumber = "5" },
+                    new ConstructionSiteRaw { ID = 1002, ConstructionProjectNumber = "PRJ-DUP", StageNumber = "5" },
+                ],
+                Total = 2,
+            });
+
+        var ctx = new ImportContext(Guid.NewGuid(), ProjectId, null, null);
+        var rows = new[] { MakeParsedRow(2, "Квартира", "PRJ-DUP", "5", "1") };
+
+        var result = await _mapper.ValidateAsync(ctx, rows, _visaryDb, default);
+
+        var mapped = Assert.Single(result.Rows);
+        Assert.False(mapped.IsValid);
+        var err = Assert.Single(mapped.Errors, e => e.ErrorCode == "site_ambiguous");
+        Assert.Contains("1001", err.Message);
+        Assert.Contains("1002", err.Message);
+    }
+
+    private static MappedRow MakeRowWithCategory(int row, string sheet, string roomNumber,
+        int kindId, int? roomCategory, double? projectArea, double? totalArea)
+    {
+        // Для тестов раскладки площадей — отдельная фабрика без ДДУ/PIN/ProjectNumber,
+        // чтобы не дёргать ShareAgreement/Developer ветки.
         var mapped = new Dictionary<string, object?>
         {
             ["Sheet"] = sheet,
+            ["SiteId"] = SiteId,
+            ["RoomNumber"] = roomNumber,
+            ["RoomKindId"] = kindId,
+            ["RoomKindTitle"] = "X",
+            ["RoomCategory"] = roomCategory,
+            ["SectionTitle"] = "1.1",
+            ["SectionTitleNumeric"] = "1.1",
+            ["BuildingSection"] = "",
+            ["Floor"] = "1",
+            ["RoomsCount"] = null,
+            ["ProjectArea"] = projectArea,
+            ["TotalArea"] = totalArea,
+            ["CostForOne"] = null,
+            ["MarketCostPerM"] = null,
+            ["ZalogCostPerM"] = null,
+            ["ShareAgreementNumber"] = null,
+            ["StageNumber"] = 1,
+            ["StageNumberRaw"] = "1",
+            ["ProjectNumber"] = "PRJ-1",
+            ["PermissionNumber"] = "RNS-1",
+        };
+        return new MappedRow(row, sheet, true,
+            JsonSerializer.SerializeToDocument(mapped), []);
+    }
+
+    private static MappedRow MakeRow(int row, string sheet, string roomNumber, string buildingSection, double area,
+        int siteId = SiteId, string projectNumber = "PRJ-1", string stageNumberRaw = "1", string sectionTitle = "1.1")
+    {
+        // Apply теперь группирует строки по SiteId (резолвится в Validate). Тесты
+        // передают siteId напрямую в MappedValues — Validate-фазу не вызываем.
+        var mapped = new Dictionary<string, object?>
+        {
+            ["Sheet"] = sheet,
+            ["SiteId"] = siteId,
             ["RoomNumber"] = roomNumber,
             ["RoomKindId"] = RoomKindIdApartment,
             ["RoomKindTitle"] = "Квартира",
             ["RoomCategory"] = 0,
-            ["SectionTitle"] = "1.1",
-            ["SectionTitleNumeric"] = "1.1",
+            ["SectionTitle"] = sectionTitle,
+            ["SectionTitleNumeric"] = sectionTitle,
             ["BuildingSection"] = buildingSection,
             ["Floor"] = "5",
             ["RoomsCount"] = 1,
@@ -153,9 +444,9 @@ public class RoomsFormImportMapperApplyTests : IDisposable
             ["MarketCostPerM"] = 120000.0,
             ["ZalogCostPerM"] = 90000.0,
             ["ShareAgreementNumber"] = $"ДДУ-{roomNumber}",
-            ["StageNumber"] = 1,
-            ["StageNumberRaw"] = "1",
-            ["ProjectNumber"] = "PRJ-1",
+            ["StageNumber"] = int.TryParse(stageNumberRaw, out var s) ? (object)s : null,
+            ["StageNumberRaw"] = stageNumberRaw,
+            ["ProjectNumber"] = projectNumber,
             ["PermissionNumber"] = "RNS-1",
         };
         return new MappedRow(row, sheet, true,
@@ -169,7 +460,8 @@ public class RoomsFormImportMapperApplyTests : IDisposable
         // На первом запуске snapshot пуст → каждая строка проходит CREATE Room + CREATE SA.
         // RowActionLog должен содержать «Корпус найден», «Помещение создано», «ДДУ создан»
         // с корректными Sheet+SourceRowNumber (для UI-отчёта doc 85, doc 95).
-        var ctx = new ImportContext(Guid.NewGuid(), ProjectId, SiteId, null);
+        // Контекст содержит только ProjectId; SiteId — в MappedValues каждой строки.
+        var ctx = new ImportContext(Guid.NewGuid(), ProjectId, null, null);
         var rows = new[] { MakeRow(10, "Квартира", "1", "1", 42.5) };
 
         var result = await _mapper.ApplyAsync(ctx, _visaryDb, rows, default);
@@ -196,7 +488,7 @@ public class RoomsFormImportMapperApplyTests : IDisposable
         //   первый Apply — создаёт RoomApplySnapshot;
         //   второй Apply с тем же MappedValues — hash совпадает → строка skip-ается
         //   с меткой «Без изменений — пропуск (snapshot)»; никакого CREATE/PATCH не происходит.
-        var ctx = new ImportContext(Guid.NewGuid(), ProjectId, SiteId, null);
+        var ctx = new ImportContext(Guid.NewGuid(), ProjectId, null, null);
         var rows = new[] { MakeRow(10, "Квартира", "1", "1", 42.5) };
 
         var first = await _mapper.ApplyAsync(ctx, _visaryDb, rows, default);
@@ -236,7 +528,7 @@ public class RoomsFormImportMapperApplyTests : IDisposable
         // Если хоть одно поле, входящее в HashedMappedFields, изменилось — diff-skip
         // не сработает, PATCH должен пройти. Это гарантирует, что snapshot не «маскирует»
         // реальные изменения площади/стоимости.
-        var ctx = new ImportContext(Guid.NewGuid(), ProjectId, SiteId, null);
+        var ctx = new ImportContext(Guid.NewGuid(), ProjectId, null, null);
 
         await _mapper.ApplyAsync(ctx, _visaryDb, new[] { MakeRow(10, "Квартира", "1", "1", 42.5) }, default);
 
@@ -288,12 +580,72 @@ public class RoomsFormImportMapperApplyTests : IDisposable
     }
 
     [Fact]
+    public async Task ApplyAsync_MultipleSites_GroupsRowsBySiteId_AndCreatesPerSite()
+    {
+        // doc 101: один файл может содержать строки разных ОКС в рамках проекта.
+        // Apply группирует валидные строки по SiteId (положен в MappedValues
+        // Validate-фазой), и каждый сайт получает свой pre-pass (snapshot/секции).
+        // Проверяем, что CreateRoom вызван для обоих сайтов с корректным SiteID.
+        const int SiteIdB = 7778;
+        const int SectionIdB = 5001;
+        const int CreatedRoomIdB = 9002;
+
+        _mockCrud.Setup(c => c.GetSiteByIdFullAsync(SiteIdB, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ConstructionSiteFull
+            {
+                ID = SiteIdB,
+                ConstructionProjectNumber = "PRJ-2",
+                StageNumber = 2,
+                ConstructionPermissionNumber = null,
+                RowVersion = 0,
+                Project = new VisaryRef { ID = ProjectId },
+            });
+        _mockListView.Setup(c => c.GetSectionsBySiteAsync(SiteIdB, It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ListViewResponse<ConstructionSectionRaw>
+            {
+                Data = [new ConstructionSectionRaw { ID = SectionIdB, Title = "2.1" }],
+                Total = 1,
+            });
+        _mockListView.Setup(c => c.GetRoomsBySectionAsync(SectionIdB, It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ListViewResponse<RoomRaw> { Data = [], Total = 0 });
+        // CreateRoomAsync уже замокан на возврат CreatedRoomId — оба сайта используют тот же возврат.
+        // Для второго сайта мы только проверяем факт вызова с корректным SiteID.
+        _mockListView.Setup(c => c.GetShareAgreementsByRoomAsync(It.IsAny<int>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ListViewResponse<ShareAgreementRaw> { Data = [], Total = 0 });
+        _mockCrud.Setup(c => c.CreateRoomAsync(It.IsAny<RoomCreateRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((RoomCreateRequest req, CancellationToken _) =>
+                new RoomRaw { ID = req.SiteID == SiteIdB ? CreatedRoomIdB : CreatedRoomId });
+
+        var ctx = new ImportContext(Guid.NewGuid(), ProjectId, null, null);
+        var rows = new[]
+        {
+            MakeRow(10, "Квартира", "1", "1", 42.5,
+                siteId: SiteId,  projectNumber: "PRJ-1", stageNumberRaw: "1", sectionTitle: "1.1"),
+            MakeRow(20, "Квартира", "1", "1", 50.0,
+                siteId: SiteIdB, projectNumber: "PRJ-2", stageNumberRaw: "2", sectionTitle: "2.1"),
+        };
+
+        var result = await _mapper.ApplyAsync(ctx, _visaryDb, rows, default);
+
+        Assert.Equal(2, result.AppliedCount);
+        Assert.Empty(result.Errors);
+        // По одному CreateRoom на сайт — с правильным SiteID.
+        _mockCrud.Verify(c => c.CreateRoomAsync(
+            It.Is<RoomCreateRequest>(r => r.SiteID == SiteId), It.IsAny<CancellationToken>()), Times.Once);
+        _mockCrud.Verify(c => c.CreateRoomAsync(
+            It.Is<RoomCreateRequest>(r => r.SiteID == SiteIdB), It.IsAny<CancellationToken>()), Times.Once);
+        // Section.find-or-create отрабатывает per-site.
+        _mockListView.Verify(c => c.GetSectionsBySiteAsync(SiteId,  "1.1", It.IsAny<CancellationToken>()), Times.Once);
+        _mockListView.Verify(c => c.GetSectionsBySiteAsync(SiteIdB, "2.1", It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
     public async Task ApplyAsync_MultipleSheets_RowActionLogPreservesSheetPerRow()
     {
         // Многолистовой файл (doc 80, doc 89): каждый RowActionLog должен нести имя своего листа,
         // иначе pipeline не сможет связать Actions с правильной StagedRow в БД и UI не
         // отрисует actions в строках.
-        var ctx = new ImportContext(Guid.NewGuid(), ProjectId, SiteId, null);
+        var ctx = new ImportContext(Guid.NewGuid(), ProjectId, null, null);
         var rows = new[]
         {
             MakeRow(10, "Квартира", "1", "1", 42.5),
