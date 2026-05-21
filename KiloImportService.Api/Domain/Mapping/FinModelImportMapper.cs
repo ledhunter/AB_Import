@@ -23,6 +23,10 @@ namespace KiloImportService.Api.Domain.Mapping;
 ///   • «Строительный адрес»   → Address           (строковый атрибут Site)
 ///   • «Площадь застройки»    → ConstructionSiteIndicator + ConstructionSiteIndicatorValue
 ///                               с конкретной стадией (Stage = 50 «Экспертиза»)
+///   • «ИНН» + «Заемщик/Застройщик» (раздел «Основные данные») → Organization (поиск по
+///     ClientID=ИНН, при отсутствии — POST /crud/organization) + projectmanagement-запись
+///     (Заемщик/Застройщик) в проекте объекта. Пара колонок опциональна — старые шаблоны
+///     без раздела «Основные данные» продолжают работать. См. doc 99.
 ///   • Бюджет («Себестоимость») → WBS (ИСР), главы и подстатьи. Title из файла резолвится
 ///     в Code (КБК) через эталонный справочник <see cref="IBudgetReferenceProvider"/>.
 ///     Идемпотентно: на повторном импорте суммы у существующих подстатей PATCH-аются,
@@ -74,7 +78,15 @@ public sealed class FinModelImportMapper : IImportMapper
             EndMarker: "Глава 2.",
             QuarterHeaderRow: 7,
             FirstQuarterColumn: "H",
-            LastQuarterColumn: "CU"));
+            LastQuarterColumn: "CU"),
+        // «Группа компаний» — единственный параметр, значение которого лежит не
+        // в колонке этапа (H/I/...), а в фиксированной E14. C14 — текст-ключ
+        // («Группа компаний»). Override-механизм парсера подставляет E14 в
+        // Cells["Группа компаний"] для каждого ParsedRow всех этапов. См. doc 100.
+        SingleValues: new[]
+        {
+            new SingleValueOverride(KeyText: "Группа компаний", ValueColumn: "E"),
+        });
 
     private static readonly string[] FinishingTypeAliases =
         ["Тип отделки", "FinishingType", "Finishing"];
@@ -87,6 +99,32 @@ public sealed class FinModelImportMapper : IImportMapper
     // Не справочник, поэтому без TryLoadDictionaryAsync / ResolveDictionaryValue.
     private static readonly string[] AddressAliases =
         ["Строительный адрес", "Address", "Адрес"];
+
+    // Раздел «Основные данные»: ИНН организации-застройщика/заёмщика. Используется
+    // для поиска Organization в Visary по ClientID (поле ClientID=ИНН в Visary).
+    // Колонки опциональные: если пара ИНН + Title отсутствует — Apply пропускает
+    // organization-link flow без ошибки. Если найдена только одна из двух —
+    // row-error «value_empty» на отсутствующее значение.
+    private static readonly string[] InnAliases =
+        ["ИНН", "INN", "ИНН организации", "ИНН Застройщика", "ИНН Заемщика", "ИНН Заёмщика"];
+
+    // Наименование организации-застройщика/заёмщика. В шаблоне «Параметры к переносу в АБ.xlsx»
+    // строка C17 содержит ровно «Заемщик/Застройщик» (через слэш, буква «е», не «ё»).
+    private static readonly string[] BorrowerOrganizationAliases =
+        [
+            "Заемщик/Застройщик", "Заёмщик/Застройщик",
+            "Заемщик / Застройщик", "Заёмщик / Застройщик",
+            "Застройщик/Заемщик", "Застройщик/Заёмщик",
+            "Застройщик", "Заемщик", "Заёмщик",
+            "Borrower", "Developer", "BorrowerTitle",
+        ];
+
+    // «Группа компаний» — наименование материнской ГК для организации-застройщика.
+    // Значение лежит в E14 (см. SingleValues override в LayoutHint выше), а текст-
+    // ключ в C14 совпадает с одним из этих алиасов. Колонка опциональна: шаблоны
+    // без раздела «Основные данные» / без этой строки продолжают работать.
+    private static readonly string[] CompanyGroupAliases =
+        ["Группа компаний", "ГК", "CompanyGroup", "Group"];
 
     // Domain.Model.Enums.ProjectStage: 50 = Expertise (Экспертиза).
     // Источник: FinModel/Альфа Банк. Управление проектами.drawio.xml — диаграмма enum'а.
@@ -262,6 +300,16 @@ public sealed class FinModelImportMapper : IImportMapper
         var fileFinishingCol = FindColumn(allColumns, FinishingTypeAliases);
         var fileEstateCol    = FindColumn(allColumns, EstateClassAliases);
         var fileAddressCol   = FindColumn(allColumns, AddressAliases);
+        // Раздел «Основные данные»: ИНН + Заемщик/Застройщик — опциональная пара.
+        // Если одна из колонок есть, а другой нет — это ошибка строки (см. ниже),
+        // но file-level error «column_not_found» не выдаём (поля не обязательны для
+        // обратной совместимости с шаблонами без раздела «Основные данные»).
+        var fileInnCol       = FindColumn(allColumns, InnAliases);
+        var fileBorrowerCol  = FindColumn(allColumns, BorrowerOrganizationAliases);
+        // «Группа компаний» — независимая опциональная колонка (без пары). Если её нет —
+        // ГК-flow пропускается; если есть и значение пустое — column присутствует, но
+        // ReadCellTrimmed вернёт null и LinkCompanyGroup пропустится.
+        var fileCompanyGroupCol = FindColumn(allColumns, CompanyGroupAliases);
         var indicatorCols    = Indicators
             .Select(p => (Param: p, Col: FindColumn(allColumns, p.Aliases)))
             .ToArray();
@@ -270,6 +318,9 @@ public sealed class FinModelImportMapper : IImportMapper
         var anyFound = fileFinishingCol is not null
                        || fileEstateCol is not null
                        || fileAddressCol is not null
+                       || fileInnCol is not null
+                       || fileBorrowerCol is not null
+                       || fileCompanyGroupCol is not null
                        || indicatorCols.Any(x => x.Col is not null);
 
         if (!anyFound)
@@ -277,6 +328,9 @@ public sealed class FinModelImportMapper : IImportMapper
             var allAliases = FinishingTypeAliases
                 .Concat(EstateClassAliases)
                 .Concat(AddressAliases)
+                .Concat(InnAliases)
+                .Concat(BorrowerOrganizationAliases)
+                .Concat(CompanyGroupAliases)
                 .Concat(Indicators.SelectMany(p => p.Aliases))
                 .ToArray();
             fileErrors.Add(BuildColumnNotFoundError(allColumns, allAliases,
@@ -328,6 +382,39 @@ public sealed class FinModelImportMapper : IImportMapper
             var addressValue = ReadCellTrimmed(
                 row, fileAddressCol!, AddressAliases, "Строительный адрес", rowErrors);
 
+            // Раздел «Основные данные»: ИНН + Заемщик/Застройщик. Колонки опциональны
+            // как пара. Поведение:
+            //   • обе колонки найдены → читаем оба значения (value_empty при пустоте);
+            //   • найдена только одна → value_empty на отсутствующее значение (требуем
+            //     согласованную пару, иначе непонятно как создавать Organization);
+            //   • ни одной → Apply пропустит organization-link без ошибки.
+            string? innValue = null;
+            string? borrowerTitleValue = null;
+            if (fileInnCol is not null || fileBorrowerCol is not null)
+            {
+                innValue = ReadCellTrimmed(
+                    row, fileInnCol ?? "ИНН", InnAliases, "ИНН", rowErrors);
+                borrowerTitleValue = ReadCellTrimmed(
+                    row,
+                    fileBorrowerCol ?? "Заемщик/Застройщик",
+                    BorrowerOrganizationAliases,
+                    "Заемщик/Застройщик",
+                    rowErrors);
+            }
+
+            // «Группа компаний»: НЕ требуем непустого значения (опциональный признак,
+            // привязка идёт только если в файле явно указано наименование). Поэтому
+            // читаем без rowErrors-add — TryReadCellTrimmed бы тоже работал, но в коде
+            // нет такого хелпера; используем GetTrimmedCellValue, который возвращает
+            // null/пусто без ошибок.
+            string? companyGroupValue = null;
+            if (fileCompanyGroupCol is not null
+                && row.Cells.TryGetValue(fileCompanyGroupCol, out var cgRaw)
+                && !string.IsNullOrWhiteSpace(cgRaw))
+            {
+                companyGroupValue = cgRaw.Trim();
+            }
+
             var indicatorValues = new Dictionary<string, double>();
             foreach (var (param, col) in indicatorCols)
             {
@@ -349,6 +436,9 @@ public sealed class FinModelImportMapper : IImportMapper
                 EstateClassId          = estateEntry!.Value.Id,
                 EstateClassTitle       = estateEntry.Value.Title,
                 Address                = addressValue,
+                Inn                    = innValue,
+                BorrowerTitle          = borrowerTitleValue,
+                CompanyGroupTitle      = companyGroupValue,
                 Indicators             = indicatorValues,
             });
 
@@ -586,12 +676,33 @@ public sealed class FinModelImportMapper : IImportMapper
         int siteId, IReadOnlyList<MappedRow> paramRows, List<RowError> errors, CancellationToken ct)
     {
         var firstRow = paramRows[0];
+        // Привязка row-level Apply-ошибок к конкретной params-строке: фронт по этим
+        // полям сгруппирует ошибки в нужной строке листа Inputs (см. doc 100).
+        // ApplyParametersAsync работает с ОДНОЙ логической строкой params (firstRow),
+        // поэтому одна точка привязки.
+        var paramRow = firstRow.SourceRowNumber;
+        var paramSheet = firstRow.Sheet;
+        RowError ParamError(string code, string message, string? column = null) =>
+            new(column, code, message, paramRow, paramSheet);
+
         var root = firstRow.MappedValues.RootElement;
         var finishingMaterialId = root.GetProperty("FinishingMaterialId").GetInt32();
         var estateClassId       = root.GetProperty("EstateClassId").GetInt32();
         var address             = root.TryGetProperty("Address", out var addrEl)
                                   && addrEl.ValueKind == JsonValueKind.String
                                   ? addrEl.GetString()
+                                  : null;
+        var inn                 = root.TryGetProperty("Inn", out var innEl)
+                                  && innEl.ValueKind == JsonValueKind.String
+                                  ? innEl.GetString()
+                                  : null;
+        var borrowerTitle       = root.TryGetProperty("BorrowerTitle", out var btEl)
+                                  && btEl.ValueKind == JsonValueKind.String
+                                  ? btEl.GetString()
+                                  : null;
+        var companyGroupTitle   = root.TryGetProperty("CompanyGroupTitle", out var cgEl)
+                                  && cgEl.ValueKind == JsonValueKind.String
+                                  ? cgEl.GetString()
                                   : null;
 
         try
@@ -600,6 +711,48 @@ public sealed class FinModelImportMapper : IImportMapper
             await _visaryClient.UpdateSiteEstateClassAsync(siteId, estateClassId, ct);
             if (!string.IsNullOrWhiteSpace(address))
                 await _visaryClient.UpdateSiteAddressAsync(siteId, address, ct);
+
+            // Раздел «Основные данные»: при наличии ИНН + наименования —
+            // найти/создать Organization и привязать её к проекту через PM-запись
+            // (Заемщик/Застройщик). Изолировано от остальных параметров: одна ошибка
+            // здесь не отменяет уже применённые FK/Address-обновления.
+            int? linkedOrgId = null;
+            if (!string.IsNullOrWhiteSpace(inn) && !string.IsNullOrWhiteSpace(borrowerTitle))
+            {
+                try
+                {
+                    linkedOrgId = await LinkBorrowerOrganizationAsync(siteId, inn!, borrowerTitle!, ct);
+                }
+                catch (Exception ex)
+                {
+                    _log.LogError(ex,
+                        "FinModelImportMapper: organization/PM link failed for siteId={SiteId} inn={Inn}",
+                        siteId, inn);
+                    errors.Add(ParamError("organization_link_error",
+                        $"Ошибка привязки организации '{borrowerTitle}' (ИНН {inn}) к проекту: {ex.Message}"));
+                }
+            }
+
+            // ГК-flow: если у нас есть orgId (организация найдена/создана) и в файле
+            // указано наименование ГК — пытаемся проставить Group у Organization.
+            // Изолируем — отдельные row-error'ы (skip/not-found/multiple-found/patch-fail),
+            // которые не отменяют уже применённые параметры. См. doc 100.
+            if (linkedOrgId is int orgIdForGroup
+                && !string.IsNullOrWhiteSpace(companyGroupTitle))
+            {
+                try
+                {
+                    await LinkCompanyGroupAsync(orgIdForGroup, companyGroupTitle!, errors, ParamError, ct);
+                }
+                catch (Exception ex)
+                {
+                    _log.LogError(ex,
+                        "FinModelImportMapper: company-group link failed for orgId={OrgId} title='{Title}'",
+                        orgIdForGroup, companyGroupTitle);
+                    errors.Add(ParamError("company_group_link_error",
+                        $"ГК не найдена, тк ошибка обновления организации: {ex.Message}"));
+                }
+            }
 
             // Indicator-параметры: для каждого находим показатель → конкретное значение
             // нужной стадии → PATCH. Каждый параметр обрабатывается независимо;
@@ -616,13 +769,13 @@ public sealed class FinModelImportMapper : IImportMapper
                     {
                         _log.LogError(ex,
                             "Indicator '{Param}' not found for siteId={SiteId}", param.HumanName, siteId);
-                        errors.Add(new RowError(null, "indicator_not_found", ex.Message));
+                        errors.Add(ParamError("indicator_not_found", ex.Message));
                     }
                     catch (Exception ex)
                     {
                         _log.LogError(ex,
                             "Indicator '{Param}' update failed for siteId={SiteId}", param.HumanName, siteId);
-                        errors.Add(new RowError(null, "indicator_update_error",
+                        errors.Add(ParamError("indicator_update_error",
                             $"Ошибка обновления показателя '{param.HumanName}': {ex.Message}"));
                     }
                 }
@@ -637,17 +790,199 @@ public sealed class FinModelImportMapper : IImportMapper
         catch (KeyNotFoundException ex)
         {
             _log.LogError(ex, "Visary site not found for siteId={SiteId}", siteId);
-            errors.Add(new RowError(null, "visary_site_not_found",
+            errors.Add(ParamError("visary_site_not_found",
                 $"Объект строительства {siteId} не найден в Visary."));
             return 0;
         }
         catch (Exception ex)
         {
             _log.LogError(ex, "Visary update failed for siteId={SiteId}", siteId);
-            errors.Add(new RowError(null, "visary_update_error",
+            errors.Add(ParamError("visary_update_error",
                 $"Ошибка обновления в Visary: {ex.Message}"));
             return 0;
         }
+    }
+
+    // ─── Organization / ProjectManagement flow ───────────────────────────────
+    //
+    // Раздел «Основные данные» из шаблона Финмодели содержит ИНН + наименование
+    // организации-Заёмщика/Застройщика. По аналогии с импортом Помещений (doc 75)
+    // алгоритм:
+    //   1. Найти Organization в Visary по ClientID=ИНН (listview/organization).
+    //      Если нет — создать через POST /crud/organization (Title, ClientID).
+    //   2. Проверить, есть ли уже projectmanagement-запись на этом сайте,
+    //      связанная с найденной/созданной Organization (любая роль). Если есть —
+    //      flow завершён (организация уже видна в «Участниках Объекта»).
+    //   3. Иначе — посмотреть PM в рамках проекта (onetomany/Project) с этой
+    //      Organization. Если есть подходящая запись — переиспользуем (max ID).
+    //      Если нет — создаём новую PM (Role=«Застройщик» по умолчанию).
+    //   4. Привязываем PM к сайту через manytomany/link.
+    //
+    // Решение: при поиске PM в проекте мы НЕ фильтруем по Role.ID, потому что
+    // одна организация может присутствовать в разных ролях (Застройщик/Заёмщик),
+    // и нам подходит любая существующая. При создании используем Role=Developer (10);
+    // справочник ролей Visary целиком пока не интегрирован.
+    private async Task<int> LinkBorrowerOrganizationAsync(
+        int siteId, string inn, string borrowerTitle, CancellationToken ct)
+    {
+        // (1) Organization по ClientID=ИНН.
+        var orgs = await _listViewClient.GetOrganizationsByClientIdAsync(inn, ct);
+        // Visary возвращает несколько записей при «contains»-семантике поиска,
+        // поэтому фильтруем локально по точному совпадению ClientID (Trim).
+        var existingOrg = orgs.Data.FirstOrDefault(o =>
+            string.Equals(o.ClientID?.Trim(), inn.Trim(), StringComparison.Ordinal));
+
+        int orgId;
+        if (existingOrg is not null)
+        {
+            orgId = existingOrg.ID;
+            _log.LogInformation(
+                "FinModelImportMapper: organization '{Title}' (ID={OrgId}) found by INN={Inn}",
+                existingOrg.Title, orgId, inn);
+        }
+        else
+        {
+            var created = await _visaryClient.CreateOrganizationAsync(new OrganizationCreateRequest
+            {
+                Title = borrowerTitle,
+                ClientID = inn,
+                INN = inn,
+            }, ct);
+            orgId = created.ID;
+            _log.LogInformation(
+                "FinModelImportMapper: organization '{Title}' (INN={Inn}) created with ID={OrgId}",
+                borrowerTitle, inn, orgId);
+        }
+
+        // (2) Уже привязана к сайту?
+        var siteSPm = await _listViewClient.GetProjectManagementsBySiteAsync(siteId, ct);
+        if (siteSPm.Data.Any(pm => pm.Organization?.ID == orgId))
+        {
+            _log.LogInformation(
+                "FinModelImportMapper: organization ID={OrgId} already linked to siteId={SiteId} — skip PM",
+                orgId, siteId);
+            return orgId;
+        }
+
+        // (3) Найти/создать PM в проекте.
+        var siteFull = await _visaryClient.GetSiteByIdFullAsync(siteId, ct);
+        var projectId = siteFull.Project?.ID;
+        if (projectId is null)
+        {
+            throw new InvalidOperationException(
+                $"У объекта siteId={siteId} не задан Project — невозможно создать projectmanagement-запись.");
+        }
+
+        // Без фильтра по Role.ID — берём любую существующую PM этой Organization
+        // в проекте (Застройщик/Заёмщик/любая) и переиспользуем.
+        var inProject = await _listViewClient.GetProjectManagementsByProjectAsync(
+            projectId.Value, orgId, roleId: null, ct);
+        var reusable = inProject.Data
+            .Where(pm => pm.Organization?.ID == orgId)
+            .OrderByDescending(pm => pm.ID)
+            .FirstOrDefault();
+
+        int pmIdToLink;
+        if (reusable is not null)
+        {
+            pmIdToLink = reusable.ID;
+            _log.LogInformation(
+                "FinModelImportMapper: reusing projectmanagement ID={PmId} (orgId={OrgId}, roleId={RoleId}) in projectId={ProjectId}",
+                pmIdToLink, orgId, reusable.Role?.ID, projectId);
+        }
+        else
+        {
+            var createdPm = await _visaryClient.CreateProjectManagementAsync(new ProjectManagementCreateRequest
+            {
+                Project = new VisaryRef { ID = projectId.Value },
+                Organization = new VisaryRef { ID = orgId },
+                Role = new VisaryRef
+                {
+                    ID = ProjectManagementRoles.Developer,
+                    Title = ProjectManagementRoles.DeveloperTitle,
+                },
+                Affiliation = 0,
+            }, ct);
+            pmIdToLink = createdPm.ID;
+            _log.LogInformation(
+                "FinModelImportMapper: created projectmanagement ID={PmId} (orgId={OrgId}, role=Застройщик) in projectId={ProjectId}",
+                pmIdToLink, orgId, projectId);
+        }
+
+        // (4) Linkage PM ↔ Site.
+        await _visaryClient.LinkProjectManagementToSiteAsync(siteId, pmIdToLink, ct);
+        return orgId;
+    }
+
+    // ─── CompanyGroup (привязка организации к материнской ГК) ────────────────
+    //
+    // По doc 100: после того как организация-застройщик найдена/создана и
+    // привязана к проекту (LinkBorrowerOrganizationAsync), пытаемся проставить
+    // у неё поле Group (group of companies). Алгоритм:
+    //   ① GET /crud/organization/{orgId} → если Group уже задана → row-action «skip»;
+    //   ② POST /listview/companygroup Filter ["Title","=",title] → если ровно одна
+    //      запись → ③ PATCH /crud/organization/{orgId} с Group:{ID,Title,Hidden:false};
+    //   • 0 записей или >1 — row-error «ГК не найдена, тк {причина}», шаг продолжается
+    //     (мы не отменяем уже применённые FK/Address/Org-link/Indicators).
+    //
+    // Метод НЕ бросает исключений на «бизнес-ошибки» — все 4 исхода (skip / linked /
+    // not-found / multiple-found) выражены через errors-список. Технические сбои
+    // (HTTP 5xx и т.п.) пробрасываются — caller их ловит и оформляет как
+    // company_group_link_error.
+    private async Task LinkCompanyGroupAsync(
+        int orgId,
+        string companyGroupTitle,
+        List<RowError> errors,
+        Func<string, string, string?, RowError> rowErrorFactory,
+        CancellationToken ct)
+    {
+        // (1) Текущее состояние организации (Group + RowVersion).
+        var orgFull = await _visaryClient.GetOrganizationByIdAsync(orgId, ct);
+        if (orgFull.Group is { ID: var existingGroupId, Title: var existingTitle })
+        {
+            _log.LogInformation(
+                "FinModelImportMapper: orgId={OrgId} already has Group ID={GroupId} title='{Title}' — skip",
+                orgId, existingGroupId, existingTitle);
+            return; // успех — но без вызова, без ошибки. Идемпотентность.
+        }
+
+        // (2) Поиск ГК по точному Title.
+        var groups = await _listViewClient.GetCompanyGroupsByTitleAsync(companyGroupTitle, ct);
+        // Visary иногда матчит с лишними пробелами — фильтруем локально по Trim+OrdinalIgnoreCase.
+        var needle = companyGroupTitle.Trim();
+        var matches = groups.Data
+            .Where(g => string.Equals(g.Title?.Trim(), needle, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        if (matches.Count == 0)
+        {
+            errors.Add(rowErrorFactory("company_group_not_found",
+                $"ГК не найдена, тк в Visary нет записи companygroup с Title='{companyGroupTitle}'.",
+                null));
+            _log.LogInformation(
+                "FinModelImportMapper: companygroup with Title='{Title}' not found — row-error, continue",
+                companyGroupTitle);
+            return;
+        }
+
+        if (matches.Count > 1)
+        {
+            var ids = string.Join(", ", matches.Select(g => g.ID));
+            errors.Add(rowErrorFactory("company_group_multiple_found",
+                $"ГК не найдена, тк в Visary найдено несколько записей companygroup с Title='{companyGroupTitle}' (ID: {ids}). Однозначно сопоставить нельзя.",
+                null));
+            _log.LogInformation(
+                "FinModelImportMapper: companygroup with Title='{Title}' returned {N} matches — row-error, continue",
+                companyGroupTitle, matches.Count);
+            return;
+        }
+
+        var group = matches[0];
+        // (3) PATCH /crud/organization/{orgId} с Group.
+        await _visaryClient.UpdateOrganizationGroupAsync(orgId, group.ID, group.Title ?? companyGroupTitle, ct);
+        _log.LogInformation(
+            "FinModelImportMapper: orgId={OrgId} linked to companygroup ID={GroupId} title='{Title}'",
+            orgId, group.ID, group.Title);
     }
 
     // ─── Indicator flow ──────────────────────────────────────────────────────

@@ -119,6 +119,71 @@ public class FinModelImportMapperTests : IDisposable
             .Setup(c => c.PatchIndicatorValueAsync(It.IsAny<int>(), It.IsAny<IndicatorValuePatchRequest>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
 
+        // ── Organization / ProjectManagement defaults для organization-link flow ──
+        // (см. LinkBorrowerOrganizationAsync). По умолчанию: ИНН не находит организацию
+        // → создаём; на сайте PM нет → проверяем проект; в проекте PM нет → создаём + link.
+        // Тесты могут перенастроить эти setups.
+        _mockListView
+            .Setup(c => c.GetOrganizationsByClientIdAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ListViewResponse<OrganizationRaw>
+            {
+                Data = new List<OrganizationRaw>(),
+                Total = 0,
+            });
+        _mockCrud
+            .Setup(c => c.CreateOrganizationAsync(It.IsAny<OrganizationCreateRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((OrganizationCreateRequest req, CancellationToken _) =>
+                new OrganizationRaw { ID = 9001, Title = req.Title, ClientID = req.ClientID });
+        _mockListView
+            .Setup(c => c.GetProjectManagementsBySiteAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ListViewResponse<ProjectManagementRaw>
+            {
+                Data = new List<ProjectManagementRaw>(),
+                Total = 0,
+            });
+        _mockListView
+            .Setup(c => c.GetProjectManagementsByProjectAsync(
+                It.IsAny<int>(), It.IsAny<int?>(), It.IsAny<int?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ListViewResponse<ProjectManagementRaw>
+            {
+                Data = new List<ProjectManagementRaw>(),
+                Total = 0,
+            });
+        _mockCrud
+            .Setup(c => c.GetSiteByIdFullAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ConstructionSiteFull
+            {
+                ID = 123,
+                Project = new VisaryRef { ID = 4584, Title = "Тестовый проект" },
+            });
+        _mockCrud
+            .Setup(c => c.CreateProjectManagementAsync(
+                It.IsAny<ProjectManagementCreateRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ProjectManagementRaw { ID = 7001 });
+        _mockCrud
+            .Setup(c => c.LinkProjectManagementToSiteAsync(
+                It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        // ── CompanyGroup defaults (см. doc 100) ──────────────────────────────
+        // По умолчанию GetOrganizationByIdAsync возвращает организацию БЕЗ Group,
+        // ListCompanyGroups — пусто. Тесты с ГК-flow перенастраивают эти setups.
+        _mockCrud
+            .Setup(c => c.GetOrganizationByIdAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((int id, CancellationToken _) =>
+                new OrganizationFull { ID = id, RowVersion = 1000000, Group = null });
+        _mockListView
+            .Setup(c => c.GetCompanyGroupsByTitleAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ListViewResponse<CompanyGroupRaw>
+            {
+                Data = new List<CompanyGroupRaw>(),
+                Total = 0,
+            });
+        _mockCrud
+            .Setup(c => c.UpdateOrganizationGroupAsync(
+                It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
         // Эталонный справочник статей бюджета грузится из embedded-ресурса
         // KiloImportService.Api → используем реальный provider (без сети, in-process).
         var budgetRef = new BudgetReferenceProvider(
@@ -670,5 +735,504 @@ public class FinModelImportMapperTests : IDisposable
         Assert.Equal(1, apply.AppliedCount);
         _mockCrud.Verify(c => c.UpdateSiteAddressAsync(
             123, "г. Уфа, ул. Чернышевского, 88", It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    // ─── Organization / ProjectManagement link (раздел «Основные данные») ────
+
+    private static ParsedRow RowWithOrg(
+        string inn = "6319038948",
+        string borrowerTitle = "ООО СЗ Скай",
+        string finishing = "Черновая",
+        string estate = "Комфорт",
+        string buildingArea = "1234.5",
+        string buildingDensity = "0.42",
+        string address = "ул. Ленина, 1")
+        => new(SourceRowNumber: 2, Sheet: "inputs",
+            Cells: new Dictionary<string, string>
+            {
+                ["Тип отделки"]         = finishing,
+                ["Класс жилья"]         = estate,
+                ["Площадь застройки"]   = buildingArea,
+                ["Плотность застройки"] = buildingDensity,
+                ["Строительный адрес"]  = address,
+                ["ИНН"]                 = inn,
+                ["Заемщик/Застройщик"]  = borrowerTitle,
+            });
+
+    [Fact]
+    public async Task ValidateAsync_InnAndBorrowerColumns_StoredInMappedJson()
+    {
+        var result = await _mapper.ValidateAsync(
+            Ctx(), new[] { RowWithOrg(inn: "6319038948", borrowerTitle: "ООО СЗ Скай") },
+            _dbContext, default);
+
+        Assert.True(result.Rows[0].IsValid);
+        var root = result.Rows[0].MappedValues.RootElement;
+        Assert.Equal("6319038948", root.GetProperty("Inn").GetString());
+        Assert.Equal("ООО СЗ Скай", root.GetProperty("BorrowerTitle").GetString());
+    }
+
+    [Theory]
+    [InlineData("INN")]
+    [InlineData("инн")]
+    [InlineData("ИНН организации")]
+    public async Task ValidateAsync_InnColumnAliases_WorkCaseInsensitive(string colName)
+    {
+        var row = new ParsedRow(2, "inputs",
+            new Dictionary<string, string>
+            {
+                ["Тип отделки"]         = "Черновая",
+                ["Класс жилья"]         = "Комфорт",
+                ["Площадь застройки"]   = "100",
+                ["Плотность застройки"] = "0.5",
+                ["Строительный адрес"]  = "ул. Ленина, 1",
+                [colName]               = "7700123456",
+                ["Заемщик/Застройщик"]  = "ООО Тест",
+            });
+
+        var result = await _mapper.ValidateAsync(Ctx(), new[] { row }, _dbContext, default);
+
+        Assert.True(result.Rows[0].IsValid);
+        Assert.Equal("7700123456",
+            result.Rows[0].MappedValues.RootElement.GetProperty("Inn").GetString());
+    }
+
+    [Theory]
+    [InlineData("Заёмщик/Застройщик")]
+    [InlineData("Застройщик")]
+    [InlineData("Borrower")]
+    public async Task ValidateAsync_BorrowerColumnAliases_WorkCaseInsensitive(string colName)
+    {
+        var row = new ParsedRow(2, "inputs",
+            new Dictionary<string, string>
+            {
+                ["Тип отделки"]         = "Черновая",
+                ["Класс жилья"]         = "Комфорт",
+                ["Площадь застройки"]   = "100",
+                ["Плотность застройки"] = "0.5",
+                ["Строительный адрес"]  = "ул. Ленина, 1",
+                ["ИНН"]                 = "7700123456",
+                [colName]               = "ООО Тест",
+            });
+
+        var result = await _mapper.ValidateAsync(Ctx(), new[] { row }, _dbContext, default);
+
+        Assert.True(result.Rows[0].IsValid);
+        Assert.Equal("ООО Тест",
+            result.Rows[0].MappedValues.RootElement.GetProperty("BorrowerTitle").GetString());
+    }
+
+    [Fact]
+    public async Task ValidateAsync_MissingBothOrgColumns_NoErrorBackwardCompatible()
+    {
+        // Старые шаблоны без раздела «Основные данные»: пара ИНН/Заемщик отсутствует —
+        // не должна давать file-level error. Только обычные параметры мапятся.
+        var result = await _mapper.ValidateAsync(
+            Ctx(), new[] { Row() }, _dbContext, default);
+
+        Assert.True(result.Rows[0].IsValid);
+        Assert.DoesNotContain(result.FileLevelErrors,
+            e => e.ErrorCode == "column_not_found" && e.Message.Contains("ИНН"));
+        Assert.DoesNotContain(result.FileLevelErrors,
+            e => e.ErrorCode == "column_not_found" && e.Message.Contains("Заемщик"));
+    }
+
+    [Fact]
+    public async Task ValidateAsync_OnlyInnColumnPresent_ReturnsRowErrorForBorrower()
+    {
+        // Если найдена ИНН, но нет Заемщик/Застройщик — value_empty на наименование
+        // (требуем согласованную пару).
+        var row = new ParsedRow(2, "inputs",
+            new Dictionary<string, string>
+            {
+                ["Тип отделки"]         = "Черновая",
+                ["Класс жилья"]         = "Комфорт",
+                ["Площадь застройки"]   = "100",
+                ["Плотность застройки"] = "0.5",
+                ["Строительный адрес"]  = "ул. Ленина, 1",
+                ["ИНН"]                 = "7700123456",
+            });
+
+        var result = await _mapper.ValidateAsync(Ctx(), new[] { row }, _dbContext, default);
+
+        Assert.False(result.Rows[0].IsValid);
+        Assert.Contains(result.Rows[0].Errors,
+            e => e.ErrorCode == "value_empty" && e.Message.Contains("Заемщик/Застройщик"));
+    }
+
+    [Fact]
+    public async Task ApplyAsync_OrganizationNotFoundByInn_CreatesOrgAndPm()
+    {
+        // По умолчанию GetOrganizationsByClientId возвращает пусто (см. конструктор).
+        // CreateOrganization → ID=9001. PM на сайте/в проекте — пусто. CreatePM → ID=7001.
+        var validation = await _mapper.ValidateAsync(
+            Ctx(), new[] { RowWithOrg(inn: "6319038948", borrowerTitle: "ООО СЗ Скай") },
+            _dbContext, default);
+
+        var apply = await _mapper.ApplyAsync(Ctx(), _dbContext, validation.Rows, default);
+
+        Assert.Equal(1, apply.AppliedCount);
+        Assert.Empty(apply.Errors);
+
+        _mockListView.Verify(c => c.GetOrganizationsByClientIdAsync(
+            "6319038948", It.IsAny<CancellationToken>()), Times.Once);
+        _mockCrud.Verify(c => c.CreateOrganizationAsync(
+            It.Is<OrganizationCreateRequest>(r =>
+                r.ClientID == "6319038948" && r.Title == "ООО СЗ Скай"),
+            It.IsAny<CancellationToken>()), Times.Once);
+        _mockCrud.Verify(c => c.CreateProjectManagementAsync(
+            It.Is<ProjectManagementCreateRequest>(r =>
+                r.Organization.ID == 9001
+                && r.Project.ID == 4584
+                && r.Role.ID == ProjectManagementRoles.Developer),
+            It.IsAny<CancellationToken>()), Times.Once);
+        _mockCrud.Verify(c => c.LinkProjectManagementToSiteAsync(
+            123, 7001, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ApplyAsync_OrganizationFoundByInn_DoesNotCreateOrg()
+    {
+        _mockListView
+            .Setup(c => c.GetOrganizationsByClientIdAsync("6319038948", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ListViewResponse<OrganizationRaw>
+            {
+                Data = new() { new() { ID = 5500, Title = "ООО Существующая", ClientID = "6319038948" } },
+                Total = 1,
+            });
+
+        var validation = await _mapper.ValidateAsync(
+            Ctx(), new[] { RowWithOrg(inn: "6319038948", borrowerTitle: "ООО Любая") },
+            _dbContext, default);
+        var apply = await _mapper.ApplyAsync(Ctx(), _dbContext, validation.Rows, default);
+
+        Assert.Equal(1, apply.AppliedCount);
+        _mockCrud.Verify(c => c.CreateOrganizationAsync(
+            It.IsAny<OrganizationCreateRequest>(), It.IsAny<CancellationToken>()), Times.Never);
+        _mockCrud.Verify(c => c.CreateProjectManagementAsync(
+            It.Is<ProjectManagementCreateRequest>(r => r.Organization.ID == 5500),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ApplyAsync_OrgAlreadyLinkedToSite_DoesNotCreateOrLinkPm()
+    {
+        _mockListView
+            .Setup(c => c.GetOrganizationsByClientIdAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ListViewResponse<OrganizationRaw>
+            {
+                Data = new() { new() { ID = 5500, ClientID = "6319038948" } },
+                Total = 1,
+            });
+        _mockListView
+            .Setup(c => c.GetProjectManagementsBySiteAsync(123, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ListViewResponse<ProjectManagementRaw>
+            {
+                Data = new()
+                {
+                    new()
+                    {
+                        ID = 8888,
+                        Organization = new VisaryRef { ID = 5500 },
+                        Role = new VisaryRef { ID = ProjectManagementRoles.Developer },
+                    },
+                },
+                Total = 1,
+            });
+
+        var validation = await _mapper.ValidateAsync(
+            Ctx(), new[] { RowWithOrg() }, _dbContext, default);
+        var apply = await _mapper.ApplyAsync(Ctx(), _dbContext, validation.Rows, default);
+
+        Assert.Equal(1, apply.AppliedCount);
+        _mockCrud.Verify(c => c.CreateProjectManagementAsync(
+            It.IsAny<ProjectManagementCreateRequest>(), It.IsAny<CancellationToken>()), Times.Never);
+        _mockCrud.Verify(c => c.LinkProjectManagementToSiteAsync(
+            It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ApplyAsync_PmExistsInProjectButNotOnSite_ReusesAndLinks()
+    {
+        _mockListView
+            .Setup(c => c.GetOrganizationsByClientIdAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ListViewResponse<OrganizationRaw>
+            {
+                Data = new() { new() { ID = 5500, ClientID = "6319038948" } },
+                Total = 1,
+            });
+        // На сайте PM нет, но в проекте уже есть — нужно переиспользовать (max ID).
+        _mockListView
+            .Setup(c => c.GetProjectManagementsByProjectAsync(
+                4584, 5500, It.IsAny<int?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ListViewResponse<ProjectManagementRaw>
+            {
+                Data = new()
+                {
+                    new() { ID = 6001, Organization = new VisaryRef { ID = 5500 },
+                            Role = new VisaryRef { ID = ProjectManagementRoles.Developer } },
+                    new() { ID = 6042, Organization = new VisaryRef { ID = 5500 },
+                            Role = new VisaryRef { ID = ProjectManagementRoles.Developer } },
+                },
+                Total = 2,
+            });
+
+        var validation = await _mapper.ValidateAsync(
+            Ctx(), new[] { RowWithOrg() }, _dbContext, default);
+        var apply = await _mapper.ApplyAsync(Ctx(), _dbContext, validation.Rows, default);
+
+        Assert.Equal(1, apply.AppliedCount);
+        _mockCrud.Verify(c => c.CreateProjectManagementAsync(
+            It.IsAny<ProjectManagementCreateRequest>(), It.IsAny<CancellationToken>()), Times.Never);
+        _mockCrud.Verify(c => c.LinkProjectManagementToSiteAsync(
+            123, 6042, It.IsAny<CancellationToken>()), Times.Once);   // max ID
+    }
+
+    [Fact]
+    public async Task ApplyAsync_NoInnNoBorrower_SkipsOrgFlow()
+    {
+        var validation = await _mapper.ValidateAsync(
+            Ctx(), new[] { Row() }, _dbContext, default);   // без ИНН/Заемщик
+
+        var apply = await _mapper.ApplyAsync(Ctx(), _dbContext, validation.Rows, default);
+
+        Assert.Equal(1, apply.AppliedCount);
+        _mockListView.Verify(c => c.GetOrganizationsByClientIdAsync(
+            It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        _mockCrud.Verify(c => c.CreateOrganizationAsync(
+            It.IsAny<OrganizationCreateRequest>(), It.IsAny<CancellationToken>()), Times.Never);
+        _mockCrud.Verify(c => c.CreateProjectManagementAsync(
+            It.IsAny<ProjectManagementCreateRequest>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ApplyAsync_OrgLinkFailure_DoesNotBreakParameterUpdates()
+    {
+        // Visary падает при создании Organization — параметры (Finishing/Estate/Address)
+        // уже применены, ошибка о привязке организации добавлена, AppliedCount=0
+        // (т.к. errors.Count > 0 в ApplyParametersAsync).
+        _mockCrud
+            .Setup(c => c.CreateOrganizationAsync(It.IsAny<OrganizationCreateRequest>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new HttpRequestException("Visary 500"));
+
+        var validation = await _mapper.ValidateAsync(
+            Ctx(), new[] { RowWithOrg() }, _dbContext, default);
+        var apply = await _mapper.ApplyAsync(Ctx(), _dbContext, validation.Rows, default);
+
+        Assert.Contains(apply.Errors, e => e.ErrorCode == "organization_link_error");
+        // FK-обновления выполнились до организации.
+        _mockCrud.Verify(c => c.UpdateSiteFinishingMaterialAsync(123, 3, It.IsAny<CancellationToken>()), Times.Once);
+        _mockCrud.Verify(c => c.UpdateSiteEstateClassAsync(123, 2, It.IsAny<CancellationToken>()), Times.Once);
+        _mockCrud.Verify(c => c.UpdateSiteAddressAsync(123, "ул. Ленина, 1", It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    // ─── CompanyGroup link (раздел «Основные данные», doc 100) ───────────────
+
+    private static ParsedRow RowWithOrgAndGroup(
+        string inn = "6319038948",
+        string borrowerTitle = "ООО СЗ Скай",
+        string? companyGroup = "ГК Строитель")
+    {
+        var cells = new Dictionary<string, string>
+        {
+            ["Тип отделки"]         = "Черновая",
+            ["Класс жилья"]         = "Комфорт",
+            ["Площадь застройки"]   = "1234.5",
+            ["Плотность застройки"] = "0.42",
+            ["Строительный адрес"]  = "ул. Ленина, 1",
+            ["ИНН"]                 = inn,
+            ["Заемщик/Застройщик"]  = borrowerTitle,
+        };
+        if (companyGroup is not null) cells["Группа компаний"] = companyGroup;
+        return new ParsedRow(2, "inputs", cells);
+    }
+
+    [Fact]
+    public async Task ApplyAsync_CompanyGroupColumnAbsent_NoCallToVisary()
+    {
+        // Без колонки «Группа компаний» — ГК-flow вообще не должен запускаться.
+        var validation = await _mapper.ValidateAsync(
+            Ctx(), new[] { RowWithOrgAndGroup(companyGroup: null) }, _dbContext, default);
+
+        var apply = await _mapper.ApplyAsync(Ctx(), _dbContext, validation.Rows, default);
+
+        Assert.Equal(1, apply.AppliedCount);
+        Assert.Empty(apply.Errors);
+        _mockListView.Verify(c => c.GetCompanyGroupsByTitleAsync(
+            It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        _mockCrud.Verify(c => c.UpdateOrganizationGroupAsync(
+            It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task ApplyAsync_CompanyGroupAlreadySet_SkipsLookupAndPatch()
+    {
+        // У существующей организации уже есть Group → ни поиска ГК, ни PATCH-а.
+        _mockListView
+            .Setup(c => c.GetOrganizationsByClientIdAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ListViewResponse<OrganizationRaw>
+            {
+                Data = new() { new() { ID = 5500, ClientID = "6319038948" } },
+                Total = 1,
+            });
+        _mockCrud
+            .Setup(c => c.GetOrganizationByIdAsync(5500, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new OrganizationFull
+            {
+                ID = 5500,
+                RowVersion = 1000000,
+                Group = new VisaryRef { ID = 391, Title = "АПРИ" },
+            });
+
+        var validation = await _mapper.ValidateAsync(
+            Ctx(), new[] { RowWithOrgAndGroup(companyGroup: "ГК Строитель") }, _dbContext, default);
+        var apply = await _mapper.ApplyAsync(Ctx(), _dbContext, validation.Rows, default);
+
+        Assert.Equal(1, apply.AppliedCount);
+        Assert.Empty(apply.Errors);
+        _mockListView.Verify(c => c.GetCompanyGroupsByTitleAsync(
+            It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        _mockCrud.Verify(c => c.UpdateOrganizationGroupAsync(
+            It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task ApplyAsync_CompanyGroupFoundExactlyOne_PatchesOrganization()
+    {
+        // Организация без Group + ГК найдена ровно одна → PATCH с {ID,Title}.
+        _mockListView
+            .Setup(c => c.GetOrganizationsByClientIdAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ListViewResponse<OrganizationRaw>
+            {
+                Data = new() { new() { ID = 5500, ClientID = "6319038948" } },
+                Total = 1,
+            });
+        _mockListView
+            .Setup(c => c.GetCompanyGroupsByTitleAsync("ГК Строитель", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ListViewResponse<CompanyGroupRaw>
+            {
+                Data = new() { new() { ID = 391, Title = "ГК Строитель" } },
+                Total = 1,
+            });
+
+        var validation = await _mapper.ValidateAsync(
+            Ctx(), new[] { RowWithOrgAndGroup(companyGroup: "ГК Строитель") }, _dbContext, default);
+        var apply = await _mapper.ApplyAsync(Ctx(), _dbContext, validation.Rows, default);
+
+        Assert.Equal(1, apply.AppliedCount);
+        Assert.Empty(apply.Errors);
+        _mockCrud.Verify(c => c.UpdateOrganizationGroupAsync(
+            5500, 391, "ГК Строитель", It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ApplyAsync_CompanyGroupNotFound_RowErrorButContinues()
+    {
+        // ГК не найдена → row-error «ГК не найдена, тк …», но остальные параметры применены,
+        // PATCH организации не вызывается.
+        _mockListView
+            .Setup(c => c.GetOrganizationsByClientIdAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ListViewResponse<OrganizationRaw>
+            {
+                Data = new() { new() { ID = 5500, ClientID = "6319038948" } },
+                Total = 1,
+            });
+        _mockListView
+            .Setup(c => c.GetCompanyGroupsByTitleAsync("ГК Нет такой", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ListViewResponse<CompanyGroupRaw>
+            {
+                Data = new List<CompanyGroupRaw>(),
+                Total = 0,
+            });
+
+        var validation = await _mapper.ValidateAsync(
+            Ctx(), new[] { RowWithOrgAndGroup(companyGroup: "ГК Нет такой") }, _dbContext, default);
+        var apply = await _mapper.ApplyAsync(Ctx(), _dbContext, validation.Rows, default);
+
+        // Ошибка должна быть row-level (привязана к params-строке), а не file-level —
+        // фронт группирует по (Sheet, SourceRowNumber) и рендерит в строке таблицы.
+        var rowErr = Assert.Single(apply.Errors, e => e.ErrorCode == "company_group_not_found");
+        Assert.Contains("ГК не найдена", rowErr.Message);
+        Assert.Contains("ГК Нет такой", rowErr.Message);
+        Assert.Equal(2, rowErr.SourceRowNumber);     // RowWithOrgAndGroup использует SourceRowNumber=2
+        Assert.Equal("inputs", rowErr.Sheet);
+        // FK/Address — применены до организации.
+        _mockCrud.Verify(c => c.UpdateSiteFinishingMaterialAsync(123, 3, It.IsAny<CancellationToken>()), Times.Once);
+        _mockCrud.Verify(c => c.UpdateOrganizationGroupAsync(
+            It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task ApplyAsync_CompanyGroupMultipleFound_RowErrorButContinues()
+    {
+        // ГК найдено >1 → row-error «ГК не найдена, тк … несколько записей», PATCH не вызывается.
+        _mockListView
+            .Setup(c => c.GetOrganizationsByClientIdAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ListViewResponse<OrganizationRaw>
+            {
+                Data = new() { new() { ID = 5500, ClientID = "6319038948" } },
+                Total = 1,
+            });
+        _mockListView
+            .Setup(c => c.GetCompanyGroupsByTitleAsync("ГК Дубль", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ListViewResponse<CompanyGroupRaw>
+            {
+                Data = new()
+                {
+                    new() { ID = 391, Title = "ГК Дубль" },
+                    new() { ID = 392, Title = "ГК Дубль" },
+                },
+                Total = 2,
+            });
+
+        var validation = await _mapper.ValidateAsync(
+            Ctx(), new[] { RowWithOrgAndGroup(companyGroup: "ГК Дубль") }, _dbContext, default);
+        var apply = await _mapper.ApplyAsync(Ctx(), _dbContext, validation.Rows, default);
+
+        var rowErr = Assert.Single(apply.Errors, e => e.ErrorCode == "company_group_multiple_found");
+        Assert.Contains("несколько записей", rowErr.Message);
+        Assert.Contains("391", rowErr.Message);
+        Assert.Contains("392", rowErr.Message);
+        // Row-level привязка (см. doc 100): фронт сгруппирует по (Sheet, SourceRowNumber).
+        Assert.Equal(2, rowErr.SourceRowNumber);
+        Assert.Equal("inputs", rowErr.Sheet);
+        _mockCrud.Verify(c => c.UpdateOrganizationGroupAsync(
+            It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task ApplyAsync_CompanyGroupPatchFails_RowErrorButContinues()
+    {
+        // Visary 5xx при PATCH организации → row-error company_group_link_error,
+        // остальные параметры (Finishing/Estate/Address) уже применены.
+        _mockListView
+            .Setup(c => c.GetOrganizationsByClientIdAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ListViewResponse<OrganizationRaw>
+            {
+                Data = new() { new() { ID = 5500, ClientID = "6319038948" } },
+                Total = 1,
+            });
+        _mockListView
+            .Setup(c => c.GetCompanyGroupsByTitleAsync("ГК Строитель", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ListViewResponse<CompanyGroupRaw>
+            {
+                Data = new() { new() { ID = 391, Title = "ГК Строитель" } },
+                Total = 1,
+            });
+        _mockCrud
+            .Setup(c => c.UpdateOrganizationGroupAsync(
+                It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new HttpRequestException("Visary 500"));
+
+        var validation = await _mapper.ValidateAsync(
+            Ctx(), new[] { RowWithOrgAndGroup(companyGroup: "ГК Строитель") }, _dbContext, default);
+        var apply = await _mapper.ApplyAsync(Ctx(), _dbContext, validation.Rows, default);
+
+        Assert.Contains(apply.Errors, e => e.ErrorCode == "company_group_link_error");
+        _mockCrud.Verify(c => c.UpdateSiteFinishingMaterialAsync(123, 3, It.IsAny<CancellationToken>()), Times.Once);
     }
 }

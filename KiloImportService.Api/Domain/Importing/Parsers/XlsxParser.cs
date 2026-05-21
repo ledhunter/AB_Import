@@ -450,6 +450,29 @@ public sealed class XlsxParser : IFileParser
             ? valueStartCol + maxStages.Value - 1
             : lastCol;
 
+        // SingleValueOverrides — параметры, значение которых лежит не в колонке этапа,
+        // а в фиксированной колонке (например, «Группа компаний» в E14 — см. doc 100).
+        // Решаем (row, col) ОДИН РАЗ до основного цикла и применяем ко всем этапным
+        // ParsedRow одно и то же значение.
+        var overrideValues = new List<(string Key, string Value)>();
+        if (layout.SingleValues is { Count: > 0 } overrides)
+        {
+            foreach (var ov in overrides)
+            {
+                var match = keyByRow.FirstOrDefault(k =>
+                    string.Equals(k.Key, ov.KeyText, StringComparison.OrdinalIgnoreCase));
+                if (match.Row == 0) continue; // нет строки с таким key — молча пропускаем
+                if (!TryParseColumnLetter(ov.ValueColumn, out var ovCol))
+                {
+                    errors.Add(new ParseError(null,
+                        $"Некорректное имя override-колонки '{ov.ValueColumn}' для параметра '{ov.KeyText}'."));
+                    return new ParseResult(headers, rows, errors);
+                }
+                var value = sheet.Cell(match.Row, ovCol).GetString() ?? string.Empty;
+                overrideValues.Add((ov.KeyText, value));
+            }
+        }
+
         for (int c = valueStartCol; c <= stopCol; c++)
         {
             ct.ThrowIfCancellationRequested();
@@ -461,6 +484,16 @@ public sealed class XlsxParser : IFileParser
                 if (!string.IsNullOrWhiteSpace(value)) anyValue = true;
                 cells[key] = value ?? string.Empty;
             }
+
+            // Применяем overrides ПОСЛЕ основного цикла, чтобы перебить пустое значение
+            // из колонки этапа. Любая непустая override-ячейка засчитывается как наличие
+            // значения (anyValue=true), иначе строка целиком отфильтровывается.
+            foreach (var (key, value) in overrideValues)
+            {
+                cells[key] = value;
+                if (!string.IsNullOrWhiteSpace(value)) anyValue = true;
+            }
+
             // Если число этапов задано явно — выпускаем ParsedRow всегда (даже на пустую
             // колонку), чтобы маппер показал value_empty для конкретного этапа.
             // Без явного N — пропускаем пустые, иначе насобираем «фантомных» строк.

@@ -71,7 +71,21 @@ public record MappedRow(
     IReadOnlyList<RowError> Errors
 );
 
-public record RowError(string? ColumnName, string ErrorCode, string Message);
+/// <param name="SourceRowNumber">
+/// Абсолютный номер строки в исходном файле. Для file-level ошибок (на этапе
+/// Validate — отсутствие колонок, неверный лист и т.п.) оставлять <c>null</c>:
+/// Pipeline запишет 0, фронт отрисует в блоке «Ошибки уровня файла».
+/// Для Apply-ошибок, относящихся к конкретной строке, передавать абсолютный
+/// row-номер (берётся из <see cref="MappedRow.SourceRowNumber"/>) — фронт
+/// сгруппирует ошибку по <c>(Sheet, RowNumber)</c> и покажет внутри таблицы.
+/// </param>
+/// <param name="Sheet">
+/// Имя листа, к которому относится ошибка. Используется в паре с
+/// <paramref name="SourceRowNumber"/>. <c>null</c> для file-level ошибок.
+/// </param>
+public record RowError(
+    string? ColumnName, string ErrorCode, string Message,
+    int? SourceRowNumber = null, string? Sheet = null);
 
 public record ValidationResult(IReadOnlyList<MappedRow> Rows, IReadOnlyList<RowError> FileLevelErrors);
 

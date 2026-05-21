@@ -269,6 +269,9 @@ var pm = await _crud.CreateProjectManagementAsync(req, ct);
 - [x] `IListViewClient.GetProjectManagementsBySiteAsync` — DI-injected
 - [x] `ICrudClient.CreateProjectManagementAsync` + `LinkProjectManagementToSiteAsync` — DI-injected
 - [x] Mnemonic + DTO — в общей библиотеке `Visary.Api.Client`
+- [x] **Переиспользовано в Финмодели** (doc [99](./99-finmodel-organization-link.md)) —
+      по ИНН из раздела «Основные данные», без кэша (одна организация на сайт),
+      БЕЗ фильтра по `Role.ID` при поиске PM в проекте (берём любую существующую).
 - [ ] При использовании из нового импорта — повторить паттерн с per-session кэшем
       (`developerPmByOrg` + `pmListLoaded`-флаг) или вынести в helper-сервис
       `IProjectManagementResolver`, если flow повторится в 3+ местах

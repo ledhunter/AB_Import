@@ -109,6 +109,22 @@ public sealed class ProjectCreateRequest
     public string? Description { get; set; }
 }
 
+/// <summary>
+/// Тело POST <c>/api/visary/crud/organization</c>. Минимальный набор для создания
+/// новой записи Organization из импорта Финмодели по ИНН: наименование +
+/// внешний идентификатор (<see cref="ClientID"/>=ИНН, Visary использует это
+/// поле как PIN застройщика — см. <see cref="ListView.IListViewClient.GetOrganizationsByClientIdAsync"/>).
+/// </summary>
+public sealed class OrganizationCreateRequest
+{
+    public string? Title { get; set; }
+    /// <summary>ИНН — клиентский идентификатор организации, по нему же ищется в listview.</summary>
+    public string? ClientID { get; set; }
+    public string? INN { get; set; }
+    public string? KPP { get; set; }
+    public string? OGRN { get; set; }
+}
+
 public sealed class IndicatorValuePatchRequest
 {
     // Включено в body для optimistic locking — `forceUpdate=false` требует, чтобы клиент

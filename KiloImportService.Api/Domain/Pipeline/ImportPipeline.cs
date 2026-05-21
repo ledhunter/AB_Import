@@ -375,11 +375,15 @@ public sealed class ImportPipeline
         await _serviceDb.SaveChangesAsync(ct);
         foreach (var err in applyResult.Errors)
         {
+            // RowError может нести Sheet+SourceRowNumber для row-level Apply-ошибок
+            // (например, company_group_not_found в FinModel привязывается к params-
+            // строке). Без них — file-level (SourceRowNumber=0, Sheet=""), фронт
+            // отрендерит в блоке «Ошибки уровня файла».
             _serviceDb.Errors.Add(new ImportError
             {
                 ImportSessionId = sessionId,
-                Sheet = string.Empty, // Apply ошибки сейчас file-level, sheet можно достать из mr.MappedValues при необходимости
-                SourceRowNumber = 0,
+                Sheet = err.Sheet ?? string.Empty,
+                SourceRowNumber = err.SourceRowNumber ?? 0,
                 ErrorCode = err.ErrorCode,
                 Message = err.Message,
                 ColumnName = err.ColumnName,
