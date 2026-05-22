@@ -3,6 +3,8 @@
 > Дата: 2026-05-20
 >
 > Связано с: [03-import-flow](./03-import-flow.md), [77-rooms-form-import](./77-rooms-form-import.md) *(если есть)*, [85-per-row-action-log](./85-per-row-action-log.md), [86-rooms-dedup-pre-check](./86-rooms-dedup-pre-check.md), [89-mappedrow-sheet-invariant](./89-mappedrow-sheet-invariant.md)
+>
+> 🔄 **Расширено в [doc 106](./106-rooms-snapshot-revalidation.md) (2026-05-22):** hash-match — необходимое, но НЕ достаточное условие skip-а. Перед пропуском строки маппер сверяется с реальным состоянием Visary (Room в `roomsInSection`, ДДУ через `GetShareAgreementsByRoomAsync`), иначе удалённые в Visary сущности не восстанавливались бы при повторном импорте.
 
 ## Проблема
 
@@ -202,3 +204,9 @@ test-стендом).
 6. **`LastAppliedSessionId` всегда = `context.SessionId`.** При откате
    таблицы snapshot к предыдущей сессии можно использовать его для
    forensic-восстановления.
+7. **Hash-match — необходимое, но НЕ достаточное условие skip-а** (см. [doc 106](./106-rooms-snapshot-revalidation.md)). Перед пропуском
+   строки маппер обязан проверить, что `prev.VisaryRoomId` всё ещё
+   существует в Visary (поиск в уже-загруженном `roomsInSection`), и при
+   наличии `prev.VisaryShareAgreementId` — что ДДУ тоже на месте. Иначе
+   удалённое в Visary помещение не восстановится при повторном импорте
+   того же файла.

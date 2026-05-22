@@ -89,6 +89,22 @@ try
     // ─── Visary HTTP API клиент + кэш проектов ───
     builder.Services.AddVisaryClient(builder.Configuration.GetSection(VisaryOptions.SectionName));
 
+    // ─── Visary auth: OIDC refresh_token flow (см. doc_project/107-visary-token-provider.md) ───
+    // Включается только если задан TokenEndpoint — иначе остаётся дефолтный StaticVisaryTokenProvider
+    // (читает Visary:BearerToken из .env, legacy/dev-fallback). Это позволяет включать OIDC
+    // поэтапно: на dev-стенде сначала с .env-токеном, на prod — после настройки Vault.
+    var visaryAuthSection = builder.Configuration.GetSection(Visary.Api.Auth.VisaryAuthOptions.SectionName);
+    if (!string.IsNullOrWhiteSpace(visaryAuthSection["TokenEndpoint"]))
+    {
+        builder.Services.AddVisaryOidcAuth(visaryAuthSection);
+
+        // TODO(doc 107): на prod-окружении заменить EnvironmentRefreshTokenStore на VaultRefreshTokenStore:
+        //   builder.Services.Replace(
+        //       ServiceDescriptor.Singleton<IVisaryRefreshTokenStore, VaultRefreshTokenStore>());
+        // SDK-интеграция Vault (VaultSharp + AppRole/K8s auth) — отдельный коммит после
+        // согласования endpoint'а и auth-mode с командой infra.
+    }
+
     // ─── Visary справочники: прокси-эндпоинты /api/visary/{name} и /{name}/{id} ───
     // Расширение: чтобы добавить новый справочник — одна строка ниже.
     builder.Services
