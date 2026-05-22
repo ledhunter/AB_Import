@@ -127,11 +127,28 @@ export const SessionRowsTable = ({ report, onPageChange }: Props) => {
   const canCollapseAny = allSheets.length >= 1;
 
   const counts = useMemo(() => {
-    // Status-based счётчики — по ВИДИМОЙ странице (как и раньше): backend
-    // не агрегирует Invalid/Failed/etc по всей сессии, кроме `successRows`
-    // / `errorRows` в карточках сверху. Для action-фильтров есть отдельный
-    // session-wide `report.actionTotals` (doc 98 v1.2) — там сервер уже
-    // прошёлся по jsonb-меткам всех Applied-строк сессии.
+    // Status-фильтры теперь session-wide (doc 98 v1.3): backend агрегирует
+    // all/valid/invalid/applied/failed по ВСЕЙ сессии в `report.statusTotals`.
+    // Это устраняет рассинхрон с верхней панелью `SessionSummary`, где
+    // `successRows`/`errorRows` тоже session-wide. Раньше «С ошибками 22» в
+    // карточках и «С ошибками 0» в фильтре сбивали с толку — фильтр считал по
+    // видимой странице (50 строк), а ошибки лежали на странице 3.
+    //
+    // Fallback на page-level считаем для совместимости со старым backend'ом
+    // (statusTotals может быть null, если backend не обновлён).
+    if (report.statusTotals) {
+      return {
+        all: report.statusTotals.all,
+        valid: report.statusTotals.valid,
+        invalid: report.statusTotals.invalid,
+        applied: report.statusTotals.applied,
+        failed: report.statusTotals.failed,
+        created: report.actionTotals.created,
+        updated: report.actionTotals.updated,
+        skipped: report.actionTotals.skipped,
+      };
+    }
+    // Legacy backend без statusTotals — считаем по видимой странице.
     const byStatus: Record<RowStatus, number> = {
       Pending: 0,
       Valid: 0,
@@ -150,7 +167,7 @@ export const SessionRowsTable = ({ report, onPageChange }: Props) => {
       updated: report.actionTotals.updated,
       skipped: report.actionTotals.skipped,
     };
-  }, [report.rows, report.actionTotals]);
+  }, [report.rows, report.actionTotals, report.statusTotals]);
 
   const filtered = useMemo(
     () => report.rows.filter((r) => matchesFilter(r, filter)),

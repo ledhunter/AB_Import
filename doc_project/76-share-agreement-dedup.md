@@ -1,5 +1,21 @@
 # 🔁 Дедупликация ДДУ при импорте «Помещения»
 
+> **v1.1 (2026-05-22)** — добавлен **loose-fallback** для orphan-ДДУ. Раньше глобальный
+> поиск шёл только строгим фильтром по 5-полям (`Number+Kind+Cond+Stage+Project`). Orphan
+> ДДУ — записи с пустыми `Stage`/`Project`/`Room` — серверным `=`-фильтром Visary отсекались,
+> повторный импорт плодил новый дубликат рядом с орфаном. Третья ступень снимает Stage/Project,
+> но принимает **только** строки, у которых Room не указывает на реальное помещение
+> (anti-pattern #2 ниже).
+>
+> **v1.2 (2026-05-22)** — расширён orphan-фильтр: `a.Room is null || a.Room.ID <= 0`. Visary
+> сериализует «нет связи с помещением» как `{"Room": {"ID": 0, "Title": ""}}` (а не `null`),
+> а `VisaryRef.ID` — non-nullable int (дефолт 0) → проверка `a.Room?.ID is null` ловила только
+> чистый JSON-null и пропускала реальные orphan'ы из Visary. Симптом: повторный импорт после
+> ручного «отвязать ДДУ от помещения» в Visary UI всё равно создавал дубликат. Добавлен
+> `_log.LogInformation` в loose-find, который показывает, **что именно** Visary вернул и какие
+> `Room.ID` у кандидатов — без этой диагностики симптом «ничего не нашлось» не отличишь от
+> «нашлось, но всё отфильтровано как non-orphan».
+
 ## 📋 Описание
 
 При импорте Помещений (rooms-form) каждая строка может содержать №ДДУ
@@ -72,17 +88,43 @@ public sealed class ShareAgreementPatchRequest
 }
 ```
 
-### RoomsFormImportMapper — flow
+### RoomsFormImportMapper — flow (v1.1 — три ступени)
 
 ```csharp
-// Блок 4 в ApplyAsync — Find / Reuse / Create
-var saMatch = (await _listView.FindShareAgreementsAsync(
-    saNumber, kindId, roomNumber, stageNumberForSa, projectNumberForSa, ct))
-    .Data
-    .Where(a => string.Equals(a.Number, saNumber, StringComparison.OrdinalIgnoreCase))
-    .Where(a => kindId is null || a.RoomKindRef?.ID == kindId)
-    .OrderByDescending(a => a.ID)   // 👈 max(ID) при нескольких подходящих
-    .FirstOrDefault();
+// Блок 4 в ApplyAsync — find / reuse / create
+//
+// Ступень 1 — per-room search (doc 86): дешёво, ловит уже-привязанные ДДУ.
+var byRoom = await _listView.GetShareAgreementsByRoomAsync(roomId, null, ct);
+saMatch = byRoom.Data.FirstOrDefault(a => /* Number+Trim match */);
+
+// Ступень 2 — глобальный STRICT по 5-полям. Дедуп с тем же Project+Stage:
+// безопасен от «угона» из соседнего проекта.
+if (saMatch is null)
+{
+    var foundStrict = await _listView.FindShareAgreementsAsync(
+        saNumber, kindId, roomNumber, stageNumberForSa, projectNumberForSa, ct);
+    saMatch = foundStrict.Data
+        .Where(/* Number + Kind */)
+        .OrderByDescending(a => a.ID)
+        .FirstOrDefault();
+
+    // Ступень 3 — глобальный LOOSE без Stage/Project, но ТОЛЬКО orphan (Room == null).
+    // Зачем: ДДУ может существовать в Visary до загрузки помещений (заведена вручную
+    // или отвязана системно). У такого orphan'а Stage/Project NULL, и Visary `=`-фильтр
+    // его отсекает. Без 3-й ступени каждый импорт создаёт дубликат, а orphan остаётся
+    // невидимым.
+    if (saMatch is null)
+    {
+        var foundLoose = await _listView.FindShareAgreementsAsync(
+            saNumber, kindId, roomNumber,
+            stageNumber: null, projectNumber: null, ct);
+        saMatch = foundLoose.Data
+            .Where(/* Number + Kind */)
+            .Where(a => a.Room is null || a.Room.ID <= 0)   // ← orphan-only (v1.2)
+            .OrderByDescending(a => a.ID)
+            .FirstOrDefault();
+    }
+}
 
 if (saMatch is null)
 {
@@ -90,8 +132,8 @@ if (saMatch is null)
 }
 else
 {
-    // Нашли — PATCH'им на текущую комнату (даже если saMatch уже привязан
-    // к другой Room или null). Это «реанимация» orphan-ДДУ.
+    // Нашли — PATCH'им на текущую комнату (даже если saMatch уже был привязан
+    // к другой Room или Room=null). Это «реанимация» orphan-ДДУ.
     await _crud.PatchShareAgreementAsync(saMatch.ID, new ShareAgreementPatchRequest
     {
         Number            = saNumber,
@@ -135,10 +177,23 @@ var sas = await _listView.GetShareAgreementsByRoomAsync(roomId, saNumber, ct);
 ```
 
 ```csharp
-// ❌ НЕПРАВИЛЬНО: фильтровать только по Number
-var sas = await _listView.FindShareAgreementsAsync(saNumber, null, null, null, null, ct);
-// Если в системе два ДДУ с одинаковым Number, но в разных проектах/этажах —
-// привяжем не тот. Бизнес-ключ ВСЕГДА все 5 полей.
+// ❌ НЕПРАВИЛЬНО: фильтровать только по Number/Cond+Kind БЕЗ orphan-only пост-фильтра
+var sas = await _listView.FindShareAgreementsAsync(saNumber, kindId, roomNumber, null, null, ct);
+var match = sas.Data.OrderByDescending(a => a.ID).First();
+// Если в системе два ДДУ с одинаковыми Number+Cond+Kind в разных проектах/этапах,
+// возьмём не тот — «угоним» чужую запись (saMatch.Room != null, привязан к чужой комнате).
+// Loose-find на это случай ОБЯЗАН фильтровать `.Where(a => a.Room?.ID is null)` —
+// только орфаны безопасно реанимировать. См. v1.1 выше.
+```
+
+```csharp
+// ❌ НЕПРАВИЛЬНО: strict-only поиск без loose-fallback'а
+var found = await _listView.FindShareAgreementsAsync(
+    saNumber, kindId, roomNumber, stageNumberForSa, projectNumberForSa, ct);
+// Если в системе живёт orphan-ДДУ (Stage=NULL, Project=NULL) с тем же Number/Cond/Kind —
+// строгий Visary `=` его не вернёт (NULL не равен запрошенной строке). Каждый
+// импорт создаст рядом новый ДДУ-дубликат, orphan останется невидимым.
+// Лечение: после strict-miss'а сделать loose-find без Stage/Project + orphan-only filter.
 ```
 
 ```csharp
@@ -171,10 +226,21 @@ await _crud.PatchShareAgreementAsync(saMatch.ID, new ShareAgreementPatchRequest
 
 ## 🎯 Чек-лист «как протестировать»
 
-- [ ] В Visary есть orphan ДДУ (Room=null) с известными Number/Kind/Cond/Stage/Project.
-- [ ] Импорт строки помещения с теми же значениями.
+- [ ] В Visary есть orphan ДДУ (Room=null, Project=null, Stage=null) с известными Number/Kind/Cond.
+- [ ] Импорт строки помещения с теми же Number+Cond+Kind.
 - [ ] В логе backend появляется
       `RoomsForm.Apply: найден орфанный/несоответствующий ДДУ id=... — привязываем к roomId=...`
 - [ ] В Visary ДДУ теперь привязан к новой комнате; дубликат **не создан**.
 - [ ] Повторный импорт той же строки — никаких изменений (идемпотентность).
 - [ ] При двух подходящих ДДУ в системе — привязывается тот, у которого `ID` больше.
+- [ ] **Safety:** если в Visary есть ДДУ с теми же Number+Cond+Kind, но привязанный к ЧУЖОЙ
+      комнате (другой проект/этап) — он НЕ должен быть «угнан»; импорт создаст новый ДДУ.
+      Покрыто тестом `ApplyAsync_LooseFind_SkipsNonOrphan_DoesNotStealFromAnotherRoom`.
+
+## 📍 Тесты (doc 76 v1.1 + v1.2)
+
+| Тест | Проверяет |
+|---|---|
+| `ApplyAsync_OrphanShareAgreement_IsReusedAndRelinked_NotDuplicated` (v1.1) | Strict-find возвращает 0, loose-find возвращает orphan c `Room = null` → mapper делает `PatchShareAgreementAsync(orphanId, …)` с заполненными Room/Project/Site/Stage; `CreateShareAgreementAsync` НЕ вызывается; snapshot держит orphan ID |
+| `ApplyAsync_OrphanShareAgreement_WithZeroRoomId_IsAlsoTreatedAsOrphan` (v1.2) | Visary шлёт `{"Room": {"ID": 0, "Title": ""}}` для отвязанного помещения (а не JSON-null). Фильтр `Room is null \|\| Room.ID <= 0` ловит оба формата → orphan реанимируется, дубликат не создаётся |
+| `ApplyAsync_LooseFind_SkipsNonOrphan_DoesNotStealFromAnotherRoom` (v1.1) | Loose-find отдаёт строку с `Room != null` (ID=88888) → orphan-only фильтр её отсекает; mapper создаёт новый ДДУ, PATCH чужой записи НЕ делает |

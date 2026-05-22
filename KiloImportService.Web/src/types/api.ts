@@ -134,6 +134,13 @@ export interface ApiImportReport {
    * см. doc 98 v1.1. У старого backend'а поля может не быть → `undefined`.
    */
   actionTotals?: ApiActionTotals;
+  /**
+   * Счётчики по StagedRowStatus (all/valid/invalid/applied/failed) по ВСЕЙ сессии.
+   * UI показывает их в status-фильтрах (Все/Валидные/С ошибками/…) — они теперь
+   * session-wide и совпадают с верхней панелью отчёта. У старого backend'а отсутствует
+   * → фронт фоллбэчит на page-level подсчёт по `report.rows`. См. doc 98 v1.3.
+   */
+  statusTotals?: ApiStatusTotals;
   errors: ApiImportError[];
 }
 
@@ -141,6 +148,14 @@ export interface ApiActionTotals {
   created: number;
   updated: number;
   skipped: number;
+}
+
+export interface ApiStatusTotals {
+  all: number;
+  valid: number;
+  invalid: number;
+  applied: number;
+  failed: number;
 }
 
 /** Ответ `POST /api/imports` — sessionId + начальный статус. */

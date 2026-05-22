@@ -767,6 +767,15 @@ public sealed class RoomsFormImportMapper : IImportMapper
                 }
             }
 
+            // Локальный кэш ДДУ по roomId внутри группы. Используется:
+            //   ① snapshot-revalidation: при hash-match нужно убедиться, что ДДУ
+            //      из snapshot всё ещё существует в Visary (иначе помещение/ДДУ
+            //      могли удалить → snapshot устарел, надо пересоздать);
+            //   ② основной flow ДДУ (find-or-create) — переиспользуем тот же лист.
+            // Это даёт максимум 1 GetShareAgreementsByRoomAsync на (roomId) даже
+            // если строка прошла через revalidation и потом через normal flow.
+            var saByRoomCache = new Dictionary<int, List<ShareAgreementRaw>>();
+
             foreach (var mr in group)
             {
                 gct.ThrowIfCancellationRequested();
@@ -777,7 +786,11 @@ public sealed class RoomsFormImportMapper : IImportMapper
                     var kindId = GetIntOrNull(v, "RoomKindId");
                     var buildingSection = GetStringOrNull(v, "BuildingSection") ?? string.Empty;
 
-                    // ── (a) Diff-hash → skip, если snapshot совпал ───────────
+                    // ── (a) Diff-hash → skip-кандидат ────────────────────────
+                    // Сравниваем хэш текущего MappedValues с тем, что лежит в snapshot.
+                    // Hash-match — НЕОБХОДИМОЕ, но не ДОСТАТОЧНОЕ условие для skip:
+                    // помещение/ДДУ могли удалить в Visary, оставив наш snapshot устаревшим.
+                    // Поэтому ниже делаем revalidation против реального состояния Visary.
                     var snapKey = RoomApplySnapshotStore.BuildKey(
                         siteId, sheetForRow, sectionTitle ?? string.Empty,
                         kindId, roomNumber, buildingSection);
@@ -786,12 +799,28 @@ public sealed class RoomsFormImportMapper : IImportMapper
                     if (snapshotsByKey.TryGetValue(snapKey, out var prev)
                         && string.Equals(prev.MappedHash, hash, StringComparison.Ordinal))
                     {
-                        // Запись уже соответствует тому, что мы применили в прошлый раз —
-                        // PATCH-и не нужны. Это и есть инкрементальный импорт.
-                        Log(sheetForRow, mr.SourceRowNumber, "Без изменений — пропуск (snapshot)");
-                        Interlocked.Increment(ref skipped);
-                        Interlocked.Increment(ref applied);
-                        continue;
+                        // ── (a') Revalidation snapshot против реального Visary ─
+                        // Зачем: пользователь мог удалить Room/ДДУ в Visary между
+                        // импортами. Если skip-нём только по hash, помещение
+                        // не восстановится. Проверяем существование per-row.
+                        var (revalidated, staleReason) = await RevalidateSnapshotAsync(
+                            prev, roomsInSection, saByRoomCache, gct);
+
+                        if (revalidated)
+                        {
+                            // Snapshot жив — помещение/ДДУ существуют, hash совпал.
+                            // Это и есть инкрементальный импорт: пропускаем PATCH-и.
+                            Log(sheetForRow, mr.SourceRowNumber, "Без изменений — пропуск (snapshot)");
+                            Interlocked.Increment(ref skipped);
+                            Interlocked.Increment(ref applied);
+                            continue;
+                        }
+
+                        // Snapshot устарел — продолжаем обычный flow (Room/SA find-or-create),
+                        // он либо переиспользует существующую сущность, либо создаст новую.
+                        // Запись в snapshot будет перезаписана с актуальными VisaryRoomId/SaId.
+                        Log(sheetForRow, mr.SourceRowNumber,
+                            $"Snapshot устарел ({staleReason}) — пересоздаём");
                     }
 
                     if (sectionId is not null)
@@ -900,8 +929,20 @@ public sealed class RoomsFormImportMapper : IImportMapper
 
                         try
                         {
-                            var byRoom = await _listView.GetShareAgreementsByRoomAsync(roomId.Value, null, gct);
-                            saMatch = byRoom.Data
+                            // Если revalidation уже подняла список ДДУ для этого Room —
+                            // переиспользуем кэш, чтобы не дёргать Visary дважды на одну строку.
+                            List<ShareAgreementRaw> saList;
+                            if (saByRoomCache.TryGetValue(roomId.Value, out var cached))
+                            {
+                                saList = cached;
+                            }
+                            else
+                            {
+                                var byRoom = await _listView.GetShareAgreementsByRoomAsync(roomId.Value, null, gct);
+                                saList = byRoom.Data.ToList();
+                                saByRoomCache[roomId.Value] = saList;
+                            }
+                            saMatch = saList
                                 .Where(a => string.Equals(
                                     (a.Number ?? string.Empty).Trim(), saNumberTrim,
                                     StringComparison.OrdinalIgnoreCase))
@@ -920,7 +961,11 @@ public sealed class RoomsFormImportMapper : IImportMapper
                         {
                             try
                             {
-                                var found = await _listView.FindShareAgreementsAsync(
+                                // Шаг А — строгий поиск по полному бизнес-ключу (5 полей, doc 76).
+                                // Находит ДДУ, у которых Project+Stage УЖЕ совпадают с текущей
+                                // строкой (классический дедуп). Безопасен от «угона» ДДУ из
+                                // соседнего проекта/этапа.
+                                var foundStrict = await _listView.FindShareAgreementsAsync(
                                     number:            saNumber,
                                     roomKindId:        kindId,
                                     conditionalNumber: roomNumber,
@@ -928,13 +973,59 @@ public sealed class RoomsFormImportMapper : IImportMapper
                                     projectNumber:     projectNumberForSa,
                                     gct);
 
-                                saMatch = found.Data
+                                saMatch = foundStrict.Data
                                     .Where(a => string.Equals(
                                         (a.Number ?? string.Empty).Trim(), saNumberTrim,
                                         StringComparison.OrdinalIgnoreCase))
                                     .Where(a => kindId is null || a.RoomKindRef?.ID == kindId)
                                     .OrderByDescending(a => a.ID)
                                     .FirstOrDefault();
+
+                                // Шаг Б — loose-поиск без Stage/Project (doc 76 v1.1).
+                                // Orphan-ДДУ (вручную или системно отвязанные от Room/Project/Stage)
+                                // не находятся строгим фильтром, потому что Visary `=` на NULL/пустой
+                                // StageNumber/ProjectNumber их отсекает. Без этой ступени каждый
+                                // импорт плодит дубликат ДДУ рядом с orphan-ом, который так и остаётся
+                                // невидимым. Безопасность: принимаем строки, где Room **не указывает на
+                                // реальное помещение** — `Room == null` ИЛИ `Room.ID <= 0` (Visary часто
+                                // сериализует «нет связи» как `{"ID":0,"Title":""}` вместо JSON-null;
+                                // VisaryRef.ID — non-nullable int → 0 по умолчанию). НЕ трогаем ДДУ,
+                                // легитимно принадлежащую другому проекту/этапу (anti-pattern #2 в doc 76).
+                                if (saMatch is null)
+                                {
+                                    var foundLoose = await _listView.FindShareAgreementsAsync(
+                                        number:            saNumber,
+                                        roomKindId:        kindId,
+                                        conditionalNumber: roomNumber,
+                                        stageNumber:       null,
+                                        projectNumber:     null,
+                                        gct);
+
+                                    var candidates = foundLoose.Data
+                                        .Where(a => string.Equals(
+                                            (a.Number ?? string.Empty).Trim(), saNumberTrim,
+                                            StringComparison.OrdinalIgnoreCase))
+                                        .Where(a => kindId is null || a.RoomKindRef?.ID == kindId)
+                                        .ToList();
+
+                                    // Диагностика: видим в логе, какие ДДУ Visary вернул и почему мы
+                                    // считаем их (не) orphan-ами. Без этого в проде нельзя отличить
+                                    // «loose ничего не вернул» от «вернул, но всё non-orphan».
+                                    if (candidates.Count > 0)
+                                    {
+                                        _log.LogInformation(
+                                            "RoomsForm.Apply: loose-find SA '{Num}' (Cond='{Cond}', Kind={Kind}) " +
+                                            "вернул {Total}: {Brief}",
+                                            saNumber, roomNumber, kindId, candidates.Count,
+                                            string.Join("; ", candidates.Take(5).Select(a =>
+                                                $"id={a.ID}/Room.ID={a.Room?.ID.ToString() ?? "null"}")));
+                                    }
+
+                                    saMatch = candidates
+                                        .Where(a => a.Room is null || a.Room.ID <= 0)
+                                        .OrderByDescending(a => a.ID)
+                                        .FirstOrDefault();
+                                }
                             }
                             catch (Exception findEx)
                             {
@@ -1053,6 +1144,89 @@ public sealed class RoomsFormImportMapper : IImportMapper
             .Select(kv => new RowActionLog(kv.Key.Row, kv.Key.Sheet, kv.Value))
             .ToList();
         return new ApplyResult(applied, errors.ToList(), rowActions);
+    }
+
+    /// <summary>
+    /// Snapshot-revalidation против реального состояния Visary. Hash MappedValues
+    /// уже совпал с <paramref name="prev"/> — но это говорит только про входные
+    /// данные импорта, не про живость сущностей в Visary. Пользователь мог удалить
+    /// помещение/ДДУ между импортами; без этой проверки skip-by-hash «маскировал»
+    /// бы удалённые сущности — повторный импорт того же файла не восстановил бы их.
+    ///
+    /// Проверяем два уровня:
+    /// <list type="number">
+    ///   <item><description><b>Room.</b> Ищем <c>prev.VisaryRoomId</c> в уже-загруженном
+    ///     <c>roomsInSection</c> (стоимость 0 — listview/room уже сделан в начале группы).
+    ///     Нет → snapshot устарел, выходим без проверки ДДУ.</description></item>
+    ///   <item><description><b>ShareAgreement.</b> Если в snapshot был <c>VisaryShareAgreementId</c>,
+    ///     грузим ДДУ по комнате (один <c>GetShareAgreementsByRoomAsync</c> на roomId,
+    ///     кэшируется в <paramref name="saByRoomCache"/> и переиспользуется
+    ///     основным flow). Нет — snapshot устарел.</description></item>
+    /// </list>
+    ///
+    /// На сетевой ошибке проверки ДДУ — возвращаем «живо» (true), чтобы временные
+    /// сбои не запускали полный пересчёт всей сессии.
+    /// </summary>
+    /// <returns>
+    /// <c>(true, null)</c> — snapshot валиден (можно skip-нуть строку);
+    /// <c>(false, причина)</c> — устарел, продолжать обычный flow.
+    /// </returns>
+    private async Task<(bool Live, string? StaleReason)> RevalidateSnapshotAsync(
+        RoomApplySnapshot prev,
+        IReadOnlyList<RoomRaw> roomsInSection,
+        Dictionary<int, List<ShareAgreementRaw>> saByRoomCache,
+        CancellationToken ct)
+    {
+        // ── 1. Room-existence ────────────────────────────────────────────────
+        if (prev.VisaryRoomId is int prevRoomId)
+        {
+            var roomExists = roomsInSection.Any(r => r.ID == prevRoomId);
+            if (!roomExists)
+            {
+                _log.LogInformation(
+                    "RoomsForm.Apply.Revalidate: помещение roomId={RoomId} (snapshotId={SnapId}) " +
+                    "не найдено в секции — snapshot устарел.",
+                    prevRoomId, prev.Id);
+                return (false, $"помещение №{prev.RoomNumber} удалено в Visary");
+            }
+        }
+
+        // ── 2. ShareAgreement-existence ──────────────────────────────────────
+        // Если в snapshot не было ДДУ — нечего проверять (строка без ДДУ
+        // или прошлый импорт обработал её без SA).
+        if (prev.VisaryShareAgreementId is int prevSaId && prev.VisaryRoomId is int rid)
+        {
+            try
+            {
+                if (!saByRoomCache.TryGetValue(rid, out var saList))
+                {
+                    var byRoom = await _listView.GetShareAgreementsByRoomAsync(rid, null, ct);
+                    saList = byRoom.Data.ToList();
+                    saByRoomCache[rid] = saList;
+                }
+                var saExists = saList.Any(a => a.ID == prevSaId);
+                if (!saExists)
+                {
+                    _log.LogInformation(
+                        "RoomsForm.Apply.Revalidate: ДДУ saId={SaId} (number='{Num}') не найден " +
+                        "в комнате roomId={RoomId} — snapshot устарел.",
+                        prevSaId, prev.ShareAgreementNumber, rid);
+                    return (false, $"ДДУ №{prev.ShareAgreementNumber ?? "?"} удалён в Visary");
+                }
+            }
+            catch (Exception saCheckEx)
+            {
+                // Сетевая ошибка на проверке — НЕ инвалидируем snapshot, иначе
+                // временный сбой Visary запустит full-rewrite всей сессии.
+                // Прежнее поведение skip-а сохраняется при недоступности проверки.
+                _log.LogWarning(saCheckEx,
+                    "RoomsForm.Apply.Revalidate: проверка ДДУ saId={SaId} roomId={RoomId} " +
+                    "не удалась: {Msg} — считаем snapshot валидным.",
+                    prevSaId, rid, saCheckEx.Message);
+            }
+        }
+
+        return (true, null);
     }
 
     /// <summary>

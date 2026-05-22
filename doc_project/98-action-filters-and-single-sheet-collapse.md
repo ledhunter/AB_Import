@@ -131,3 +131,102 @@ TODO в `ImportSessionReportService`).
 перестанут срабатывать — это будет видно сразу: счётчик 0 при том, что
 такие строки точно есть. Чинить — синхронно поправить регулярки в
 [SessionRowsTable.tsx](../KiloImportService.Web/src/components/ImportSession/SessionRowsTable.tsx).
+
+---
+
+## v1.3 (2026-05-22) — Status-фильтры тоже session-wide
+
+### Что было сломано
+
+В верхней панели отчёта (`SessionSummary`) карточка «С ошибками» показывала
+`session.errorRows` — session-wide значение (например, **22**). В блоке
+`filter-tags` чуть ниже кнопка «С ошибками» при этом показывала **0**,
+потому что счётчик считался по `report.rows` — а на странице 1 (первые 50)
+ошибочных строк не было, они лежали на странице 3.
+
+Симптомы:
+- `Применённые 50` в фильтре vs `Создано 100` в action-фильтре (та же сессия!).
+- «Всего строк 625 / Валидных 100 / С ошибками 22» в карточках, но `Все 50`,
+  `Валидные 50`, `С ошибками 0` в фильтрах.
+- Пользователь не понимает, где правда.
+
+Корень — async-миграция в v1.2 перевела **только** action-фильтры
+(Created/Updated/Skipped) на session-wide через `actionTotals` на backend.
+Status-фильтры (`Все`/`Валидные`/`С ошибками`/`Применённые`/`Не применилось`)
+остались page-level → рассинхрон с верхней панелью.
+
+### Что сделано
+
+**Backend** ([ImportsController.cs:354-389](../KiloImportService.Api/Controllers/ImportsController.cs)):
+один EF GroupBy-запрос по `StagedRow.Status`, агрегат в словарь, сборка
+объекта:
+
+```csharp
+var byStatus = await _db.StagedRows.AsNoTracking()
+    .Where(r => r.ImportSessionId == id)
+    .GroupBy(r => r.Status)
+    .Select(g => new { Status = g.Key, Count = g.Count() })
+    .ToListAsync(ct);
+var statusDict = byStatus.ToDictionary(x => x.Status, x => x.Count);
+int countOf(StagedRowStatus s) => statusDict.TryGetValue(s, out var c) ? c : 0;
+
+statusTotals = new {
+    all     = statusDict.Values.Sum(),
+    valid   = countOf(StagedRowStatus.Valid) + countOf(StagedRowStatus.Applied),
+    invalid = countOf(StagedRowStatus.Invalid),
+    applied = countOf(StagedRowStatus.Applied),
+    failed  = countOf(StagedRowStatus.Failed),
+}
+```
+
+Важно: `valid = Valid + Applied` — Applied означает «прошёл validation + apply»,
+он же «валидный». Без сложения «Применённые» оказались бы > «Валидные», что
+бессмыслица.
+
+`statusTotals` **не** учитывает `excludeSheets` — как `actionTotals` и
+`session.errorRows`. Свёрнутый лист на пагинацию влияет (`rowsPagination.total`),
+а на верхние/фильтр-счётчики — нет. Это сознательно: пользователь видит общее
+состояние сессии независимо от текущего вида.
+
+**Frontend**:
+- [api.ts](../KiloImportService.Web/src/types/api.ts) — `ApiStatusTotals` interface.
+- [session.ts](../KiloImportService.Web/src/types/session.ts) — `UiStatusTotals`,
+  `UiReport.statusTotals: UiStatusTotals | null`.
+- [importMappers.ts](../KiloImportService.Web/src/services/importMappers.ts) —
+  `statusTotals: api.statusTotals ?? null` (legacy backend → null).
+- [SessionRowsTable.tsx](../KiloImportService.Web/src/components/ImportSession/SessionRowsTable.tsx) —
+  если `statusTotals` есть, берём оттуда; иначе fallback на старый page-level
+  подсчёт (для обратной совместимости со старым backend'ом).
+
+### ⚠️ Грабли
+
+1. **`statusValid = Valid + Applied`** — не просто `Valid`. Applied тоже валидные,
+   они просто УЖЕ применены. Если посчитать только `Valid`, получим 0 после
+   успешного Apply, а кнопка «Валидные» обнулится.
+
+2. **Фронт-фильтр (`matchesFilter`) по-прежнему page-level** — он применяется к
+   видимым строкам и решает, **показать ли строку**. Session-wide цифры
+   рассказывают «сколько таких в сессии», но клик по фильтру отфильтрует
+   только текущую страницу. Чтобы найти ошибочные строки в большой сессии,
+   пользователю придётся пагинироваться (страница, где status=Invalid).
+
+3. **Legacy fallback** — без `report.statusTotals` UI вычисляет
+   как раньше (page-level). Это нужно для случая, когда фронт обновили,
+   а backend ещё старый.
+
+### Зачем не unit-test'нули
+
+`statusTotals` — это детерминированный SQL GroupBy с явным маппингом enum→ключи.
+Существующих integration-тестов для `ImportsController` в проекте нет (нужна
+WebApplicationFactory + in-memory ImportServiceDb + seed). Заводить инфраструктуру
+ради одной 7-строчной добавки — overkill. Проверка — `curl GET /api/imports/{id}/report`
+после смешанного импорта и сравнение `statusTotals` с `session.errorRows`/`SuccessRows`.
+Если потребуется тест-инфра — стоит делать единым кешем с `actionTotals`-тестом.
+
+### Как это видно в UI
+
+| До v1.3 | После v1.3 |
+|---|---|
+| `С ошибками 22` (карточка) ≠ `С ошибками 0` (фильтр) | Оба — `22` |
+| `Применённые 50` (page) ≠ `Создано 100` (session) | Оба — session-wide |
+| Цифры в фильтре растут при переходе на следующую страницу | Цифры стабильны |

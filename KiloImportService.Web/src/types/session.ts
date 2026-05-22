@@ -124,6 +124,20 @@ export interface UiActionTotals {
   skipped: number;
 }
 
+/**
+ * Session-wide счётчики по статусам строк (doc 98 v1.3). Используются вместо
+ * page-level подсчёта `report.rows`, чтобы цифры в status-фильтрах совпадали с
+ * верхней панелью `SessionSummary`. `null` — старый backend без поля; UI
+ * фоллбэчит на page-level.
+ */
+export interface UiStatusTotals {
+  all: number;
+  valid: number;
+  invalid: number;
+  applied: number;
+  failed: number;
+}
+
 export interface UiReport {
   session: UiSession;
   rows: UiReportRow[];
@@ -138,6 +152,11 @@ export interface UiReport {
   sheetTotals: UiSheetTotal[];
   /** Action-counters по всей сессии (created/updated/skipped); 0/0/0 для legacy backend. */
   actionTotals: UiActionTotals;
+  /**
+   * Status-counters по всей сессии (doc 98 v1.3). `null` для legacy backend —
+   * UI fallback на page-level подсчёт по `rows`.
+   */
+  statusTotals: UiStatusTotals | null;
 }
 
 /**

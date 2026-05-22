@@ -369,6 +369,24 @@ public class ImportsController : ControllerBase
                 || text.Contains("пропуск", StringComparison.OrdinalIgnoreCase))           actSkipped++;
         }
 
+        // statusTotals — счётчики по StagedRowStatus ПО ВСЕЙ сессии (без excludeSheets,
+        // как actionTotals и как session.successRows/errorRows в верхней панели UI).
+        // Раньше status-фильтры на фронте считались по видимой странице (50 строк) →
+        // «С ошибками 0» на странице 1 при том, что всего 22 невалидных. Теперь
+        // фронт показывает session-wide цифры. См. doc 98 v1.3.
+        var byStatus = await _db.StagedRows.AsNoTracking()
+            .Where(r => r.ImportSessionId == id)
+            .GroupBy(r => r.Status)
+            .Select(g => new { Status = g.Key, Count = g.Count() })
+            .ToListAsync(ct);
+        var statusDict = byStatus.ToDictionary(x => x.Status, x => x.Count);
+        int countOf(StagedRowStatus s) => statusDict.TryGetValue(s, out var c) ? c : 0;
+        int statusValid   = countOf(StagedRowStatus.Valid) + countOf(StagedRowStatus.Applied);
+        int statusInvalid = countOf(StagedRowStatus.Invalid);
+        int statusApplied = countOf(StagedRowStatus.Applied);
+        int statusFailed  = countOf(StagedRowStatus.Failed);
+        int statusAll     = statusDict.Values.Sum();
+
         return Ok(new
         {
             sessionId = id,
@@ -380,6 +398,14 @@ public class ImportsController : ControllerBase
             rowsPagination = new { skip, take, total = totalRows },
             sheetTotals,
             actionTotals = new { created = actCreated, updated = actUpdated, skipped = actSkipped },
+            statusTotals = new
+            {
+                all     = statusAll,
+                valid   = statusValid,
+                invalid = statusInvalid,
+                applied = statusApplied,
+                failed  = statusFailed,
+            },
             errors
         });
     }

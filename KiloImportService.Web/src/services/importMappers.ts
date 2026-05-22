@@ -196,5 +196,8 @@ export function toUiReport(api: ApiImportReport, session: UiSession): UiReport {
     // actionTotals — счётчики created/updated/skipped по ВСЕЙ сессии (doc 98 v1.2).
     // Если backend старый — нули, табы фильтров просто не отрисуются (count > 0 gate).
     actionTotals: api.actionTotals ?? { created: 0, updated: 0, skipped: 0 },
+    // statusTotals — session-wide all/valid/invalid/applied/failed (doc 98 v1.3).
+    // null означает «backend не отдал», UI вычислит по page-level (legacy fallback).
+    statusTotals: api.statusTotals ?? null,
   };
 }

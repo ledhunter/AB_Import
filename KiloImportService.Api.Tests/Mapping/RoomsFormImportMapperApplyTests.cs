@@ -484,10 +484,15 @@ public class RoomsFormImportMapperApplyTests : IDisposable
     [Fact]
     public async Task ApplyAsync_SecondRun_SameRows_SkipsByHash_NoExtraPatchOrCreate()
     {
-        // Сценарий повторного импорта того же файла:
+        // Сценарий повторного импорта того же файла, КОГДА сущности живы в Visary:
         //   первый Apply — создаёт RoomApplySnapshot;
-        //   второй Apply с тем же MappedValues — hash совпадает → строка skip-ается
-        //   с меткой «Без изменений — пропуск (snapshot)»; никакого CREATE/PATCH не происходит.
+        //   второй Apply с тем же MappedValues — hash совпадает И revalidation
+        //   нашла Room+ДДУ в Visary → строка skip-ается с меткой «Без изменений
+        //   — пропуск (snapshot)»; никакого CREATE/PATCH не происходит.
+        //
+        // doc 106: snapshot-revalidation требует, чтобы во втором запуске Visary
+        // ВЕРНУЛ существующие сущности, иначе snapshot будет признан устаревшим
+        // и flow перейдёт в reuse/recreate.
         var ctx = new ImportContext(Guid.NewGuid(), ProjectId, null, null);
         var rows = new[] { MakeRow(10, "Квартира", "1", "1", 42.5) };
 
@@ -505,6 +510,22 @@ public class RoomsFormImportMapperApplyTests : IDisposable
 
         _mockCrud.Invocations.Clear();
 
+        // ── Симулируем, что во втором запуске Room и ДДУ ВСЁ ЕЩЁ существуют в Visary.
+        // Без этого revalidation решит, что snapshot устарел, и flow пойдёт по
+        // обычному пути find-or-create (CreateRoomAsync вызовется).
+        _mockListView.Setup(c => c.GetRoomsBySectionAsync(SectionId, It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ListViewResponse<RoomRaw>
+            {
+                Data = [new RoomRaw { ID = CreatedRoomId, Number = "1", ExplicationNumber = "1", BuildingSection = "1", Kind = new VisaryRef { ID = RoomKindIdApartment } }],
+                Total = 1,
+            });
+        _mockListView.Setup(c => c.GetShareAgreementsByRoomAsync(CreatedRoomId, It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ListViewResponse<ShareAgreementRaw>
+            {
+                Data = [new ShareAgreementRaw { ID = CreatedSaId, Number = "ДДУ-1", Room = new VisaryRef { ID = CreatedRoomId } }],
+                Total = 1,
+            });
+
         // На втором Apply мы НЕ ожидаем CreateRoom/CreateShareAgreement.
         // GetRoomsBySectionAsync будет вызван (он внутри parallel-цикла), но это OK —
         // именно через diff-skip мы экономим CREATE/PATCH, а не listview-чтения.
@@ -520,6 +541,109 @@ public class RoomsFormImportMapperApplyTests : IDisposable
         _mockCrud.Verify(c => c.PatchRoomAsync(It.IsAny<int>(), It.IsAny<RoomPatchRequest>(), It.IsAny<CancellationToken>()), Times.Never);
         _mockCrud.Verify(c => c.CreateShareAgreementAsync(It.IsAny<ShareAgreementCreateRequest>(), It.IsAny<CancellationToken>()), Times.Never);
         _mockCrud.Verify(c => c.PatchShareAgreementAsync(It.IsAny<int>(), It.IsAny<ShareAgreementPatchRequest>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ApplyAsync_SecondRun_RoomDeletedInVisary_SnapshotStale_RecreatesRoom()
+    {
+        // doc 106: snapshot-revalidation. Между первым и вторым импортом
+        // пользователь удалил Room в Visary (например, очистил тестовый сайт).
+        // Snapshot.VisaryRoomId не находится в свежем GetRoomsBySectionAsync →
+        // hash-match не должен приводить к skip; маппер обязан пересоздать помещение.
+        var ctx = new ImportContext(Guid.NewGuid(), ProjectId, null, null);
+        var rows = new[] { MakeRow(10, "Квартира", "1", "1", 42.5) };
+
+        // Первый запуск — стандартный мок (Section/Rooms пусты → CREATE Room, CREATE SA).
+        var first = await _mapper.ApplyAsync(ctx, _visaryDb, rows, default);
+        Assert.Equal(1, first.AppliedCount);
+
+        _mockCrud.Invocations.Clear();
+
+        // ── Симулируем удаление Room в Visary: GetRoomsBySectionAsync вернёт пусто,
+        //    хотя snapshot.VisaryRoomId = CreatedRoomId. Это и есть «помещение удалено».
+        _mockListView.Setup(c => c.GetRoomsBySectionAsync(SectionId, It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ListViewResponse<RoomRaw> { Data = [], Total = 0 });
+        // ДДУ тоже формально нет — он привязывался к удалённой комнате.
+        _mockListView.Setup(c => c.GetShareAgreementsByRoomAsync(It.IsAny<int>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ListViewResponse<ShareAgreementRaw> { Data = [], Total = 0 });
+
+        // CreateRoom должен вернуть НОВЫЙ ID — это и есть «пересоздание».
+        const int RecreatedRoomId = 9011;
+        _mockCrud.Setup(c => c.CreateRoomAsync(It.IsAny<RoomCreateRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new RoomRaw { ID = RecreatedRoomId });
+        _mockCrud.Setup(c => c.CreateShareAgreementAsync(It.IsAny<ShareAgreementCreateRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ShareAgreementRaw { ID = 9511 });
+
+        var second = await _mapper.ApplyAsync(ctx, _visaryDb, rows, default);
+
+        Assert.Equal(1, second.AppliedCount);
+        Assert.Empty(second.Errors);
+
+        // Журнал должен явно сигнализировать про stale-snapshot и про пересоздание.
+        var log = Assert.Single(second.RowActions!);
+        Assert.Contains(log.Actions, a => a.Contains("Snapshot устарел"));
+        Assert.Contains(log.Actions, a => a.Contains("Помещение создано"));
+        Assert.DoesNotContain(log.Actions, a => a.Contains("Без изменений"));
+
+        _mockCrud.Verify(c => c.CreateRoomAsync(It.IsAny<RoomCreateRequest>(), It.IsAny<CancellationToken>()), Times.Once);
+
+        // Snapshot должен обновиться с новым VisaryRoomId.
+        using var diag = _sp.CreateScope();
+        var db = diag.ServiceProvider.GetRequiredService<ImportServiceDbContext>();
+        var saved = db.RoomApplySnapshots.AsNoTracking().Single(s => s.VisarySiteId == SiteId);
+        Assert.Equal(RecreatedRoomId, saved.VisaryRoomId);
+    }
+
+    [Fact]
+    public async Task ApplyAsync_SecondRun_ShareAgreementDeletedInVisary_SnapshotStale_RecreatesShareAgreement()
+    {
+        // doc 106: revalidation для ДДУ. Помещение в Visary осталось (с тем же ID),
+        // но ДДУ удалён. Без проверки ДДУ маппер skip-нул бы строку, и удалённый
+        // ДДУ не восстановился бы.
+        var ctx = new ImportContext(Guid.NewGuid(), ProjectId, null, null);
+        var rows = new[] { MakeRow(10, "Квартира", "1", "1", 42.5) };
+
+        var first = await _mapper.ApplyAsync(ctx, _visaryDb, rows, default);
+        Assert.Equal(1, first.AppliedCount);
+
+        _mockCrud.Invocations.Clear();
+
+        // ── Room на месте, ДДУ удалён ─────────────────────────────────────
+        _mockListView.Setup(c => c.GetRoomsBySectionAsync(SectionId, It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ListViewResponse<RoomRaw>
+            {
+                Data = [new RoomRaw { ID = CreatedRoomId, Number = "1", ExplicationNumber = "1", BuildingSection = "1", Kind = new VisaryRef { ID = RoomKindIdApartment } }],
+                Total = 1,
+            });
+        // Возвращаем ПУСТО — ДДУ удалён. Глобальный поиск тоже пуст (или его не делаем).
+        _mockListView.Setup(c => c.GetShareAgreementsByRoomAsync(CreatedRoomId, It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ListViewResponse<ShareAgreementRaw> { Data = [], Total = 0 });
+        _mockListView.Setup(c => c.FindShareAgreementsAsync(
+                It.IsAny<string?>(), It.IsAny<int?>(), It.IsAny<string?>(),
+                It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ListViewResponse<ShareAgreementRaw> { Data = [], Total = 0 });
+
+        const int RecreatedSaId = 9512;
+        _mockCrud.Setup(c => c.CreateShareAgreementAsync(It.IsAny<ShareAgreementCreateRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ShareAgreementRaw { ID = RecreatedSaId });
+
+        var second = await _mapper.ApplyAsync(ctx, _visaryDb, rows, default);
+
+        Assert.Equal(1, second.AppliedCount);
+        Assert.Empty(second.Errors);
+
+        var log = Assert.Single(second.RowActions!);
+        Assert.Contains(log.Actions, a => a.Contains("Snapshot устарел") && a.Contains("ДДУ"));
+        Assert.Contains(log.Actions, a => a.Contains("ДДУ создан"));
+        // Room НЕ должен пересоздаваться — только PATCH (он жив).
+        _mockCrud.Verify(c => c.CreateRoomAsync(It.IsAny<RoomCreateRequest>(), It.IsAny<CancellationToken>()), Times.Never);
+        _mockCrud.Verify(c => c.PatchRoomAsync(CreatedRoomId, It.IsAny<RoomPatchRequest>(), It.IsAny<CancellationToken>()), Times.Once);
+        _mockCrud.Verify(c => c.CreateShareAgreementAsync(It.IsAny<ShareAgreementCreateRequest>(), It.IsAny<CancellationToken>()), Times.Once);
+
+        using var diag = _sp.CreateScope();
+        var db = diag.ServiceProvider.GetRequiredService<ImportServiceDbContext>();
+        var saved = db.RoomApplySnapshots.AsNoTracking().Single(s => s.VisarySiteId == SiteId);
+        Assert.Equal(RecreatedSaId, saved.VisaryShareAgreementId);
     }
 
     [Fact]
@@ -658,5 +782,201 @@ public class RoomsFormImportMapperApplyTests : IDisposable
         Assert.Equal(2, result.RowActions!.Count);
         Assert.All(result.RowActions, log => Assert.Equal("Квартира", log.Sheet));
         Assert.Equal([10, 11], result.RowActions.Select(l => l.SourceRowNumber).OrderBy(x => x));
+    }
+
+    [Fact]
+    public async Task ApplyAsync_OrphanShareAgreement_IsReusedAndRelinked_NotDuplicated()
+    {
+        // doc 76 v1.1: ДДУ может существовать в Visary ДО загрузки помещений — отвязанная
+        // от Room/Project/Stage (например, заведена сотрудником вручную или отстёгнута
+        // системно). Строгий поиск по 5-полям (Number+Kind+Cond+Stage+Project) её не находит,
+        // потому что Stage/Project у орфана NULL. Без loose-fallback'а каждый импорт плодит
+        // новый ДДУ-дубликат, а orphan остаётся невидимым. Этот тест фиксирует обратное.
+        const int OrphanSaId = 9777;
+
+        // Per-room search: пусто (Room только что создан).
+        _mockListView.Setup(c => c.GetShareAgreementsByRoomAsync(
+                CreatedRoomId, It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ListViewResponse<ShareAgreementRaw> { Data = [], Total = 0 });
+
+        // Strict find (stage+project заполнены) — пусто. Орфан не матчится строгим Visary `=`.
+        _mockListView.Setup(c => c.FindShareAgreementsAsync(
+                It.IsAny<string?>(), It.IsAny<int?>(), It.IsAny<string?>(),
+                It.Is<string?>(s => !string.IsNullOrWhiteSpace(s)),
+                It.Is<string?>(p => !string.IsNullOrWhiteSpace(p)),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ListViewResponse<ShareAgreementRaw> { Data = [], Total = 0 });
+
+        // Loose find (stage+project null) — отдаём orphan ДДУ: Number+RoomKind+Cond матчат,
+        // Room == null (главный признак, что можно безопасно реанимировать).
+        _mockListView.Setup(c => c.FindShareAgreementsAsync(
+                It.IsAny<string?>(), It.IsAny<int?>(), It.IsAny<string?>(),
+                null, null,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ListViewResponse<ShareAgreementRaw>
+            {
+                Data =
+                [
+                    new ShareAgreementRaw
+                    {
+                        ID                = OrphanSaId,
+                        Number            = "ДДУ-1",
+                        ConditionalNumber = "1",
+                        RoomKindRef       = new VisaryRef { ID = RoomKindIdApartment },
+                        Room              = null,    // ← orphan-маркер (JSON null)
+                        Project           = null,
+                        Site              = null,
+                        StageNumber       = null,
+                    }
+                ],
+                Total = 1,
+            });
+
+        var ctx = new ImportContext(Guid.NewGuid(), ProjectId, null, null);
+        var rows = new[] { MakeRow(10, "Квартира", "1", "1", 42.5) };
+
+        var result = await _mapper.ApplyAsync(ctx, _visaryDb, rows, default);
+
+        Assert.Equal(1, result.AppliedCount);
+        Assert.Empty(result.Errors);
+
+        // Новый ДДУ НЕ создан — orphan переиспользован.
+        _mockCrud.Verify(c => c.CreateShareAgreementAsync(
+            It.IsAny<ShareAgreementCreateRequest>(), It.IsAny<CancellationToken>()), Times.Never);
+
+        // Orphan заpatch-ан: Room/Project/Site/Stage/Project заполнены текущими значениями.
+        _mockCrud.Verify(c => c.PatchShareAgreementAsync(
+            OrphanSaId,
+            It.Is<ShareAgreementPatchRequest>(r =>
+                r.RoomID == CreatedRoomId &&
+                r.Room!.ID == CreatedRoomId &&
+                r.Site!.ID == SiteId &&
+                r.Project!.ID == ProjectId &&
+                r.RoomKindRef!.ID == RoomKindIdApartment &&
+                r.ConditionalNumber == "1" &&
+                r.StageNumber == "1" &&
+                r.ProjectNumber == "PRJ-1"),
+            It.IsAny<CancellationToken>()), Times.Once);
+
+        // В журнале строки — метка о глобальной находке + привязке.
+        var log = Assert.Single(result.RowActions!);
+        Assert.Contains(log.Actions, a => a.Contains("ДДУ найден глобально"));
+
+        // Snapshot привязан к orphan-ID (а не к новому ID).
+        using var diag = _sp.CreateScope();
+        var db = diag.ServiceProvider.GetRequiredService<ImportServiceDbContext>();
+        var saved = db.RoomApplySnapshots.AsNoTracking().Single(s => s.VisarySiteId == SiteId);
+        Assert.Equal(OrphanSaId, saved.VisaryShareAgreementId);
+    }
+
+    [Fact]
+    public async Task ApplyAsync_OrphanShareAgreement_WithZeroRoomId_IsAlsoTreatedAsOrphan()
+    {
+        // Регрессия из реального стенда: Visary часто сериализует «нет связи» как
+        // {"Room": {"ID": 0, "Title": ""}}, а не {"Room": null}. С учётом того что
+        // VisaryRef.ID — non-nullable int (default = 0), `a.Room?.ID is null` это
+        // НЕ ловит. Проверка `a.Room is null || a.Room.ID <= 0` должна работать
+        // в обоих случаях. См. скриншот заказчика «Лавандовый раф» — ДДУ 833/834/835
+        // с пустыми «Помещение»/«Объект»/«Проект».
+        const int OrphanSaIdZeroRoom = 9779;
+
+        _mockListView.Setup(c => c.GetShareAgreementsByRoomAsync(
+                CreatedRoomId, It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ListViewResponse<ShareAgreementRaw> { Data = [], Total = 0 });
+
+        _mockListView.Setup(c => c.FindShareAgreementsAsync(
+                It.IsAny<string?>(), It.IsAny<int?>(), It.IsAny<string?>(),
+                It.Is<string?>(s => !string.IsNullOrWhiteSpace(s)),
+                It.Is<string?>(p => !string.IsNullOrWhiteSpace(p)),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ListViewResponse<ShareAgreementRaw> { Data = [], Total = 0 });
+
+        _mockListView.Setup(c => c.FindShareAgreementsAsync(
+                It.IsAny<string?>(), It.IsAny<int?>(), It.IsAny<string?>(),
+                null, null,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ListViewResponse<ShareAgreementRaw>
+            {
+                Data =
+                [
+                    new ShareAgreementRaw
+                    {
+                        ID                = OrphanSaIdZeroRoom,
+                        Number            = "ДДУ-1",
+                        ConditionalNumber = "1",
+                        RoomKindRef       = new VisaryRef { ID = RoomKindIdApartment },
+                        // ← Visary шлёт {"ID":0}, не null — как в реальных данных:
+                        Room              = new VisaryRef { ID = 0, Title = string.Empty },
+                    }
+                ],
+                Total = 1,
+            });
+
+        var ctx = new ImportContext(Guid.NewGuid(), ProjectId, null, null);
+        var rows = new[] { MakeRow(10, "Квартира", "1", "1", 42.5) };
+
+        var result = await _mapper.ApplyAsync(ctx, _visaryDb, rows, default);
+
+        Assert.Equal(1, result.AppliedCount);
+        _mockCrud.Verify(c => c.CreateShareAgreementAsync(
+            It.IsAny<ShareAgreementCreateRequest>(), It.IsAny<CancellationToken>()), Times.Never);
+        _mockCrud.Verify(c => c.PatchShareAgreementAsync(
+            OrphanSaIdZeroRoom,
+            It.Is<ShareAgreementPatchRequest>(r =>
+                r.RoomID == CreatedRoomId && r.Room!.ID == CreatedRoomId),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ApplyAsync_LooseFind_SkipsNonOrphan_DoesNotStealFromAnotherRoom()
+    {
+        // Anti-pattern #2 из doc 76: если loose-find вернёт ДДУ с тем же Number/Cond/Kind,
+        // но привязанный к ДРУГОЙ комнате (a.Room?.ID != null) — это не наш ДДУ, а легитимная
+        // запись из соседнего этапа/проекта. Угонять её нельзя — создаём свой новый ДДУ.
+        _mockListView.Setup(c => c.GetShareAgreementsByRoomAsync(
+                CreatedRoomId, It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ListViewResponse<ShareAgreementRaw> { Data = [], Total = 0 });
+
+        _mockListView.Setup(c => c.FindShareAgreementsAsync(
+                It.IsAny<string?>(), It.IsAny<int?>(), It.IsAny<string?>(),
+                It.Is<string?>(s => !string.IsNullOrWhiteSpace(s)),
+                It.Is<string?>(p => !string.IsNullOrWhiteSpace(p)),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ListViewResponse<ShareAgreementRaw> { Data = [], Total = 0 });
+
+        // Loose-find отдаёт ДДУ, привязанный к чужой комнате (Room != null) — фильтр должен
+        // отсеять его, и mapper создаст НОВЫЙ.
+        _mockListView.Setup(c => c.FindShareAgreementsAsync(
+                It.IsAny<string?>(), It.IsAny<int?>(), It.IsAny<string?>(),
+                null, null,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ListViewResponse<ShareAgreementRaw>
+            {
+                Data =
+                [
+                    new ShareAgreementRaw
+                    {
+                        ID          = 9888,
+                        Number      = "ДДУ-1",
+                        ConditionalNumber = "1",
+                        RoomKindRef = new VisaryRef { ID = RoomKindIdApartment },
+                        Room        = new VisaryRef { ID = 88888 }, // ← чужая комната
+                    }
+                ],
+                Total = 1,
+            });
+
+        var ctx = new ImportContext(Guid.NewGuid(), ProjectId, null, null);
+        var rows = new[] { MakeRow(10, "Квартира", "1", "1", 42.5) };
+
+        var result = await _mapper.ApplyAsync(ctx, _visaryDb, rows, default);
+
+        Assert.Equal(1, result.AppliedCount);
+        // Создан НОВЫЙ ДДУ — чужой не угнан.
+        _mockCrud.Verify(c => c.CreateShareAgreementAsync(
+            It.IsAny<ShareAgreementCreateRequest>(), It.IsAny<CancellationToken>()), Times.Once);
+        // PATCH чужого ДДУ не делали.
+        _mockCrud.Verify(c => c.PatchShareAgreementAsync(
+            9888, It.IsAny<ShareAgreementPatchRequest>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 }

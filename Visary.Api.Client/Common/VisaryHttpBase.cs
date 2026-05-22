@@ -1,5 +1,4 @@
 using System.Net;
-using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -38,16 +37,17 @@ public abstract class VisaryHttpBase<T>
         var opt = Options;
         if (string.IsNullOrWhiteSpace(opt.BaseUrl))
             throw new InvalidOperationException("Visary:BaseUrl не задан.");
-        if (string.IsNullOrWhiteSpace(opt.BearerToken))
-            throw new InvalidOperationException("Visary:BearerToken не задан.");
+        // Authorization теперь ставит VisaryAuthHandler через IVisaryTokenProvider — см. doc 107.
+        // Здесь проверка BearerToken снята: при использовании StaticVisaryTokenProvider
+        // он сам бросает InvalidOperationException при пустом токене.
     }
 
     protected HttpRequestMessage NewRequest(HttpMethod method, string url)
     {
         EnsureConfig();
-        var req = new HttpRequestMessage(method, url);
-        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", Options.BearerToken);
-        return req;
+        // Заголовок Authorization добавляет VisaryAuthHandler (DelegatingHandler в pipeline'е
+        // HttpClient'а) — см. Visary.Api.Auth.VisaryAuthHandler.
+        return new HttpRequestMessage(method, url);
     }
 
     protected async Task HandleAuthErrorAsync(HttpResponseMessage response, CancellationToken ct)
