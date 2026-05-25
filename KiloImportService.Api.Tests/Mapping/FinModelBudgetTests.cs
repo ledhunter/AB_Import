@@ -55,6 +55,12 @@ public class FinModelBudgetTests : IDisposable
                 Total = 1,
             });
 
+        // Pre-check 1 (doc 109): ApplyAsync вызывает GetWbsBySiteAsync перед заливкой
+        // XLSX. По умолчанию — ИСР пуста (бюджет должен залиться). Тесты, которые
+        // проверяют именно skip-by-existing-wbs, переопределяют Setup сами.
+        _mockListView.Setup(c => c.GetWbsBySiteAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ListViewResponse<WbsRaw> { Data = [], Total = 0 });
+
         var budgetRef = new BudgetReferenceProvider(NullLogger<BudgetReferenceProvider>.Instance);
 
         // Mock IBudgetVisaryUploader — он зарегистрирован в реальном DI как Scoped.
@@ -241,6 +247,83 @@ public class FinModelBudgetTests : IDisposable
             It.IsAny<CancellationToken>()), Times.Never);
         _mockListView.Verify(c => c.GetWbsByProjectAsync(It.IsAny<int>(),
             It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ApplyAsync_Budget_SkipsUploadWhenSiteAlreadyHasWbs()
+    {
+        // Pre-check 1 (doc 109): listview/wbs/onetomany/ConstructionSite вернул
+        // непустой список → bypass залива XLSX в Visary. budgetUploadOk=true,
+        // т.е. ГФ ниже всё равно может запуститься. В errors — info-сообщение
+        // budget_upload_skipped_wbs_exists.
+        _mockListView.Setup(c => c.GetWbsBySiteAsync(SiteId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ListViewResponse<WbsRaw>
+            {
+                Data = [new WbsRaw { ID = 100, Code = "1.", Title = "Глава 1" }],
+                Total = 1,
+            });
+
+        var rows = new[]
+        {
+            BudgetRow(475, c: "Глава 1. Стоимость земельного участка и расходы по его содержанию"),
+            BudgetRow(481, c: "Затраты на приобретение прав на ЗУ", e: "438000"),
+            BudgetRow(484, c: "Итого", e: "438000"),
+        };
+
+        var validation = await _mapper.ValidateAsync(Ctx(), rows, _dbContext, default);
+        var apply = await _mapper.ApplyAsync(Ctx(), _dbContext, validation.Rows, default);
+
+        // Uploader НЕ должен вызываться вообще.
+        _mockBudgetUploader.Verify(u => u.UploadAndWaitAsync(
+            It.IsAny<Guid>(), It.IsAny<TimeSpan?>(), It.IsAny<TimeSpan?>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+
+        // Сообщение об пропуске присутствует.
+        Assert.Contains(apply.Errors, e => e.Code == "budget_upload_skipped_wbs_exists");
+    }
+
+    [Fact]
+    public async Task ApplyAsync_Budget_UploadsWhenSiteHasNoWbs()
+    {
+        // Дефолтный setup в конструкторе: GetWbsBySiteAsync → пусто. Заливка должна
+        // пройти как раньше.
+        var rows = new[]
+        {
+            BudgetRow(475, c: "Глава 1. Стоимость земельного участка и расходы по его содержанию"),
+            BudgetRow(481, c: "Затраты на приобретение прав на ЗУ", e: "438000"),
+            BudgetRow(484, c: "Итого", e: "438000"),
+        };
+
+        var validation = await _mapper.ValidateAsync(Ctx(), rows, _dbContext, default);
+        await _mapper.ApplyAsync(Ctx(), _dbContext, validation.Rows, default);
+
+        _mockBudgetUploader.Verify(u => u.UploadAndWaitAsync(
+            It.IsAny<Guid>(), It.IsAny<TimeSpan?>(), It.IsAny<TimeSpan?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ApplyAsync_Budget_SkipsUploadWhenWbsPrecheckFails()
+    {
+        // Если listview/wbs упал — заливать XLSX небезопасно (можем породить
+        // дубликат ИСР). Pre-check возвращает null → upload + ГФ пропущены.
+        _mockListView.Setup(c => c.GetWbsBySiteAsync(SiteId, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("listview/wbs is down"));
+
+        var rows = new[]
+        {
+            BudgetRow(475, c: "Глава 1. Стоимость земельного участка и расходы по его содержанию"),
+            BudgetRow(481, c: "Затраты на приобретение прав на ЗУ", e: "438000"),
+            BudgetRow(484, c: "Итого", e: "438000"),
+        };
+
+        var validation = await _mapper.ValidateAsync(Ctx(), rows, _dbContext, default);
+        var apply = await _mapper.ApplyAsync(Ctx(), _dbContext, validation.Rows, default);
+
+        _mockBudgetUploader.Verify(u => u.UploadAndWaitAsync(
+            It.IsAny<Guid>(), It.IsAny<TimeSpan?>(), It.IsAny<TimeSpan?>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+        Assert.Contains(apply.Errors, e => e.Code == "budget_upload_precheck_failed");
     }
 
     [Fact]
