@@ -10,11 +10,31 @@ interface Props {
   file: File | null;
   detectedFormat: FileFormat | null;
   onFileSelect: (file: File | null) => void;
+  /**
+   * Опциональный второй файл (на сегодня — только Финмодель). Если переданы
+   * `secondaryFile`/`onSecondaryFileSelect`, под основным uploader-ом отрисовывается
+   * компактный второй слот с подписью {@link secondaryLabel}.
+   * См. doc_project/110-finmodel-plan-and-fmmodel.md.
+   */
+  secondaryFile?: File | null;
+  onSecondaryFileSelect?: (file: File | null) => void;
+  secondaryLabel?: string;
+  secondaryHint?: string;
 }
 
-export const FileUpload = ({ file, detectedFormat, onFileSelect }: Props) => {
+export const FileUpload = ({
+  file,
+  detectedFormat,
+  onFileSelect,
+  secondaryFile,
+  onSecondaryFileSelect,
+  secondaryLabel = 'Дополнительный файл (опционально)',
+  secondaryHint,
+}: Props) => {
   const inputRef = useRef<HTMLInputElement>(null);
+  const secondaryInputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
+  const showSecondary = typeof onSecondaryFileSelect === 'function';
 
   const validateAndSelect = (f: File | null | undefined) => {
     if (!f) return;
@@ -34,6 +54,18 @@ export const FileUpload = ({ file, detectedFormat, onFileSelect }: Props) => {
     setError(null);
     if (inputRef.current) inputRef.current.value = '';
     onFileSelect(null);
+  };
+
+  // Второй (опциональный) файл: формат не валидируем — backend сам решит, как
+  // его трактовать (FinModel ждёт XLSX с листом «План»). Здесь только UX.
+  const handleSecondaryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0] ?? null;
+    onSecondaryFileSelect?.(f);
+  };
+  const handleSecondaryClick = () => secondaryInputRef.current?.click();
+  const handleSecondaryRemove = () => {
+    if (secondaryInputRef.current) secondaryInputRef.current.value = '';
+    onSecondaryFileSelect?.(null);
   };
 
   return (
@@ -100,6 +132,54 @@ export const FileUpload = ({ file, detectedFormat, onFileSelect }: Props) => {
               Выбрать другой
             </Button>
           </div>
+        </div>
+      )}
+
+      {showSecondary && (
+        <div style={{ marginTop: 16 }}>
+          <Typography.Text view="primary-medium" weight="bold" tag="div" style={{ marginBottom: 8 }}>
+            {secondaryLabel}
+          </Typography.Text>
+          {secondaryHint && (
+            <Typography.Text
+              view="primary-small"
+              color="secondary"
+              tag="div"
+              style={{ marginBottom: 8 }}
+            >
+              {secondaryHint}
+            </Typography.Text>
+          )}
+          <input
+            ref={secondaryInputRef}
+            type="file"
+            accept={ACCEPT_ALL_SUPPORTED}
+            onChange={handleSecondaryChange}
+            style={{ display: 'none' }}
+          />
+          {!secondaryFile ? (
+            <Button view="secondary" size={40} onClick={handleSecondaryClick}>
+              Прикрепить файл
+            </Button>
+          ) : (
+            <div className="file-uploaded">
+              <FileUploadItem
+                title={secondaryFile.name}
+                size={secondaryFile.size}
+                uploadStatus="UPLOADED"
+                showDelete
+                onDelete={handleSecondaryRemove}
+              />
+              <div className="file-uploaded__actions">
+                <Button view="secondary" size={40} onClick={handleSecondaryRemove}>
+                  Удалить файл
+                </Button>
+                <Button view="tertiary" size={40} onClick={handleSecondaryClick}>
+                  Выбрать другой
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

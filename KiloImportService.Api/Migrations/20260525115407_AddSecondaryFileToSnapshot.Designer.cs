@@ -4,6 +4,7 @@ using System.Text.Json;
 using KiloImportService.Api.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -12,9 +13,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace KiloImportService.Api.Migrations
 {
     [DbContext(typeof(ImportServiceDbContext))]
-    partial class ImportServiceDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260525115407_AddSecondaryFileToSnapshot")]
+    partial class AddSecondaryFileToSnapshot
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

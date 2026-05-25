@@ -47,11 +47,18 @@ public interface IImportMapper
 }
 
 /// <summary>Контекст одной сессии импорта (нужен мапперам для projectId/siteId/userId).</summary>
+/// <param name="SecondaryFileRelativePath">
+/// Относительный путь второго (опционального) файла в <c>IFileStorage</c>. На сегодня
+/// используется только FinModel-маппером — он по нему открывает файл «План» для
+/// чтения краевых квартальных значений и создания <c>fmmodel</c> в Visary
+/// (см. doc 110). Для остальных импортов остаётся <c>null</c>.
+/// </param>
 public record ImportContext(
     Guid SessionId,
     int? VisaryProjectId,
     int? VisarySiteId,
-    string? UserId
+    string? UserId,
+    string? SecondaryFileRelativePath = null
 );
 
 /// <summary>Результат валидации одной строки.</summary>

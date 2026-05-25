@@ -83,6 +83,15 @@ public interface ICrudClient
         int costItemId, CostItemPatchRequest request, CancellationToken ct = default);
 
     /// <summary>
+    /// Создать <c>fmmodel</c> — Финмодель проекта/объекта. POST <c>/api/visary/crud/fmmodel</c>.
+    /// Идемпотентности на сервере нет: перед вызовом — pre-check через
+    /// <see cref="ListView.IListViewClient.FindFmModelsAsync"/> по (ABProjectID, ABConstructionSiteID).
+    /// См. doc_project/110-finmodel-plan-and-fmmodel.md.
+    /// </summary>
+    Task<FmModelRaw> CreateFmModelAsync(
+        FmModelCreateRequest request, CancellationToken ct = default);
+
+    /// <summary>
     /// Создать запись <c>typedimportwbs</c> — TypedJournal-задание импорта бюджета (XLSX)
     /// из файла, уже загруженного в файловое хранилище. Поле <c>File</c> в request — это
     /// link-токен, возвращённый <see cref="FileStorage.IFileStorageClient.GetFileLinkAsync"/>.
@@ -519,6 +528,29 @@ public sealed class CrudClient : VisaryHttpBase<CrudClient>, ICrudClient
             $"{BaseUrl}/api/visary/crud/{VisaryMnemonics.CostItem}/{costItemId}?forceUpdate=true",
             request, $"{VisaryMnemonics.CostItem}/{costItemId}", costItemId, ct,
             $"CrudClient.PatchCostItemAsync: costItemId={{Id}} success");
+    }
+
+    // ─── FmModel (Финмодель) ────────────────────────────────────────────────
+
+    public async Task<FmModelRaw> CreateFmModelAsync(
+        FmModelCreateRequest request, CancellationToken ct)
+    {
+        // POST /api/visary/crud/fmmodel — тело по примеру заказчика:
+        //   { Title, ProjectCode, ABProjectID, ABConstructionSiteID, PeriodStart, PeriodEnd }
+        // Сервер возвращает FmModelRaw с ID. Идемпотентности нет — повторный POST
+        // даст дубликат; caller обязан pre-check'ить через FindFmModelsAsync.
+        _log.LogDebug(
+            "Visary → POST {Mnemonic} projectId={ProjectId} siteId={SiteId} period={Start}..{End}",
+            VisaryMnemonics.FmModel, request.ABProjectID, request.ABConstructionSiteID,
+            request.PeriodStart, request.PeriodEnd);
+        var result = await PostCrudAsync<FmModelRaw>(
+            $"{BaseUrl}/api/visary/crud/{VisaryMnemonics.FmModel}",
+            request, VisaryMnemonics.FmModel, ct);
+        _log.LogInformation(
+            "CrudClient.CreateFmModelAsync: created id={Id} title='{Title}' projectId={ProjectId} siteId={SiteId} period={Start}..{End}",
+            result.ID, request.Title, request.ABProjectID, request.ABConstructionSiteID,
+            request.PeriodStart, request.PeriodEnd);
+        return result;
     }
 
     // ─── TypedImportWbs (TypedJournal-импорт бюджета) ────────────────────────

@@ -309,3 +309,22 @@ public sealed class CostItemPeriod
     public DateTime Start { get; set; }
     public DateTime End { get; set; }
 }
+
+/// <summary>
+/// Финмодель (мнемоника <c>fmmodel</c>). Создаётся импортом «Финмодель» из
+/// «файла №2 — План» — краевые квартальные значения становятся
+/// <see cref="PeriodStart"/>/<see cref="PeriodEnd"/> (формат <c>"{Year}Q{N}"</c>,
+/// напр. <c>"2024Q1"</c>). Привязка к проекту/объекту через <see cref="ABProjectID"/>
+/// и <see cref="ABConstructionSiteID"/>. См. doc_project/110-finmodel-plan-and-fmmodel.md.
+/// </summary>
+public sealed class FmModelRaw
+{
+    public int ID { get; set; }
+    public string? Title { get; set; }
+    public string? ProjectCode { get; set; }
+    public int? ABProjectID { get; set; }
+    public int? ABConstructionSiteID { get; set; }
+    public string? PeriodStart { get; set; }
+    public string? PeriodEnd { get; set; }
+    public long RowVersion { get; set; }
+}

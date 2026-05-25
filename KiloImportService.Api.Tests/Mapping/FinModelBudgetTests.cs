@@ -87,7 +87,8 @@ public class FinModelBudgetTests : IDisposable
             _mockCrud.Object,
             _mockListView.Object,
             budgetRef,
-            scopeFactory);
+            scopeFactory,
+            new NoopFileStorage());
 
         var options = new DbContextOptionsBuilder<VisaryDbContext>()
             .UseInMemoryDatabase($"FinModelBudgetTest_{Guid.NewGuid()}")
@@ -279,7 +280,7 @@ public class FinModelBudgetTests : IDisposable
             It.IsAny<CancellationToken>()), Times.Never);
 
         // Сообщение об пропуске присутствует.
-        Assert.Contains(apply.Errors, e => e.Code == "budget_upload_skipped_wbs_exists");
+        Assert.Contains(apply.Errors, e => e.ErrorCode == "budget_upload_skipped_wbs_exists");
     }
 
     [Fact]
@@ -323,7 +324,7 @@ public class FinModelBudgetTests : IDisposable
         _mockBudgetUploader.Verify(u => u.UploadAndWaitAsync(
             It.IsAny<Guid>(), It.IsAny<TimeSpan?>(), It.IsAny<TimeSpan?>(),
             It.IsAny<CancellationToken>()), Times.Never);
-        Assert.Contains(apply.Errors, e => e.Code == "budget_upload_precheck_failed");
+        Assert.Contains(apply.Errors, e => e.ErrorCode == "budget_upload_precheck_failed");
     }
 
     [Fact]

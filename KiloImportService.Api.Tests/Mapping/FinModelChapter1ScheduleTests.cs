@@ -61,7 +61,8 @@ public class FinModelChapter1ScheduleTests : IDisposable
             _mockCrud.Object,
             _mockListView.Object,
             budgetRef,
-            scopeFactory);
+            scopeFactory,
+            new NoopFileStorage());
 
         var options = new DbContextOptionsBuilder<VisaryDbContext>()
             .UseInMemoryDatabase($"FinModelScheduleTest_{Guid.NewGuid()}")

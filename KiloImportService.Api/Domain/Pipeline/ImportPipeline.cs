@@ -51,6 +51,12 @@ public sealed class ImportPipeline
     /// Принять файл и зарегистрировать сессию (status=Pending).
     /// Парсинг запускается отдельно через <see cref="ParseAndValidateAsync"/>.
     /// </summary>
+    /// <param name="secondaryFileStream">
+    /// Опциональный второй файл (для FinModel — «План»). Сохраняется в storage,
+    /// путь записывается в <see cref="ImportFileSnapshot.SecondaryRelativePath"/>.
+    /// На Apply пайплайн пробросит путь в <see cref="ImportContext.SecondaryFileRelativePath"/>,
+    /// мапер сам откроет файл через <see cref="IFileStorage"/>. См. doc 110.
+    /// </param>
     public async Task<ImportSession> UploadAsync(
         string importTypeCode,
         Stream fileStream,
@@ -58,7 +64,9 @@ public sealed class ImportPipeline
         int? visaryProjectId,
         int? visarySiteId,
         string? userId,
-        CancellationToken ct)
+        CancellationToken ct,
+        Stream? secondaryFileStream = null,
+        string? secondaryFileName = null)
     {
         // Проверяем тип импорта.
         _ = _mapperRegistry.GetByTypeCode(importTypeCode); // throws if unknown
@@ -80,6 +88,24 @@ public sealed class ImportPipeline
         // Сохраняем файл на диск (в storage).
         var snapshotPath = await _storage.SaveAsync(ms, fileName, ct);
 
+        // Второй файл — опционально. Сохраняем как отдельный объект storage,
+        // путь и метаданные кладём в Snapshot. Формат не валидируем здесь —
+        // мапер сам решает, как его трактовать (для FinModel ожидается XLSX).
+        string? secondaryPath = null;
+        long? secondarySize = null;
+        if (secondaryFileStream is not null)
+        {
+            using var ms2 = new MemoryStream();
+            await secondaryFileStream.CopyToAsync(ms2, ct);
+            ms2.Position = 0;
+            if (ms2.Length > 0)
+            {
+                secondaryPath = await _storage.SaveAsync(
+                    ms2, secondaryFileName ?? "secondary.xlsx", ct);
+                secondarySize = ms2.Length;
+            }
+        }
+
         // Создаём сессию + ImportFileSnapshot.
         var session = new ImportSession
         {
@@ -98,12 +124,17 @@ public sealed class ImportPipeline
             RelativePath = snapshotPath,
             ContentType = ContentTypeFor(format),
             SizeBytes = ms.Length,
+            SecondaryRelativePath = secondaryPath,
+            SecondaryFileName = secondaryPath is null ? null : secondaryFileName,
+            SecondarySizeBytes = secondarySize,
         };
         _serviceDb.Sessions.Add(session);
         await _serviceDb.SaveChangesAsync(ct);
 
-        _log.LogInformation("Import session {SessionId} created: type={Type} file={File} ({Size} bytes)",
-            session.Id, importTypeCode, fileName, ms.Length);
+        _log.LogInformation(
+            "Import session {SessionId} created: type={Type} file={File} ({Size} bytes){SecondaryInfo}",
+            session.Id, importTypeCode, fileName, ms.Length,
+            secondaryPath is null ? "" : $" + secondary='{secondaryFileName}' ({secondarySize} bytes)");
 
         return session;
     }
@@ -178,7 +209,9 @@ public sealed class ImportPipeline
         await _hub.Clients.Group(groupName).SendAsync("StageStarted", new { sessionId, stage = "Validate" }, ct);
 
         _log.LogInformation("Session {SessionId}: calling mapper.ValidateAsync", sessionId);
-        var ctx = new ImportContext(sessionId, session.VisaryProjectId, session.VisarySiteId, session.UserId);
+        var ctx = new ImportContext(
+            sessionId, session.VisaryProjectId, session.VisarySiteId, session.UserId,
+            SecondaryFileRelativePath: session.FileSnapshot?.SecondaryRelativePath);
         var validation = await mapper.ValidateAsync(ctx, parseResult.Rows, _visaryDb, ct);
         _log.LogInformation("Session {SessionId}: mapper.ValidateAsync returned rows={RowsCount} errors={ErrorsCount}", 
             sessionId, validation.Rows.Count, validation.FileLevelErrors.Count);
@@ -336,7 +369,12 @@ public sealed class ImportPipeline
 
     private async Task ApplyCoreAsync(Guid sessionId, CancellationToken ct)
     {
-        var session = await _serviceDb.Sessions.FirstAsync(s => s.Id == sessionId, ct);
+        // Include(FileSnapshot) нужен для ImportContext.SecondaryFileRelativePath:
+        // мапер на Apply-стадии должен иметь возможность открыть второй файл
+        // (для FinModel — лист «План»). См. doc 110.
+        var session = await _serviceDb.Sessions
+            .Include(s => s.FileSnapshot)
+            .FirstAsync(s => s.Id == sessionId, ct);
         if (session.Status != ImportStatus.Validated)
             throw new InvalidOperationException($"Apply возможен только из статуса Validated, текущий: {session.Status}.");
 
@@ -353,7 +391,9 @@ public sealed class ImportPipeline
             .ToListAsync(ct);
 
         var mappedRows = staged.Select(r => new MappedRow(r.SourceRowNumber, r.Sheet ?? string.Empty, true, r.MappedValues!, [])).ToList();
-        var ctx = new ImportContext(sessionId, session.VisaryProjectId, session.VisarySiteId, session.UserId);
+        var ctx = new ImportContext(
+            sessionId, session.VisaryProjectId, session.VisarySiteId, session.UserId,
+            SecondaryFileRelativePath: session.FileSnapshot?.SecondaryRelativePath);
         var applyResult = await mapper.ApplyAsync(ctx, _visaryDb, mappedRows, ct);
 
         // Обновляем статусы StagedRow + переносим per-row actions из маппера.

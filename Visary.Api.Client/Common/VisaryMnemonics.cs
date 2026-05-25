@@ -18,6 +18,7 @@ public static class VisaryMnemonics
     public const string ProjectManagement = "projectmanagement";
     public const string CostItem = "costitem";
     public const string CompanyGroup = "companygroup";
+    public const string FmModel = "fmmodel";
 
     // ─── Справочники ────────────────────────────────────────────────────
     public const string Town                = "town";

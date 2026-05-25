@@ -21,6 +21,9 @@ export default function App() {
   const [projectId, setProjectId] = useState<number | null>(null);
   const [siteId, setSiteId] = useState<number | null>(null);
   const [file, setFile] = useState<File | null>(null);
+  // Опциональный второй файл (Финмодель — лист «План»).
+  // См. doc_project/110-finmodel-plan-and-fmmodel.md.
+  const [secondaryFile, setSecondaryFile] = useState<File | null>(null);
 
   const importSession = useImportSession();
   const importTypes = useImportTypes();
@@ -51,12 +54,17 @@ export default function App() {
       file,
       projectId,
       siteId: requiresSite ? siteId : null,
+      // secondaryFile прокидываем только если он есть и тип импорта его поддерживает
+      // (на сегодня — только finmodel). Для остальных типов backend поле просто
+      // проигнорирует (валидации нет), но семантически удобнее не слать.
+      secondaryFile: importType === 'finmodel' ? secondaryFile : null,
     });
   };
 
   const handleReset = () => {
     importSession.reset();
     setFile(null);
+    setSecondaryFile(null);
   };
 
   const isFormPhase = importSession.phase === 'idle';
@@ -123,6 +131,17 @@ export default function App() {
               file={file}
               detectedFormat={detectedFormat}
               onFileSelect={setFile}
+              // Финмодель — единственный тип, поддерживающий «файл №2 с планами».
+              // Для остальных слот не отрисовываем (см. doc 110).
+              {...(importType === 'finmodel'
+                ? {
+                    secondaryFile,
+                    onSecondaryFileSelect: setSecondaryFile,
+                    secondaryLabel: 'Файл с планами по фин. модели (опционально)',
+                    secondaryHint:
+                      'XLSX с листом «План» — строки «Год» и «Квартал». Backend возьмёт крайние значения для PeriodStart/PeriodEnd и создаст Финмодель в Visary.',
+                  }
+                : {})}
             />
 
             {importSession.error && (

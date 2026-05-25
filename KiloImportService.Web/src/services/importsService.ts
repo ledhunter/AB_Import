@@ -136,6 +136,13 @@ export interface UploadImportPayload {
   file: File;
   projectId?: number | null;
   siteId?: number | null;
+  /**
+   * Опциональный второй файл. Сейчас используется только Финмоделью —
+   * заказчик загружает «файл с планами» (лист «План»), из которого backend
+   * читает краевые квартальные значения и создаёт `fmmodel` в Visary.
+   * См. doc_project/110-finmodel-plan-and-fmmodel.md.
+   */
+  secondaryFile?: File | null;
 }
 
 /**
@@ -151,6 +158,7 @@ export async function uploadImport(
   form.set('file', payload.file);
   if (payload.projectId != null) form.set('projectId', String(payload.projectId));
   if (payload.siteId != null) form.set('siteId', String(payload.siteId));
+  if (payload.secondaryFile) form.set('secondaryFile', payload.secondaryFile);
 
   return fetchJson<ApiUploadResult>('/api/imports', {
     method: 'POST',
