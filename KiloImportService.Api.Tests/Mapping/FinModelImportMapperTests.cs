@@ -207,7 +207,8 @@ public class FinModelImportMapperTests : IDisposable
             _mockCrud.Object,
             _mockListView.Object,
             budgetRef,
-            scopeFactory);
+            scopeFactory,
+            new NoopFileStorage());
 
         var options = new DbContextOptionsBuilder<VisaryDbContext>()
             .UseInMemoryDatabase($"FinModelTest_{Guid.NewGuid()}")

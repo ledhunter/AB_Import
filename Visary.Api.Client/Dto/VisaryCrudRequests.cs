@@ -422,3 +422,23 @@ public sealed class CostItemPatchRequest
     public double? PlanSum { get; set; }
     public CostItemPeriod? PlanPeriod { get; set; }
 }
+
+/// <summary>
+/// POST <c>/api/visary/crud/fmmodel</c> — создание Финмодели по проекту/объекту.
+/// Импортируется из второго файла «Финмодель» (лист «План»): краевые значения
+/// (Год + Квартал) превращаются в <see cref="PeriodStart"/>/<see cref="PeriodEnd"/>
+/// формата <c>"{Year}Q{N}"</c>. <see cref="Title"/> — фиксированная константа
+/// «Модель из эксель файла» (видимое имя в Visary).
+/// Идемпотентности на сервере нет: повторный POST породит дубликат.
+/// Caller обязан pre-check'ить через <see cref="ListView.IListViewClient.FindFmModelsAsync"/>.
+/// См. doc_project/110-finmodel-plan-and-fmmodel.md.
+/// </summary>
+public sealed class FmModelCreateRequest
+{
+    public string Title { get; set; } = null!;
+    public string? ProjectCode { get; set; }
+    public int ABProjectID { get; set; }
+    public int ABConstructionSiteID { get; set; }
+    public string PeriodStart { get; set; } = null!;
+    public string PeriodEnd { get; set; } = null!;
+}

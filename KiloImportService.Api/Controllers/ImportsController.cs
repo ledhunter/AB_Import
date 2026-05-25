@@ -59,6 +59,10 @@ public class ImportsController : ControllerBase
         [FromForm] IFormFile file,
         [FromForm] int? projectId,
         [FromForm] int? siteId,
+        // Опциональный второй файл. На сегодня используется только FinModel-импортом
+        // (лист «План» — краевые квартальные значения для создания fmmodel в Visary).
+        // См. doc_project/110-finmodel-plan-and-fmmodel.md.
+        [FromForm] IFormFile? secondaryFile,
         CancellationToken ct)
     {
         if (file is null || file.Length == 0) return BadRequest(new { error = "Файл не передан или пустой." });
@@ -69,9 +73,24 @@ public class ImportsController : ControllerBase
         try
         {
             await using var stream = file.OpenReadStream();
-            session = await _pipeline.UploadAsync(
-                importTypeCode, stream, file.FileName, projectId, siteId,
-                userId: User.Identity?.Name, ct);
+            // Второй файл: если пришёл — открываем его поток и передаём в pipeline.
+            // Stream нельзя дробить «в фоне», поэтому всё в одном using-блоке.
+            if (secondaryFile is { Length: > 0 })
+            {
+                await using var secondaryStream = secondaryFile.OpenReadStream();
+                session = await _pipeline.UploadAsync(
+                    importTypeCode, stream, file.FileName, projectId, siteId,
+                    userId: User.Identity?.Name,
+                    ct: ct,
+                    secondaryFileStream: secondaryStream,
+                    secondaryFileName: secondaryFile.FileName);
+            }
+            else
+            {
+                session = await _pipeline.UploadAsync(
+                    importTypeCode, stream, file.FileName, projectId, siteId,
+                    userId: User.Identity?.Name, ct);
+            }
         }
         catch (ArgumentException ex) { return BadRequest(new { error = ex.Message }); }
         catch (NotSupportedException ex) { return BadRequest(new { error = ex.Message }); }

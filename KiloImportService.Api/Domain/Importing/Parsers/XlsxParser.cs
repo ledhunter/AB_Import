@@ -92,7 +92,7 @@ public sealed class XlsxParser : IFileParser
     /// Сообщение от ClosedXML вида: "Unable to determine token for '…URL…' at index N".
     /// Под этот случай попадают и формулы в ячейках, и defined names с external refs.
     /// </summary>
-    private static bool IsExternalLinkError(Exception ex)
+    internal static bool IsExternalLinkError(Exception ex)
     {
         var msg = ex.Message ?? string.Empty;
         return msg.Contains("Unable to determine token", StringComparison.OrdinalIgnoreCase)
@@ -111,7 +111,7 @@ public sealed class XlsxParser : IFileParser
     ///    у которых RefersTo содержит URL или `[file]` (т.е. ссылается во вне).
     /// 3) Из `xl/_rels/workbook.xml.rels` — Relationship с типом `…/externalLink`.
     /// </summary>
-    private static byte[] StripExternalLinks(byte[] source)
+    internal static byte[] StripExternalLinks(byte[] source)
     {
         // Копию байтов кладём в writable MemoryStream — ZipArchiveMode.Update
         // требует возможности расширять/перезаписывать поток. По завершении

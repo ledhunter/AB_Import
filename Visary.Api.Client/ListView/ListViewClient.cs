@@ -172,6 +172,18 @@ public interface IListViewClient
     Task<ListViewResponse<CostItemRaw>> GetCostItemsByWbsAsync(
         int wbsId, CancellationToken ct = default);
 
+    /// <summary>
+    /// Pre-check для CreateFmModel: ищем существующую Финмодель по
+    /// (ABProjectID, ABConstructionSiteID). Используется FinModel-импортом
+    /// (doc 110) — повторный импорт того же проекта/объекта не должен плодить
+    /// дубликаты, даже если Title одинаковый. Visary серверной идемпотентности
+    /// нет, поэтому это единственная защита.
+    /// HAR-эндпоинт: <c>POST /api/visary/listview/fmmodel</c> с
+    /// <c>Filter [["ABProjectID","=",X],"and",["ABConstructionSiteID","=",Y]]</c>.
+    /// </summary>
+    Task<ListViewResponse<FmModelRaw>> FindFmModelsAsync(
+        int abProjectId, int abConstructionSiteId, CancellationToken ct = default);
+
     // ─── Справочники (list для резолвинга «название → ID») ──────────────────
     // Используются мапперами импорта: тянем справочник один раз на сессию,
     // строим Title → ID словарь по живым данным (не хардкод switch'ем).
@@ -276,6 +288,14 @@ public sealed class ListViewClient : VisaryHttpBase<ListViewClient>, IListViewCl
     private static readonly string[] CostItemColumns =
         ["ID", "WBS", "Snapshot", "PlanSum", "Status", "PlanPeriod", "ProjectDoc",
          "Version", "PlanMonth", "PlanQuarter", "PlanYear"];
+
+    // Колонки для fmmodel listview — точно тот же набор, что шлёт Visary UI
+    // (HAR заказчика). Минимальный набор сервер отбивал 400. Расширенный список
+    // зеркалит payload UI; лишние поля идут в FmModelRaw как unused — это OK.
+    private static readonly string[] FmModelColumns =
+        ["ID", "Title", "Portfolio", "ProjectCode", "ConstructionSiteCode",
+         "ABProjectID", "ABConstructionSiteID", "PeriodStart", "PeriodEnd",
+         "CreditLineCode", "ABCreditLineID", "CommisioningPeriod"];
 
     private static readonly string[] ShareAgreementColumns =
         ["ID", "Title", "Number", "Date", "ConstructionPermitNumber", "ConstructionPermitDate",
@@ -932,6 +952,59 @@ public sealed class ListViewClient : VisaryHttpBase<ListViewClient>, IListViewCl
         return PostListViewAsync<CostItemRaw>(
             $"{BaseUrl}/api/visary/listview/{VisaryMnemonics.CostItem}/onetomany/WBS?associationId={wbsId}",
             body, $"{VisaryMnemonics.CostItem}/onetomany/WBS id={wbsId}", ct);
+    }
+
+    // ─── FmModel (Финмодель) ────────────────────────────────────────────────
+
+    public Task<ListViewResponse<FmModelRaw>> FindFmModelsAsync(
+        int abProjectId, int abConstructionSiteId, CancellationToken ct)
+    {
+        // ⚠️ fmmodel listview контракт ОТЛИЧАЕТСЯ от других listview:
+        //   • `Filter` — JSON-**строка** с экранированным массивом условий
+        //     (не нативный массив, как у ShareAgreement/CostItem/CompanyGroup);
+        //   • `Scope` — обязательный JSON-string с FMModels-ассоциацией проекта.
+        // Без обоих сервер бьёт 400 Bad Request. Контракт подсмотрен в HAR Visary UI;
+        // см. doc_project/110-finmodel-plan-and-fmmodel.md.
+        //
+        // Для идемпотентности достаточно (Title, ABConstructionSiteID) — `Scope` сам
+        // ограничивает выборку проектом `abProjectId`, поэтому отдельный фильтр
+        // ABProjectID избыточен. Title-фильтр через `contains` — нашей константы
+        // <c>FmModelTitle</c>; UI шлёт его же, поэтому маркер совпадает.
+        var filterArray = new object[]
+        {
+            new object[] { "Title", "contains", "Модель из эксель файла" },
+            "and",
+            new object[] { "ABConstructionSiteID", "=", abConstructionSiteId },
+        };
+        var filterJson = JsonSerializer.Serialize(filterArray);
+
+        var scopeJson = JsonSerializer.Serialize(new
+        {
+            EntityId = abProjectId,
+            FilterName = "ConstructionProject_ConstructionProject_FMModels_IndirectAssociation",
+        });
+
+        var body = new
+        {
+            Mnemonic = VisaryMnemonics.FmModel,
+            PageSkip = 0,
+            PageSize = Options.LargePageSize,
+            Columns = FmModelColumns,
+            Filter = filterJson,
+            SearchPhrase = (string?)null,
+            Sorts = SortsNullSentinel,
+            Hidden = false,
+            Summaries = Array.Empty<object>(),
+            Scope = scopeJson,
+        };
+        _log.LogDebug(
+            "Visary → GET listview/{Mnemonic} scope(EntityId={ProjectId}) filter[ABConstructionSiteID={SiteId}]",
+            VisaryMnemonics.FmModel, abProjectId, abConstructionSiteId);
+        return PostListViewAsync<FmModelRaw>(
+            $"{BaseUrl}/api/visary/listview/{VisaryMnemonics.FmModel}",
+            body,
+            $"{VisaryMnemonics.FmModel} scope(EntityId={abProjectId}) filter(ABConstructionSiteID={abConstructionSiteId})",
+            ct);
     }
 
     // ─── Справочники ─────────────────────────────────────────────────────────
