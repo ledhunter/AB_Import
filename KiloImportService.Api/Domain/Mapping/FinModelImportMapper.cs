@@ -551,21 +551,48 @@ public sealed class FinModelImportMapper : IImportMapper
         bool? budgetUploadOk = null;
         if (budgetRows.Count > 0)
         {
-            // Бюджет в Visary заливается автоматически: BudgetXlsxExporter уже сохранил
-            // mapped budget rows в staged_rows на стадии Validate; здесь поднимаем XLSX,
-            // отправляем в файловое хранилище Visary, создаём typedimportwbs и ждём
-            // финального статуса Visary'я. ГФ Главы 1 ниже создаёт CostItem-ы на WBS-узлах,
-            // которые появляются в Visary именно по результатам этого импорта, поэтому
-            // запускать ГФ до завершения бюджета бессмысленно (узлов ещё нет в ИСР).
-            // Если Visary вернул «Закончен с ошибками» / timeout / сетевой сбой —
-            // UploadBudgetToVisaryAsync пишет одну консолидированную row-error
-            // (что сделано + причина Visary + «ГФ не создан»), и мы НЕ запускаем ГФ.
-            // См. doc_project/82-visary-file-storage-upload.md и doc 94.
+            // Pre-check: если в ИСР объекта уже есть WBS-узлы — бюджет повторно
+            // не заливаем. Заказчик не хочет «перезатирать» уже сформированную ИСР
+            // вторым typedimportwbs. ГФ Главы 1 запускаем сразу — узлы есть.
+            // См. doc_project/109-finmodel-prechecks-wbs-and-gf.md.
             var schedulePending = scheduleArticleRows.Count > 0 && scheduleQuartersRow is not null;
-            budgetUploadOk = await UploadBudgetToVisaryAsync(
-                context.SessionId, budgetRows.Count, paramsApplied, schedulePending, errors, ct);
-            if (budgetUploadOk.Value)
-                applied += budgetRows.Count;
+            var wbsExists = await WbsAlreadyExistsForSiteAsync(siteId, errors, ct);
+            if (wbsExists is null)
+            {
+                // listview/wbs упал — Pre-check считаем неуспешным и НЕ запускаем заливку
+                // (иначе можем породить дубликат, если на самом деле WBS уже есть).
+                // ГФ тоже пропускаем — без подтверждённого состояния ИСР это слепой POST.
+                budgetUploadOk = false;
+            }
+            else if (wbsExists.Value)
+            {
+                _log.LogInformation(
+                    "FinModelImportMapper: ИСР объекта siteId={SiteId} уже содержит WBS-узлы — заливка XLSX-бюджета пропущена",
+                    siteId);
+                errors.Add(new RowError(null, "budget_upload_skipped_wbs_exists",
+                    "Импорт бюджета в Visary пропущен: ИСР объекта строительства уже сформирована (есть WBS-узлы). " +
+                    (schedulePending
+                        ? "ГФ Главы 1 будет применён к существующим статьям ИСР."
+                        : "ГФ Главы 1 не запрашивался.")));
+                budgetUploadOk = true;
+            }
+            else
+            {
+                // Бюджет в Visary заливается автоматически: BudgetXlsxExporter уже сохранил
+                // mapped budget rows в staged_rows на стадии Validate; здесь поднимаем XLSX,
+                // отправляем в файловое хранилище Visary, создаём typedimportwbs и ждём
+                // финального статуса Visary'я. ГФ Главы 1 ниже создаёт CostItem-ы на WBS-узлах,
+                // которые появляются в Visary именно по результатам этого импорта, поэтому
+                // запускать ГФ до завершения бюджета бессмысленно (узлов ещё нет в ИСР).
+                // Если Visary вернул «Закончен с ошибками» / timeout / сетевой сбой —
+                // UploadBudgetToVisaryAsync пишет одну консолидированную row-error
+                // (что сделано + причина Visary + «ГФ не создан»), и мы НЕ запускаем ГФ.
+                // См. doc_project/82-visary-file-storage-upload.md и doc 94.
+                budgetUploadOk = await UploadBudgetToVisaryAsync(
+                    context.SessionId, budgetRows.Count, paramsApplied, schedulePending, errors, ct);
+                if (budgetUploadOk.Value)
+                    applied += budgetRows.Count;
+            }
         }
 
         if (scheduleArticleRows.Count > 0 && scheduleQuartersRow is not null)
@@ -596,6 +623,32 @@ public sealed class FinModelImportMapper : IImportMapper
         }
 
         return new ApplyResult(applied, errors, rowActions.Count > 0 ? rowActions : null);
+    }
+
+    /// <summary>
+    /// Pre-check перед заливкой XLSX-бюджета: в ИСР выбранного объекта уже есть
+    /// WBS-узлы? Возвращает <c>true</c> (есть, заливку пропускаем), <c>false</c>
+    /// (нет, заливаем) или <c>null</c> при ошибке listview/wbs (тогда заливать не
+    /// безопасно — может быть и есть, и нет). См. doc 109.
+    /// </summary>
+    private async Task<bool?> WbsAlreadyExistsForSiteAsync(
+        int siteId, List<RowError> errors, CancellationToken ct)
+    {
+        try
+        {
+            var wbs = await _listViewClient.GetWbsBySiteAsync(siteId, ct);
+            return wbs.Data is { Count: > 0 };
+        }
+        catch (Exception ex)
+        {
+            _log.LogError(ex,
+                "FinModelImportMapper: pre-check WBS-by-site failed (siteId={SiteId}) — заливка бюджета и ГФ пропущены",
+                siteId);
+            errors.Add(new RowError(null, "budget_upload_precheck_failed",
+                $"Не удалось проверить наличие ИСР объекта строительства (siteId={siteId}): {ex.Message}. " +
+                "Заливка бюджета и ГФ Главы 1 пропущены, чтобы не создать дубликат WBS."));
+            return null;
+        }
     }
 
     /// <summary>
@@ -2109,7 +2162,7 @@ public sealed class FinModelImportMapper : IImportMapper
                 .GroupBy(ci => ci.PlanPeriod!.Start.Date)
                 .ToDictionary(g => g.Key, g => g.First());
 
-            int created = 0, patched = 0, skipped = 0, failed = 0;
+            int created = 0, skipped = 0, failed = 0;
             foreach (var (col, amountThousands) in cells)
             {
                 ct.ThrowIfCancellationRequested();
@@ -2123,46 +2176,37 @@ public sealed class FinModelImportMapper : IImportMapper
                 var quarterLabel = FormatQuarterLabel(qStart);
                 var cellLabel = $"{col}{rowNum}";
 
+                // Pre-check существующего ГФ за этот квартал: уже есть — skip без PATCH.
+                // Заказчик не хочет перезатирать суммы уже импортированного ГФ повторным
+                // запуском Финмодели; ручные правки в Visary остаются нетронутыми.
+                // См. doc 109.
+                if (existingByStart.TryGetValue(qStart.Date, out var match))
+                {
+                    skipped++;
+                    var existingSum = match.PlanSum is double cur ? FormatRub(cur) : "—";
+                    perRowActions.Add(
+                        $"ГФ {cellLabel} ({quarterLabel}, статья {code.TrimEnd('.')}): уже существует " +
+                        $"(сумма в Visary: {existingSum}) — пропуск");
+                    continue;
+                }
+
                 try
                 {
-                    if (existingByStart.TryGetValue(qStart.Date, out var match))
+                    await _visaryClient.CreateCostItemAsync(new CostItemCreateRequest
                     {
-                        if (match.PlanSum is double cur && Math.Abs(cur - amountRub) < 0.01)
+                        WBSID = wbs.ID,
+                        WBS = new VisaryRef { ID = wbs.ID },
+                        PlanSum = amountRub,
+                        PlanPeriod = new CostItemPeriod
                         {
-                            skipped++;
-                            perRowActions.Add(
-                                $"ГФ {cellLabel} ({quarterLabel}, статья {code.TrimEnd('.')}): сумма {FormatRub(amountRub)} совпадает — без изменений");
-                        }
-                        else
-                        {
-                            await _visaryClient.PatchCostItemAsync(match.ID, new CostItemPatchRequest
-                            {
-                                PlanSum = amountRub,
-                            }, ct);
-                            patched++;
-                            perRowActions.Add(
-                                $"ГФ {cellLabel} ({quarterLabel}, статья {code.TrimEnd('.')}): обновлено " +
-                                $"{FormatRub(match.PlanSum ?? 0)} → {FormatRub(amountRub)}");
-                        }
-                    }
-                    else
-                    {
-                        await _visaryClient.CreateCostItemAsync(new CostItemCreateRequest
-                        {
-                            WBSID = wbs.ID,
-                            WBS = new VisaryRef { ID = wbs.ID },
-                            PlanSum = amountRub,
-                            PlanPeriod = new CostItemPeriod
-                            {
-                                Start = DateTime.SpecifyKind(qStart, DateTimeKind.Utc),
-                                End = DateTime.SpecifyKind(qEnd, DateTimeKind.Utc),
-                            },
-                            Status = CostItemStatus.Plan,
-                        }, ct);
-                        created++;
-                        perRowActions.Add(
-                            $"ГФ {cellLabel} ({quarterLabel}, статья {code.TrimEnd('.')}): создано {FormatRub(amountRub)}");
-                    }
+                            Start = DateTime.SpecifyKind(qStart, DateTimeKind.Utc),
+                            End = DateTime.SpecifyKind(qEnd, DateTimeKind.Utc),
+                        },
+                        Status = CostItemStatus.Plan,
+                    }, ct);
+                    created++;
+                    perRowActions.Add(
+                        $"ГФ {cellLabel} ({quarterLabel}, статья {code.TrimEnd('.')}): создано {FormatRub(amountRub)}");
                 }
                 catch (Exception ex)
                 {
@@ -2178,9 +2222,9 @@ public sealed class FinModelImportMapper : IImportMapper
             }
 
             _log.LogInformation(
-                "ГФ: статья {Code} wbsId={WbsId} — created={Created} patched={Patched} skipped={Skipped} failed={Failed}",
-                code, wbs.ID, created, patched, skipped, failed);
-            applied += created + patched + skipped;
+                "ГФ: статья {Code} wbsId={WbsId} — created={Created} skipped={Skipped} failed={Failed}",
+                code, wbs.ID, created, skipped, failed);
+            applied += created + skipped;
             if (perRowActions.Count > 0)
                 rowActions.Add(new RowActionLog(rowNum, sheet, perRowActions));
         }

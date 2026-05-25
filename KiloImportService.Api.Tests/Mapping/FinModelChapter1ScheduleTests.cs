@@ -234,13 +234,16 @@ public class FinModelChapter1ScheduleTests : IDisposable
     }
 
     [Fact]
-    public async Task Apply_ScheduleArticle_PatchesExistingOnAmountChange()
+    public async Task Apply_ScheduleArticle_SkipsExistingEvenOnAmountChange()
     {
+        // Pre-check 2 (doc 109): если ГФ за этот квартал уже есть — skip без PATCH-on-diff.
+        // Заказчик не хочет перезатирать суммы уже импортированного ГФ повторной
+        // финмоделью; ручные правки в Visary остаются нетронутыми.
         SetupWbsBySite(("1.1.", Wbs11Id));
         SetupExistingCostItems(Wbs11Id,
             new CostItemRaw
             {
-                ID = 700, WBSID = Wbs11Id, PlanSum = 100_000_000.0, // старое
+                ID = 700, WBSID = Wbs11Id, PlanSum = 100_000_000.0, // отличается от файла
                 PlanPeriod = new CostItemPeriod
                 {
                     Start = new DateTime(2026, 1, 1), End = new DateTime(2026, 3, 31),
@@ -250,15 +253,18 @@ public class FinModelChapter1ScheduleTests : IDisposable
         var rows = await ValidateAndCollect(
             ScheduleRow(481, "Затраты на приобретение прав на ЗУ", h: "238000"));
 
-        await _mapper.ApplyAsync(Ctx(), _dbContext, rows, default);
+        var apply = await _mapper.ApplyAsync(Ctx(), _dbContext, rows, default);
 
-        _mockCrud.Verify(c => c.PatchCostItemAsync(
-            700,
-            It.Is<CostItemPatchRequest>(r => r.PlanSum == 238_000_000.0),
-            It.IsAny<CancellationToken>()),
-            Times.Once);
+        _mockCrud.Verify(c => c.PatchCostItemAsync(It.IsAny<int>(), It.IsAny<CostItemPatchRequest>(),
+            It.IsAny<CancellationToken>()), Times.Never);
         _mockCrud.Verify(c => c.CreateCostItemAsync(It.IsAny<CostItemCreateRequest>(), It.IsAny<CancellationToken>()),
             Times.Never);
+
+        var rowAction = Assert.Single(apply.RowActions!);
+        Assert.Contains(rowAction.Actions, a =>
+            a.Contains("H481", StringComparison.Ordinal)
+            && a.Contains("уже существует", StringComparison.Ordinal)
+            && a.Contains("пропуск", StringComparison.Ordinal));
     }
 
     [Fact]
