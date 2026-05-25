@@ -494,24 +494,30 @@ public sealed class RoomsFormImportMapper : IImportMapper
 
             // «Колич. комнат» нередко приходит в свободной форме: «1 к.», «1 к», «п1»,
             // «1п», «2-к», «3 ком.», «студия». Берём ПЕРВУЮ непрерывную группу цифр —
-            // это и есть число комнат. «студия»/прочерк/пусто → null. Жёсткое
-            // int.TryParse тут не годится: пользователю не должно прилетать
-            // invalid_number на «1 к.» — это валидная однушка в реальных реестрах.
+            // это и есть число комнат. Жёсткое int.TryParse тут не годится:
+            // пользователю не должно прилетать invalid_number на «1 к.» — это
+            // валидная однушка в реальных реестрах.
+            //
+            // Студии: маркеры «с»/«ст»/«студ»/«студия» (case-insensitive) ИЛИ числовой 0
+            // означают студию — выставляем RoomsCount=0 и IsStudio=true. Для квартиры
+            // в этом случае required_missing не выдаём (заказчик: «студия — валидный
+            // вариант для Квартиры», см. doc 108).
             var roomsCountRaw = ReadString(row, RoomsCountAliases);
             int? roomsCount = ExtractFirstRunOfDigits(roomsCountRaw);
+            bool isStudio = IsStudioMarker(roomsCountRaw) || roomsCount == 0;
+            if (isStudio) roomsCount = 0;
             if (roomsCount.HasValue
                 && !string.Equals(roomsCountRaw, roomsCount.Value.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal))
             {
                 _log.LogDebug(
-                    "RoomsForm.Validate: row {Row} — «Колич. комнат» '{Raw}' нормализовано в {N} (вытащена ведущая цифровая группа).",
-                    row.SourceRowNumber, roomsCountRaw, roomsCount.Value);
+                    "RoomsForm.Validate: row {Row} — «Колич. комнат» '{Raw}' нормализовано в {N}{Studio}.",
+                    row.SourceRowNumber, roomsCountRaw, roomsCount.Value,
+                    isStudio ? " (студия)" : string.Empty);
             }
-            // Если raw непустой, но числа нет — пользователь написал «студия»/«—» и т.п.
-            // Не считаем ошибкой числа: оставляем null. required_missing-проверка ниже
-            // (только если Kind=Квартира) подскажет, если для квартиры реально нужна цифра.
 
-            // Если вид помещения «Квартира» — «Количество комнат» обязательно.
-            if (roomsCount is null
+            // Если вид помещения «Квартира» — «Количество комнат» обязательно
+            // (студия считается заданным значением, RoomsCount=0 + IsStudio=true).
+            if (roomsCount is null && !isStudio
                 && !string.IsNullOrWhiteSpace(roomKindTitle)
                 && string.Equals(roomKindTitle.Trim(), "Квартира", StringComparison.OrdinalIgnoreCase))
             {
@@ -565,6 +571,7 @@ public sealed class RoomsFormImportMapper : IImportMapper
                 ["Floor"]                = floor,
                 ["BuildingSection"]      = buildingSection,
                 ["RoomsCount"]           = roomsCount,
+                ["IsStudio"]             = isStudio,
                 ["ProjectArea"]          = projectArea,
                 ["TotalArea"]            = totalArea,
                 ["CostForOne"]           = costForOne,
@@ -881,6 +888,7 @@ public sealed class RoomsFormImportMapper : IImportMapper
                             Floor             = GetStringOrNull(v, "Floor"),
                             BuildingSection   = buildingSection,
                             RoomsNumber       = GetIntOrNull(v, "RoomsCount"),
+                            IsStudio          = GetBoolOrNull(v, "IsStudio"),
                             ProjectArea       = projectAreaForCrud,
                             TotalArea         = totalAreaForCrud,
                             CostForOne        = GetDoubleOrNull(v, "CostForOne"),
@@ -901,6 +909,7 @@ public sealed class RoomsFormImportMapper : IImportMapper
                             Floor           = GetStringOrNull(v, "Floor"),
                             BuildingSection = buildingSection,
                             RoomsNumber     = GetIntOrNull(v, "RoomsCount"),
+                            IsStudio        = GetBoolOrNull(v, "IsStudio"),
                             ProjectArea     = projectAreaForCrud,
                             TotalArea       = totalAreaForCrud,
                             CostForOne      = GetDoubleOrNull(v, "CostForOne"),
@@ -1566,6 +1575,22 @@ public sealed class RoomsFormImportMapper : IImportMapper
             NumberStyles.Integer, CultureInfo.InvariantCulture, out var n) ? n : (int?)null;
     }
 
+    /// <summary>
+    /// Текстовые маркеры студии в колонке «Колич. комнат»: «с», «ст», «студ»,
+    /// «студия» (case-insensitive, после Trim). Сравнение точное по полному
+    /// слову — иначе «секция»/«склад» ложно сматчатся. Числовой 0 студией
+    /// здесь не считается (отдельная проверка в Validate).
+    /// </summary>
+    internal static bool IsStudioMarker(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return false;
+        var s = raw.Trim();
+        return string.Equals(s, "с",      StringComparison.OrdinalIgnoreCase)
+            || string.Equals(s, "ст",     StringComparison.OrdinalIgnoreCase)
+            || string.Equals(s, "студ",   StringComparison.OrdinalIgnoreCase)
+            || string.Equals(s, "студия", StringComparison.OrdinalIgnoreCase);
+    }
+
     /// <summary>«п1» → «1»; «12А» → «12»; «кв. 7» → «7»; «—» → <c>""</c>.
     /// Игнорирует все символы кроме цифр (включая точки/запятые).</summary>
     private static string ExtractDigitsOnly(string? raw)
@@ -1647,4 +1672,8 @@ public sealed class RoomsFormImportMapper : IImportMapper
 
     private static double? GetDoubleOrNull(JsonElement e, string p) =>
         e.TryGetProperty(p, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetDouble() : null;
+
+    private static bool? GetBoolOrNull(JsonElement e, string p) =>
+        e.TryGetProperty(p, out var v) && (v.ValueKind == JsonValueKind.True || v.ValueKind == JsonValueKind.False)
+            ? v.GetBoolean() : null;
 }

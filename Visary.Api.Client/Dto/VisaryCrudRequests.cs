@@ -33,6 +33,12 @@ public sealed class RoomPatchRequest
     public string? Floor { get; set; }
     public string? BuildingSection { get; set; }
     public int? RoomsNumber { get; set; }
+    /// <summary>
+    /// Студия: для импорта Помещений выставляется в <c>true</c>, когда в файле
+    /// в колонке «Колич. комнат» стоит «с»/«ст»/«студ»/«студия» или <c>0</c>
+    /// (см. doc 108). В этом же случае <see cref="RoomsNumber"/> = 0.
+    /// </summary>
+    public bool? IsStudio { get; set; }
     public double? ProjectArea { get; set; }
     /// <summary>
     /// Заполняется только для нежилых помещений (Kind.RoomCategory ≠ 0):
@@ -233,6 +239,10 @@ public sealed class RoomCreateRequest
     public double? MarketCostPerM { get; set; }
     public double? ZalogCostPerM { get; set; }
     public int? RoomsNumber { get; set; }
+    /// <summary>
+    /// Студия: см. <see cref="RoomPatchRequest.IsStudio"/>.
+    /// </summary>
+    public bool? IsStudio { get; set; }
     public double? ProjectArea { get; set; }
     /// <summary>
     /// Заполняется для нежилых помещений (Kind.RoomCategory ≠ 0). См.

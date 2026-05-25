@@ -43,4 +43,32 @@ public class RoomsFormImportMapperTests
         var actual = RoomsFormImportMapper.ExtractFirstRunOfDigits(raw);
         Assert.Equal(expected, actual);
     }
+
+    /// <summary>
+    /// Маркеры студии для колонки «Колич. комнат» (doc 108). Точные слова
+    /// «с»/«ст»/«студ»/«студия» (case-insensitive, после Trim). Любые другие
+    /// строки — НЕ студия, чтобы «секция»/«склад»/«стандарт» не получали
+    /// IsStudio=true по substring-совпадению. Числовой 0 здесь не маркер —
+    /// он распознаётся отдельной веткой в Validate.
+    /// </summary>
+    [Theory]
+    [InlineData("с",      true)]
+    [InlineData("ст",     true)]
+    [InlineData("студ",   true)]
+    [InlineData("студия", true)]
+    [InlineData("Студия", true)]
+    [InlineData("СТУДИЯ", true)]
+    [InlineData(" студия ", true)]   // Trim
+    [InlineData("",        false)]
+    [InlineData(null,      false)]
+    [InlineData("0",       false)]   // числовой 0 — отдельная ветка в Validate
+    [InlineData("1",       false)]
+    [InlineData("студия+", false)]   // строгое сравнение по полному слову
+    [InlineData("секция",  false)]
+    [InlineData("стандарт",false)]
+    [InlineData("сторож",  false)]
+    public void IsStudioMarker_RecognizesOnlyExactStudioWords(string? raw, bool expected)
+    {
+        Assert.Equal(expected, RoomsFormImportMapper.IsStudioMarker(raw));
+    }
 }

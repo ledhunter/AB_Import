@@ -50,7 +50,7 @@ public sealed class RoomApplySnapshotStore
         "RoomNumber", "RoomKindId", "RoomKindTitle", "RoomCategory",
         "SectionTitle", "SectionTitleNumeric",
         "BuildingSection", "Floor",
-        "RoomsCount",
+        "RoomsCount", "IsStudio",
         "ProjectArea", "TotalArea",
         "CostForOne", "MarketCostPerM", "ZalogCostPerM",
         "ShareAgreementNumber",
