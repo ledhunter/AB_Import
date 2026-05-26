@@ -15,6 +15,7 @@ import {
   type HubConnection,
 } from '@microsoft/signalr';
 import type { ApiImportStageKind, ApiImportStatus } from '../types/api';
+import { getAccessToken } from './auth';
 
 const HUB_PATH = '/hubs/imports';
 const LOG_TAG = '[ImportsHub]';
@@ -73,7 +74,13 @@ export async function createImportsHub(
   stop: () => Promise<void>;
 }> {
   const connection = new HubConnectionBuilder()
-    .withUrl(HUB_PATH)
+    .withUrl(HUB_PATH, {
+      // WebSocket-апгрейд не несёт Authorization-header, поэтому SignalR
+      // пошлёт токен в query `?access_token=…`. На backend его подхватывает
+      // JwtBearerEvents.OnMessageReceived (см. Program.cs). Возвращаем '' если
+      // токен не настроен — backend в dev-режиме (Auth:Authority пуст) пропустит.
+      accessTokenFactory: async () => (await getAccessToken()) ?? '',
+    })
     .withAutomaticReconnect()
     .configureLogging(LogLevel.Warning)
     .build();

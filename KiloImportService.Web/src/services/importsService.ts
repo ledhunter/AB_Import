@@ -16,6 +16,7 @@ import type {
   ApiImportTypesResponse,
   ApiUploadResult,
 } from '../types/api';
+import { getAccessToken } from './auth';
 
 // ─────────────────── Errors ───────────────────
 
@@ -47,6 +48,18 @@ interface RequestOptions {
   signal?: AbortSignal;
 }
 
+/**
+ * Если зарегистрирован access_token (см. services/auth.ts) — добавляем
+ * Authorization-header. Иначе init остаётся без изменений (dev-режим).
+ */
+async function withAuth(init: RequestInit): Promise<RequestInit> {
+  const token = await getAccessToken();
+  if (!token) return init;
+  const headers = new Headers(init.headers ?? {});
+  headers.set('Authorization', `Bearer ${token}`);
+  return { ...init, headers };
+}
+
 async function fetchJson<T>(
   path: string,
   init: RequestInit & RequestOptions,
@@ -66,7 +79,7 @@ async function fetchJson<T>(
 
   let response: Response;
   try {
-    response = await fetch(path, init);
+    response = await fetch(path, await withAuth(init));
   } catch (err) {
     if (err instanceof DOMException && err.name === 'AbortError') {
       console.info(`${LOG_TAG} ⊘ aborted ${method} ${path} #${id}`);
@@ -283,12 +296,12 @@ export async function exportImportsPdf(
 
   let response: Response;
   try {
-    response = await fetch(path, {
+    response = await fetch(path, await withAuth({
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ sessionIds }),
       signal: options.signal,
-    });
+    }));
   } catch (err) {
     if (err instanceof DOMException && err.name === 'AbortError') throw err;
     const message = err instanceof Error ? err.message : String(err);
