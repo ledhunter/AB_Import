@@ -184,9 +184,18 @@ secondaryFile: importType === 'finmodel' ? secondaryFile : null,
 
 ---
 
+## 📅 История изменений
+
+- **v1.1 (2026-05-26)** — после создания `fmmodel` импорт автоматически достраивает
+  каскад: версия (`fmmodelversion`) + входные данные (`inputdata`) + link. Парсер
+  «План» расширен на категории помещений (квартиры/нежилые/м/м) и материализацию
+  всех точек (Период × Категория → Summ/Amount/Cost). См.
+  [doc 112](./112-finmodel-version-and-inputdata.md).
+
 ## 🔗 Связанная документация
 
 - [doc 23 — finmodel-import](./23-finmodel-import.md) — изначальная Финмодель (один файл).
+- [doc 112 — finmodel-version-and-inputdata](./112-finmodel-version-and-inputdata.md) — версия + входные данные после создания fmmodel.
 - [doc 82 — visary-file-storage-upload](./82-visary-file-storage-upload.md) — образец работы с `IFileStorage` (загрузка XLSX-бюджета в Visary).
 - [doc 94 — finmodel-auto-budget-before-gf](./94-finmodel-auto-budget-before-gf.md) — паттерн «вызвать что-то из мапера через captive scope».
 - [doc 97 — rooms-apply-tests-and-budget-uploader-interface](./97-rooms-apply-tests-and-budget-uploader-interface.md) — урок про in-memory DB Guid в делегате (тестовые ловушки).

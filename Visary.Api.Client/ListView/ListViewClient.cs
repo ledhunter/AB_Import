@@ -182,7 +182,45 @@ public interface IListViewClient
     /// <c>Filter [["ABProjectID","=",X],"and",["ABConstructionSiteID","=",Y]]</c>.
     /// </summary>
     Task<ListViewResponse<FmModelRaw>> FindFmModelsAsync(
-        int abProjectId, int abConstructionSiteId, CancellationToken ct = default);
+        int abProjectId, int abConstructionSiteId,
+        string? periodStart, string? periodEnd,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Список версий Финмодели (<c>fmmodelversion</c>) у конкретной <c>fmmodel</c>.
+    /// POST <c>/api/visary/listview/fmmodelversion/onetomany/FMModel?associationId={fmModelId}</c>.
+    /// Используется как pre-check перед <see cref="CRUD.ICrudClient.CreateFmModelVersionAsync"/>
+    /// для идемпотентности (на сервере её нет).
+    /// </summary>
+    Task<ListViewResponse<FmModelVersionRaw>> GetFmModelVersionsByModelAsync(
+        int fmModelId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Список «входных данных» (<c>inputdata</c>), привязанных к конкретной версии Финмодели.
+    /// POST <c>/api/visary/listview/inputdata/onetomany/FMModelVersion?associationId={versionId}</c>.
+    /// Используется как pre-check перед массовым <see cref="CRUD.ICrudClient.CreateInputDataAsync"/>
+    /// — повторный импорт того же файла не должен плодить дубликаты по
+    /// (<see cref="InputDataRaw.FMPeriod"/>, <see cref="InputDataRaw.Code"/>.ID).
+    /// </summary>
+    Task<ListViewResponse<InputDataRaw>> GetInputDataByVersionAsync(
+        int versionId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Точечный поиск записи справочника «Код фин. модели» (<c>fmcode</c>) по Title.
+    /// POST <c>/api/visary/listview/fmcode</c>. Используется FinModel-импортом для
+    /// резолва <c>Title → ID</c> при подстановке в <see cref="InputDataCreateRequest.Code"/>.
+    /// <para/>
+    /// ⚠️ Контракт <c>listview/fmcode</c> отличается от обычного `ListDictionaryAsync`:
+    ///   • <c>Filter</c> — JSON-string (как у <c>fmmodel</c>);
+    ///   • <c>Sorts</c> — конкретный JSON-string с сортировкой по <c>Code</c> (НЕ
+    ///     <c>SortsNullSentinel="null"</c>);
+    ///   • полный набор из 14 колонок (по HAR заказчика).
+    /// Возвращает <see cref="ListViewResponse{T}"/> с 0 или 1 записью (Title в Visary —
+    /// уникальный ключ). Для bulk-резолва — n точечных запросов (типичный случай:
+    /// 3–4 категории InputData). См. doc_project/112-finmodel-version-and-inputdata.md.
+    /// </summary>
+    Task<ListViewResponse<FmCodeRaw>> FindFmCodeByTitleAsync(
+        string title, CancellationToken ct = default);
 
     // ─── Справочники (list для резолвинга «название → ID») ──────────────────
     // Используются мапперами импорта: тянем справочник один раз на сессию,
@@ -288,6 +326,29 @@ public sealed class ListViewClient : VisaryHttpBase<ListViewClient>, IListViewCl
     private static readonly string[] CostItemColumns =
         ["ID", "WBS", "Snapshot", "PlanSum", "Status", "PlanPeriod", "ProjectDoc",
          "Version", "PlanMonth", "PlanQuarter", "PlanYear"];
+
+    // Колонки для fmmodelversion listview. Минимальный набор + FMModel ref для
+    // диагностики (когда несколько версий, видно к какой модели они привязаны).
+    private static readonly string[] FmModelVersionColumns =
+        ["ID", "Title", "FMModel"];
+
+    // Колонки для inputdata listview — по HAR заказчика (тот же набор, что шлёт UI
+    // в /onetomany/FMModelVersion link-вызове). Сервер требует ровно этот список.
+    private static readonly string[] InputDataColumns =
+        ["ID", "Title", "FMModelVersion", "FMPeriod", "Code", "CreditLineCode",
+         "ConstructionSiteCode", "CodeGroup", "Summ", "Amount", "Cost", "Percent",
+         "Replicate", "Group"];
+
+    // Колонки для fmcode listview — точно тот набор, что шлёт Visary UI (HAR заказчика).
+    // Минимальный набор сервер отбивал 400.
+    private static readonly string[] FmCodeColumns =
+        ["ID", "Code", "Title", "Group", "Priority", "Method", "Percent", "Type",
+         "Validity", "Sign", "AutoCode", "Unit", "AddParams", "Input"];
+
+    // Sorts для fmcode — JSON-string с сортировкой по Code asc (по HAR Visary UI).
+    // SortsNullSentinel="null" сервер не принимает (400). Сериализован сразу строкой,
+    // чтобы не дёргать JsonSerializer на каждом запросе.
+    private const string FmCodeSortsByCodeAsc = "[{\"selector\":\"Code\",\"desc\":false}]";
 
     // Колонки для fmmodel listview — точно тот же набор, что шлёт Visary UI
     // (HAR заказчика). Минимальный набор сервер отбивал 400. Расширенный список
@@ -957,7 +1018,9 @@ public sealed class ListViewClient : VisaryHttpBase<ListViewClient>, IListViewCl
     // ─── FmModel (Финмодель) ────────────────────────────────────────────────
 
     public Task<ListViewResponse<FmModelRaw>> FindFmModelsAsync(
-        int abProjectId, int abConstructionSiteId, CancellationToken ct)
+        int abProjectId, int abConstructionSiteId,
+        string? periodStart, string? periodEnd,
+        CancellationToken ct)
     {
         // ⚠️ fmmodel listview контракт ОТЛИЧАЕТСЯ от других listview:
         //   • `Filter` — JSON-**строка** с экранированным массивом условий
@@ -966,17 +1029,29 @@ public sealed class ListViewClient : VisaryHttpBase<ListViewClient>, IListViewCl
         // Без обоих сервер бьёт 400 Bad Request. Контракт подсмотрен в HAR Visary UI;
         // см. doc_project/110-finmodel-plan-and-fmmodel.md.
         //
-        // Для идемпотентности достаточно (Title, ABConstructionSiteID) — `Scope` сам
-        // ограничивает выборку проектом `abProjectId`, поэтому отдельный фильтр
-        // ABProjectID избыточен. Title-фильтр через `contains` — нашей константы
-        // <c>FmModelTitle</c>; UI шлёт его же, поэтому маркер совпадает.
-        var filterArray = new object[]
+        // Идемпотентность — по (Title, ABConstructionSiteID, **PeriodStart, PeriodEnd**).
+        // Один сайт может содержать НЕСКОЛЬКО Финмоделей с разными краевыми периодами
+        // (заказчик заводит отдельные модели на разные диапазоны лет: 2023-2027 и
+        // 2024-2027 — это РАЗНЫЕ модели, не общая). Без фильтра по периодам мы бы
+        // переиспользовали чужую финмодель, и `inputdata` нового файла легли бы
+        // как новая версия чужой модели. См. doc 112 v1.3.
+        var conditions = new List<object>
         {
             new object[] { "Title", "contains", "Модель из эксель файла" },
             "and",
             new object[] { "ABConstructionSiteID", "=", abConstructionSiteId },
         };
-        var filterJson = JsonSerializer.Serialize(filterArray);
+        if (!string.IsNullOrWhiteSpace(periodStart))
+        {
+            conditions.Add("and");
+            conditions.Add(new object[] { "PeriodStart", "=", periodStart });
+        }
+        if (!string.IsNullOrWhiteSpace(periodEnd))
+        {
+            conditions.Add("and");
+            conditions.Add(new object[] { "PeriodEnd", "=", periodEnd });
+        }
+        var filterJson = JsonSerializer.Serialize(conditions);
 
         var scopeJson = JsonSerializer.Serialize(new
         {
@@ -998,12 +1073,91 @@ public sealed class ListViewClient : VisaryHttpBase<ListViewClient>, IListViewCl
             Scope = scopeJson,
         };
         _log.LogDebug(
-            "Visary → GET listview/{Mnemonic} scope(EntityId={ProjectId}) filter[ABConstructionSiteID={SiteId}]",
-            VisaryMnemonics.FmModel, abProjectId, abConstructionSiteId);
+            "Visary → GET listview/{Mnemonic} scope(EntityId={ProjectId}) filter[ABConstructionSiteID={SiteId} PeriodStart={PeriodStart} PeriodEnd={PeriodEnd}]",
+            VisaryMnemonics.FmModel, abProjectId, abConstructionSiteId, periodStart, periodEnd);
         return PostListViewAsync<FmModelRaw>(
             $"{BaseUrl}/api/visary/listview/{VisaryMnemonics.FmModel}",
             body,
-            $"{VisaryMnemonics.FmModel} scope(EntityId={abProjectId}) filter(ABConstructionSiteID={abConstructionSiteId})",
+            $"{VisaryMnemonics.FmModel} scope(EntityId={abProjectId}) filter(ABConstructionSiteID={abConstructionSiteId}, PeriodStart={periodStart}, PeriodEnd={periodEnd})",
+            ct);
+    }
+
+    // ─── FmModelVersion / InputData ──────────────────────────────────────────
+
+    public Task<ListViewResponse<FmModelVersionRaw>> GetFmModelVersionsByModelAsync(
+        int fmModelId, CancellationToken ct)
+    {
+        var body = new
+        {
+            Mnemonic = VisaryMnemonics.FmModelVersion,
+            PageSkip = 0,
+            PageSize = Options.LargePageSize,
+            Columns = FmModelVersionColumns,
+            Filter = (string?)null,
+            SearchPhrase = (string?)null,
+            Sorts = SortsNullSentinel,
+            Hidden = false,
+            Summaries = Array.Empty<object>(),
+        };
+        _log.LogDebug(
+            "Visary → POST {Mnemonic}/onetomany/FMModel fmModelId={Id}",
+            VisaryMnemonics.FmModelVersion, fmModelId);
+        return PostListViewAsync<FmModelVersionRaw>(
+            $"{BaseUrl}/api/visary/listview/{VisaryMnemonics.FmModelVersion}/onetomany/FMModel?associationId={fmModelId}",
+            body,
+            $"{VisaryMnemonics.FmModelVersion}/onetomany/FMModel id={fmModelId}",
+            ct);
+    }
+
+    public Task<ListViewResponse<InputDataRaw>> GetInputDataByVersionAsync(
+        int versionId, CancellationToken ct)
+    {
+        var body = new
+        {
+            Mnemonic = VisaryMnemonics.InputData,
+            PageSkip = 0,
+            PageSize = Options.LargePageSize,
+            Columns = InputDataColumns,
+            Filter = (string?)null,
+            SearchPhrase = (string?)null,
+            Sorts = SortsNullSentinel,
+            Hidden = false,
+            Summaries = Array.Empty<object>(),
+        };
+        _log.LogDebug(
+            "Visary → POST {Mnemonic}/onetomany/FMModelVersion versionId={Id}",
+            VisaryMnemonics.InputData, versionId);
+        return PostListViewAsync<InputDataRaw>(
+            $"{BaseUrl}/api/visary/listview/{VisaryMnemonics.InputData}/onetomany/FMModelVersion?associationId={versionId}",
+            body,
+            $"{VisaryMnemonics.InputData}/onetomany/FMModelVersion id={versionId}",
+            ct);
+    }
+
+    public Task<ListViewResponse<FmCodeRaw>> FindFmCodeByTitleAsync(
+        string title, CancellationToken ct)
+    {
+        // Контракт listview/fmcode по HAR заказчика:
+        //   Filter — JSON-string (как у fmmodel), Sorts — JSON-string с сортировкой
+        //   по Code, 14 колонок. SortsNullSentinel="null" сервер бьёт 400.
+        var body = new
+        {
+            Mnemonic = VisaryMnemonics.FmCode,
+            PageSkip = 0,
+            PageSize = 50,
+            Columns = FmCodeColumns,
+            Filter = JsonSerializer.Serialize(new object[] { "Title", "=", title }),
+            SearchPhrase = (string?)null,
+            Sorts = FmCodeSortsByCodeAsc,
+            Hidden = false,
+            Summaries = Array.Empty<object>(),
+        };
+        _log.LogDebug("Visary → POST listview/{Mnemonic} title='{Title}'",
+            VisaryMnemonics.FmCode, title);
+        return PostListViewAsync<FmCodeRaw>(
+            $"{BaseUrl}/api/visary/listview/{VisaryMnemonics.FmCode}",
+            body,
+            $"{VisaryMnemonics.FmCode} title='{title}'",
             ct);
     }
 

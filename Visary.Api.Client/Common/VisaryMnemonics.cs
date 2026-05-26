@@ -19,6 +19,16 @@ public static class VisaryMnemonics
     public const string CostItem = "costitem";
     public const string CompanyGroup = "companygroup";
     public const string FmModel = "fmmodel";
+    public const string FmModelVersion = "fmmodelversion";
+    public const string InputData = "inputdata";
+    /// <summary>
+    /// Справочник «Код фин. модели» (<c>fmcode</c>) — содержит ID/Code/Title и
+    /// классификацию (Group=Доходы/Расходы, Sign=±1, Method, Priority …). Используется
+    /// как <see cref="Dto.InputDataCreateRequest.Code"/> в <c>inputdata</c>.
+    /// Заменил ранее опробованный <c>inputdatacode</c>, которого нет на стенде (404).
+    /// См. doc_project/112-finmodel-version-and-inputdata.md v1.1.
+    /// </summary>
+    public const string FmCode = "fmcode";
 
     // ─── Справочники ────────────────────────────────────────────────────
     public const string Town                = "town";

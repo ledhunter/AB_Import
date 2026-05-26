@@ -49,7 +49,8 @@ public class FinModelFmModelTests : IDisposable
 
         // FmModel: по умолчанию pre-check возвращает пусто → создаём.
         _mockListView
-            .Setup(c => c.FindFmModelsAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .Setup(c => c.FindFmModelsAsync(It.IsAny<int>(), It.IsAny<int>(),
+                It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new ListViewResponse<FmModelRaw> { Data = [], Total = 0 });
         _mockCrud
             .Setup(c => c.CreateFmModelAsync(It.IsAny<FmModelCreateRequest>(), It.IsAny<CancellationToken>()))
@@ -111,19 +112,22 @@ public class FinModelFmModelTests : IDisposable
     [InlineData("   ", null)]
     [InlineData("кв", null)]
     [InlineData("5 кв", null)]   // вне 1..4
+    [InlineData("10", null)]     // помесячная колонка (октябрь) — НЕ Q1
+    [InlineData("12", null)]     // помесячная колонка (декабрь) — НЕ Q1
     public void ParseQuarter_HandlesCommonInputs(string raw, object? expected)
     {
         Assert.Equal(expected, FinModelImportMapper.ParseQuarter(raw));
     }
 
-    // ─────────── ReadPlanPeriods ───────────
+    // ─────────── ReadGeneralScheduleData ───────────
 
     [Fact]
-    public void ReadPlanPeriods_EdgePicking_FromMultiYearSheet()
+    public void ReadGeneralScheduleData_EdgePicking_FromMultiYearTable()
     {
-        // Эталонная раскладка: r3=«Год», r5=«Квартал», B=«Сумма», C+ = первый квартал
-        // первого года; года стоят только в первой колонке группы из 4.
-        var bytes = BuildPlanXlsx(new[]
+        // Одна таблица: r3=Год, r4=Квартал/Сумма, r5=План (маркер), r6=Площадь,
+        // r7=Стоимость, r8=Доход (Summ). В этом тесте — только заголовок, чтобы
+        // проверить краевые периоды (значения нулевые).
+        var bytes = BuildGeneralScheduleXlsx(new[]
         {
             (Year: 2024, Quarter: "1 кв"),
             (Year: 0,    Quarter: "2 кв"),
@@ -138,16 +142,16 @@ public class FinModelFmModelTests : IDisposable
         });
 
         using var stream = new MemoryStream(bytes);
-        var periods = FinModelImportMapper.ReadPlanPeriods(stream);
+        var data = FinModelImportMapper.ReadGeneralScheduleData(stream);
 
-        Assert.Equal("2024Q1", periods.PeriodStart);
-        Assert.Equal("2026Q2", periods.PeriodEnd);
+        Assert.Equal("2024Q1", data.PeriodStart);
+        Assert.Equal("2026Q2", data.PeriodEnd);
     }
 
     [Fact]
-    public void ReadPlanPeriods_NoSheetNamed_План_Throws()
+    public void ReadGeneralScheduleData_NoSheet_Throws()
     {
-        // Создаём XLSX без листа «План» — должен бросить FinModelPlanParseException.
+        // XLSX без листа «Общий график» → FinModelPlanParseException.
         using var ms = new MemoryStream();
         using (var wb = new XLWorkbook())
         {
@@ -156,25 +160,25 @@ public class FinModelFmModelTests : IDisposable
         }
         ms.Position = 0;
         var ex = Assert.Throws<FinModelImportMapper.FinModelPlanParseException>(
-            () => FinModelImportMapper.ReadPlanPeriods(ms));
-        Assert.Contains("План", ex.Message);
+            () => FinModelImportMapper.ReadGeneralScheduleData(ms));
+        Assert.Contains("Общий график", ex.Message);
     }
 
     [Fact]
-    public void ReadPlanPeriods_MissingHeaderRows_Throws()
+    public void ReadGeneralScheduleData_NoYearQuarterHeaders_Throws()
     {
-        // Лист «План» есть, но без строк «Год»/«Квартал» в первых 15 строках.
+        // Лист «Общий график» есть, но без пары строк «Год»/«Квартал».
         using var ms = new MemoryStream();
         using (var wb = new XLWorkbook())
         {
-            var ws = wb.AddWorksheet("План");
+            var ws = wb.AddWorksheet("Общий график");
             ws.Cell(1, 1).Value = "Что-то совсем не то";
             wb.SaveAs(ms);
         }
         ms.Position = 0;
         var ex = Assert.Throws<FinModelImportMapper.FinModelPlanParseException>(
-            () => FinModelImportMapper.ReadPlanPeriods(ms));
-        Assert.Contains("Год", ex.Message);
+            () => FinModelImportMapper.ReadGeneralScheduleData(ms));
+        Assert.Contains("Общий график", ex.Message);
     }
 
     // ─────────── ApplyAsync — happy / idempotent / no-file ───────────
@@ -190,7 +194,8 @@ public class FinModelFmModelTests : IDisposable
 
         Assert.Contains(result.Errors, e => e.ErrorCode == "fmmodel_skipped_no_plan_file");
         _mockListView.Verify(c => c.FindFmModelsAsync(
-            It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
+            It.IsAny<int>(), It.IsAny<int>(),
+            It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()),
             Times.Never);
         _mockCrud.Verify(c => c.CreateFmModelAsync(
             It.IsAny<FmModelCreateRequest>(), It.IsAny<CancellationToken>()),
@@ -200,7 +205,7 @@ public class FinModelFmModelTests : IDisposable
     [Fact]
     public async Task ApplyAsync_PlanFile_CallsCreateFmModel_WithEdgePeriods()
     {
-        var bytes = BuildPlanXlsx(new[]
+        var bytes = BuildGeneralScheduleXlsx(new[]
         {
             (Year: 2024, Quarter: "2 кв"),
             (Year: 0,    Quarter: "3 кв"),
@@ -240,16 +245,20 @@ public class FinModelFmModelTests : IDisposable
     [Fact]
     public async Task ApplyAsync_PlanFile_ExistingFmModel_SkipsCreate()
     {
-        var bytes = BuildPlanXlsx(new[]
+        var bytes = BuildGeneralScheduleXlsx(new[]
         {
             (Year: 2024, Quarter: "1 кв"),
             (Year: 0,    Quarter: "2 кв"),
         });
         _fileStorage.Put("plan.xlsx", bytes);
 
-        // FmModel уже существует — pre-check вернул запись.
+        // FmModel уже существует с тем же периодом 2024Q1..2024Q2 — pre-check вернул запись.
+        // Фильтр по PeriodStart/PeriodEnd должен точно совпадать с распарсенными краями
+        // (см. doc 112 v1.3: одну сайт может содержать несколько Финмоделей с разными
+        // диапазонами лет).
         _mockListView
-            .Setup(c => c.FindFmModelsAsync(ProjectId, SiteId, It.IsAny<CancellationToken>()))
+            .Setup(c => c.FindFmModelsAsync(ProjectId, SiteId,
+                "2024Q1", "2024Q2", It.IsAny<CancellationToken>()))
             .ReturnsAsync(new ListViewResponse<FmModelRaw>
             {
                 Data = [new FmModelRaw
@@ -274,6 +283,49 @@ public class FinModelFmModelTests : IDisposable
     }
 
     [Fact]
+    public async Task ApplyAsync_PlanFile_ExistingFmModelWithDifferentPeriod_CreatesNew()
+    {
+        // На сайте уже есть Финмодель с периодом 2024Q1..2024Q2, а новый файл
+        // содержит 2023Q1..2024Q2 (расширенный диапазон). Pre-check фильтрует по
+        // PeriodStart/PeriodEnd ⇒ Visary возвращает пусто ⇒ мы создаём НОВУЮ
+        // финмодель, а не реюзаем чужую. Регрессионный тест на сценарий «Репино-Парк»,
+        // см. doc 112 v1.3.
+        var bytes = BuildGeneralScheduleXlsx(new[]
+        {
+            (Year: 2023, Quarter: "1 кв"),
+            (Year: 0,    Quarter: "2 кв"),
+            (Year: 0,    Quarter: "3 кв"),
+            (Year: 0,    Quarter: "4 кв"),
+            (Year: 2024, Quarter: "1 кв"),
+            (Year: 0,    Quarter: "2 кв"),
+        });
+        _fileStorage.Put("plan.xlsx", bytes);
+
+        // Visary listview/fmmodel с фильтром PeriodStart=2023Q1, PeriodEnd=2024Q2
+        // не находит подходящих ⇒ дефолтная пустая выдача из ctor применяется.
+        // Чужая 2024Q1..2024Q2-финмодель «прячется» за period-фильтром (matcher на
+        // ином PeriodStart/PeriodEnd просто не сработает, дефолтная пустая выдача
+        // на It.IsAny<…> вернётся).
+
+        var ctx = new ImportContext(
+            Guid.NewGuid(), ProjectId, SiteId, null,
+            SecondaryFileRelativePath: "plan.xlsx");
+        var result = await _mapper.ApplyAsync(ctx, _dbContext, [], default);
+
+        // Pre-check был вызван именно с новыми границами 2023Q1..2024Q2 (без них
+        // мы бы переиспользовали чужую 2024-only финмодель).
+        _mockListView.Verify(c => c.FindFmModelsAsync(
+            ProjectId, SiteId, "2023Q1", "2024Q2", It.IsAny<CancellationToken>()),
+            Times.Once);
+        _mockCrud.Verify(c => c.CreateFmModelAsync(
+            It.Is<FmModelCreateRequest>(r =>
+                r.PeriodStart == "2023Q1" && r.PeriodEnd == "2024Q2"),
+            It.IsAny<CancellationToken>()),
+            Times.Once);
+        Assert.DoesNotContain(result.Errors, e => e.ErrorCode == "fmmodel_skipped_already_exists");
+    }
+
+    [Fact]
     public async Task ApplyAsync_PlanFile_ParseError_AddsErrorAndDoesNotCallCreate()
     {
         // Файл есть, но в нём нет ни «Год», ни «Квартал» → парсер бросает,
@@ -281,7 +333,7 @@ public class FinModelFmModelTests : IDisposable
         using var ms = new MemoryStream();
         using (var wb = new XLWorkbook())
         {
-            wb.AddWorksheet("План"); // пустой лист, нет шапки
+            wb.AddWorksheet("Общий график"); // пустой лист, нет шапки
             wb.SaveAs(ms);
         }
         _fileStorage.Put("plan.xlsx", ms.ToArray());
@@ -301,26 +353,34 @@ public class FinModelFmModelTests : IDisposable
     // ─────────── Helpers ───────────
 
     /// <summary>
-    /// Собирает XLSX-байты с одним листом «План»:
+    /// Собирает XLSX-байты с листом «Общий график» по эталонной раскладке
+    /// (одна таблица квартир, чтобы парсер нашёл валидную категорию):
     ///   r3 = «Год» в A, годы — в указанных колонках начиная с C
-    ///   r4 = «№ столбца» (только заполнитель)
-    ///   r5 = «Квартал» в A, «Сумма» в B, квартальные значения с C
+    ///   r4 = «Квартал» в A, «Сумма» в B, квартальные значения с C
+    ///   r5 = «План» (маркер)
+    ///   r6 = «Квартиры, кв.м» (Amount-строка — резолвит категорию)
+    ///   r7 = «Стоимость 1 кв.м» (Cost-строка)
+    ///   r8 = «Доход» (Summ-строка)
     /// Если Year=0 — ячейка года остаётся пустой (forward-fill).
     /// </summary>
-    private static byte[] BuildPlanXlsx((int Year, string Quarter)[] cols)
+    private static byte[] BuildGeneralScheduleXlsx((int Year, string Quarter)[] cols)
     {
         using var ms = new MemoryStream();
         using (var wb = new XLWorkbook())
         {
-            var ws = wb.AddWorksheet("План");
+            var ws = wb.AddWorksheet("Общий график");
             ws.Cell(3, 1).Value = "Год";
-            ws.Cell(5, 1).Value = "Квартал";
-            ws.Cell(5, 2).Value = "Сумма";
+            ws.Cell(4, 1).Value = "Квартал";
+            ws.Cell(4, 2).Value = "Сумма";
+            ws.Cell(5, 1).Value = "План";
+            ws.Cell(6, 1).Value = "Квартиры, кв.м";
+            ws.Cell(7, 1).Value = "Стоимость 1 кв.м";
+            ws.Cell(8, 1).Value = "Доход";
             for (int i = 0; i < cols.Length; i++)
             {
                 var c = 3 + i; // первая колонка для данных — C (3)
                 if (cols[i].Year != 0) ws.Cell(3, c).Value = cols[i].Year;
-                ws.Cell(5, c).Value = cols[i].Quarter;
+                ws.Cell(4, c).Value = cols[i].Quarter;
             }
             wb.SaveAs(ms);
         }

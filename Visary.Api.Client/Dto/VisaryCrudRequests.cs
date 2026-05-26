@@ -442,3 +442,46 @@ public sealed class FmModelCreateRequest
     public string PeriodStart { get; set; } = null!;
     public string PeriodEnd { get; set; } = null!;
 }
+
+/// <summary>
+/// POST <c>/api/visary/crud/fmmodelversion</c> — создание версии Финмодели. Импорт
+/// «Финмодель» создаёт одну версию со стандартным <see cref="Title"/>
+/// «Версия - Перенос из Эксель» сразу после <see cref="FmModelCreateRequest"/>,
+/// и наполняет её записями <see cref="InputDataCreateRequest"/>.
+/// Тело по HAR заказчика:
+/// <code>{"FMModelID":48,"FMModel":{"ID":48},"Title":"Версия - Перенос из Эксель"}</code>
+/// Идемпотентности на сервере нет — caller обязан pre-check'ить через
+/// <see cref="ListView.IListViewClient.GetFmModelVersionsByModelAsync"/>.
+/// См. doc_project/112-finmodel-version-and-inputdata.md.
+/// </summary>
+public sealed class FmModelVersionCreateRequest
+{
+    public int FMModelID { get; set; }
+    public VisaryRef FMModel { get; set; } = null!;
+    public string Title { get; set; } = null!;
+}
+
+/// <summary>
+/// POST <c>/api/visary/crud/inputdata</c> — создание записи «Входные данные»
+/// внутри версии Финмодели. Тело по HAR заказчика:
+/// <code>{"FMModelVersionID":217,"FMModelVersion":{"ID":217},"FMPeriod":"2024Q1",
+///       "Code":{"Title":"Продажа квартиры (план)","ID":20},
+///       "Summ":243685102,"Amount":2459.85,"Cost":99065.03,"Percent":0}</code>
+/// <para/>
+/// • <see cref="Code"/> — VisaryRef в справочник <c>inputdatacode</c> (резолвится
+///   через <see cref="ListView.IListViewClient.ListInputDataCodesAsync"/>).
+/// • <see cref="Percent"/> по контракту заказчика — всегда 0.
+/// • Импортер создаёт по одной записи на (RoomKind × Квартал) — нулевые периоды
+///   тоже отправляются (план = 0), как требует заказчик (doc 112 §3).
+/// </summary>
+public sealed class InputDataCreateRequest
+{
+    public int FMModelVersionID { get; set; }
+    public VisaryRef FMModelVersion { get; set; } = null!;
+    public string FMPeriod { get; set; } = null!;
+    public VisaryRef Code { get; set; } = null!;
+    public double Summ { get; set; }
+    public double Amount { get; set; }
+    public double Cost { get; set; }
+    public double Percent { get; set; }
+}
