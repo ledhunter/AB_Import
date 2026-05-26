@@ -681,48 +681,59 @@ public sealed class FinModelImportMapper : IImportMapper
             return;
         }
 
-        // 1. Парсим лист «План»: краевой PeriodStart / PeriodEnd.
-        FinModelPlanPeriods periods;
+        // 1. Парсим лист «Общий график»: краевой PeriodStart/PeriodEnd + материализованные
+        //    InputData-точки (категория × период → Summ/Amount/Cost). На листе несколько
+        //    таблиц (по одной на вид помещения); из каждой берём ТОЛЬКО первые 3 строки
+        //    данных (План), второй блок «Факт» парсер пропускает.
+        FinModelPlanData planData;
         try
         {
             await using var stream = await _fileStorage.OpenReadAsync(secondaryFilePath, ct);
-            periods = ReadPlanPeriods(stream);
+            planData = ReadGeneralScheduleData(stream);
         }
         catch (FinModelPlanParseException ex)
         {
             errors.Add(new RowError(null, "fmmodel_plan_parse_error",
-                $"Не удалось прочитать лист «План» из второго файла: {ex.Message}"));
+                $"Не удалось прочитать лист «Общий график» из второго файла: {ex.Message}"));
             return;
         }
         catch (Exception ex)
         {
-            _log.LogError(ex, "FinModelImportMapper: failed to open/parse secondary plan file (siteId={SiteId})", siteId);
+            _log.LogError(ex, "FinModelImportMapper: failed to open/parse secondary general-schedule file (siteId={SiteId})", siteId);
             errors.Add(new RowError(null, "fmmodel_plan_parse_error",
-                $"Не удалось прочитать второй файл (с планами): {ex.Message}"));
+                $"Не удалось прочитать второй файл (Общий график): {ex.Message}"));
             return;
         }
 
-        // 2. Pre-check: уже есть Финмодель по (ABProjectID, ABConstructionSiteID)?
+        // 2. Pre-check: уже есть Финмодель по (Title, ABConstructionSiteID, PeriodStart,
+        //    PeriodEnd)? Один сайт может содержать НЕСКОЛЬКО Финмоделей с разными
+        //    краевыми периодами (заказчик заводит отдельные модели на разные диапазоны
+        //    лет). Без фильтра по периодам новый файл с PeriodStart=2023Q1 матчился
+        //    бы с чужой моделью 2024Q1..2027Q4, и `inputdata` падала бы как новая
+        //    версия чужой модели. См. doc 112 v1.3.
+        int? existingFmModelId = null;
         try
         {
-            var existing = await _listViewClient.FindFmModelsAsync(projectId, siteId, ct);
+            var existing = await _listViewClient.FindFmModelsAsync(
+                projectId, siteId, planData.PeriodStart, planData.PeriodEnd, ct);
             if (existing.Data is { Count: > 0 })
             {
                 var first = existing.Data[0];
+                existingFmModelId = first.ID;
                 _log.LogInformation(
                     "FinModelImportMapper: fmmodel уже существует (id={Id}, period={Start}..{End}) — POST пропущен (projectId={ProjectId}, siteId={SiteId})",
                     first.ID, first.PeriodStart, first.PeriodEnd, projectId, siteId);
                 errors.Add(new RowError(null, "fmmodel_skipped_already_exists",
                     $"Финмодель для проекта и объекта уже существует в Visary " +
-                    $"(id={first.ID}, период {first.PeriodStart}..{first.PeriodEnd}). Создание пропущено."));
-                return;
+                    $"(id={first.ID}, период {first.PeriodStart}..{first.PeriodEnd}). Создание fmmodel пропущено, " +
+                    "версия и входные данные при необходимости будут досозданы."));
             }
         }
         catch (Exception ex)
         {
             _log.LogError(ex,
-                "FinModelImportMapper: pre-check fmmodel failed (projectId={ProjectId}, siteId={SiteId}) — пропускаем создание",
-                projectId, siteId);
+                "FinModelImportMapper: pre-check fmmodel failed (projectId={ProjectId}, siteId={SiteId}, period={Start}..{End}) — пропускаем создание",
+                projectId, siteId, planData.PeriodStart, planData.PeriodEnd);
             errors.Add(new RowError(null, "fmmodel_precheck_failed",
                 $"Не удалось проверить наличие Финмодели в Visary: {ex.Message}. " +
                 "Создание пропущено, чтобы не породить дубликат."));
@@ -745,48 +756,301 @@ public sealed class FinModelImportMapper : IImportMapper
                 projectId);
         }
 
-        // 4. POST /crud/fmmodel.
+        // 4. POST /crud/fmmodel (если pre-check не нашёл существующую).
+        int fmModelId;
+        if (existingFmModelId is { } existingId)
+        {
+            fmModelId = existingId;
+        }
+        else
+        {
+            try
+            {
+                var created = await _visaryClient.CreateFmModelAsync(new FmModelCreateRequest
+                {
+                    Title = FmModelTitle,
+                    ProjectCode = projectCode,
+                    ABProjectID = projectId,
+                    ABConstructionSiteID = siteId,
+                    PeriodStart = planData.PeriodStart,
+                    PeriodEnd = planData.PeriodEnd,
+                }, ct);
+                fmModelId = created.ID;
+                _log.LogInformation(
+                    "FinModelImportMapper: fmmodel создан id={Id} period={Start}..{End} (projectId={ProjectId}, siteId={SiteId})",
+                    created.ID, planData.PeriodStart, planData.PeriodEnd, projectId, siteId);
+            }
+            catch (Exception ex)
+            {
+                _log.LogError(ex,
+                    "FinModelImportMapper: ошибка создания fmmodel (projectId={ProjectId}, siteId={SiteId}, period={Start}..{End})",
+                    projectId, siteId, planData.PeriodStart, planData.PeriodEnd);
+                errors.Add(new RowError(null, "fmmodel_create_failed",
+                    $"Не удалось создать Финмодель в Visary " +
+                    $"(период {planData.PeriodStart}..{planData.PeriodEnd}): {ex.Message}"));
+                return;
+            }
+        }
+
+        // 5. Версия Финмодели + входные данные + связь. Любая ошибка — single row-error,
+        //    шаги-параметры/бюджет/ГФ выше уже отработали, не валим Apply целиком.
+        await EnsureFmModelVersionAndInputDataAsync(
+            fmModelId, planData, errors, ct);
+    }
+
+    /// <summary>
+    /// Создаёт версию Финмодели и наполняет её «Входными данными» по листу «План».
+    /// Идемпотентность:
+    ///   • Версия — pre-check по Title «Версия - Перенос из Эксель» в
+    ///     <see cref="IListViewClient.GetFmModelVersionsByModelAsync"/>; найдена — reuse.
+    ///   • InputData — pre-check по (FMPeriod, Code.ID) в
+    ///     <see cref="IListViewClient.GetInputDataByVersionAsync"/>; найдено — skip.
+    /// Резолв кодов справочника <c>fmcode</c> — точечные запросы по уникальным Title
+    /// (1 запрос на категорию = квартиры/нежилые/кладовки/м/м; обычно 3–4 запроса).
+    /// Любая транспортная ошибка (сеть/500/таймаут) на резолве — row-error
+    /// <c>inputdata_codes_unavailable</c> + skip версии и inputdata (fmmodel сохраняется).
+    /// «Title не найден в справочнике» (0 строк в ответе) — row-error
+    /// <c>inputdata_code_not_found</c> ПО ЗАВЕРШЕНИИ цикла, со списком всех missing.
+    /// </summary>
+    private async Task EnsureFmModelVersionAndInputDataAsync(
+        int fmModelId,
+        FinModelPlanData planData,
+        List<RowError> errors,
+        CancellationToken ct)
+    {
+        // 1) Резолв уникальных Title → ID через точечные запросы listview/fmcode.
+        //    Не один большой запрос на весь справочник (как раньше с inputdatacode),
+        //    потому что fmcode содержит сотни кодов — нам нужно 3–4 конкретных.
+        //    Транспортная ошибка (любой запрос упал не из-за «не найдено») → выходим.
+        var codeIdByTitle = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var missingCodeTitles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var uniqueTitles = planData.InputDataPoints
+            .Select(p => p.CodeTitle)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        foreach (var title in uniqueTitles)
+        {
+            ct.ThrowIfCancellationRequested();
+            try
+            {
+                var resp = await _listViewClient.FindFmCodeByTitleAsync(title, ct);
+                var found = resp.Data?.FirstOrDefault(c => c.ID > 0);
+                if (found is not null)
+                    codeIdByTitle[title] = found.ID;
+                else
+                    missingCodeTitles.Add(title);
+            }
+            catch (Exception ex)
+            {
+                _log.LogError(ex,
+                    "FinModelImportMapper: не удалось получить fmcode title='{Title}' (fmModelId={FmModelId})",
+                    title, fmModelId);
+                errors.Add(new RowError(null, "inputdata_codes_unavailable",
+                    "Не удалось получить справочник «Код фин. модели» из Visary " +
+                    $"(listview/fmcode, title=«{title}»): {ex.Message}. " +
+                    "Версия Финмодели и входные данные не созданы."));
+                return;
+            }
+        }
+
+        // 2) Версия Финмодели — каждый импорт создаёт НОВУЮ версию с уникальным Title.
+        //    Заказчик хочет историю переносов из Excel (каждый импорт = отдельная версия,
+        //    «вторая версия с новыми данными»). По существующим версиям с тем же
+        //    префиксом находим максимальный sequence-номер и инкрементируем; первая
+        //    версия получает Title без номера, последующие — «… 2», «… 3» и т.д.
+        int versionId;
+        string newVersionTitle;
         try
         {
-            var created = await _visaryClient.CreateFmModelAsync(new FmModelCreateRequest
-            {
-                Title = FmModelTitle,
-                ProjectCode = projectCode,
-                ABProjectID = projectId,
-                ABConstructionSiteID = siteId,
-                PeriodStart = periods.PeriodStart,
-                PeriodEnd = periods.PeriodEnd,
-            }, ct);
+            var versions = await _listViewClient.GetFmModelVersionsByModelAsync(fmModelId, ct);
+            newVersionTitle = BuildNextVersionTitle(versions.Data);
+            var createdVersion = await _visaryClient.CreateFmModelVersionAsync(
+                new FmModelVersionCreateRequest
+                {
+                    FMModelID = fmModelId,
+                    FMModel = new VisaryRef { ID = fmModelId },
+                    Title = newVersionTitle,
+                }, ct);
+            versionId = createdVersion.ID;
             _log.LogInformation(
-                "FinModelImportMapper: fmmodel создан id={Id} period={Start}..{End} (projectId={ProjectId}, siteId={SiteId})",
-                created.ID, periods.PeriodStart, periods.PeriodEnd, projectId, siteId);
+                "FinModelImportMapper: fmmodelversion создан id={Id} title='{Title}' fmModelId={FmModelId}",
+                versionId, newVersionTitle, fmModelId);
         }
         catch (Exception ex)
         {
             _log.LogError(ex,
-                "FinModelImportMapper: ошибка создания fmmodel (projectId={ProjectId}, siteId={SiteId}, period={Start}..{End})",
-                projectId, siteId, periods.PeriodStart, periods.PeriodEnd);
-            errors.Add(new RowError(null, "fmmodel_create_failed",
-                $"Не удалось создать Финмодель в Visary " +
-                $"(период {periods.PeriodStart}..{periods.PeriodEnd}): {ex.Message}"));
+                "FinModelImportMapper: не удалось создать fmmodelversion (fmModelId={FmModelId})",
+                fmModelId);
+            errors.Add(new RowError(null, "fmmodel_version_failed",
+                $"Не удалось создать версию Финмодели в Visary: {ex.Message}. Входные данные не загружены."));
+            return;
         }
+
+        // 3) Новая версия — заведомо пустая, pre-check inputdata-by-version пропускаем.
+        //    Раньше pre-check защищал от дубликатов при reuse-е версии; теперь, когда
+        //    каждый импорт создаёт новую версию, дубликатов внутри неё не бывает.
+        var existingPoints = new HashSet<(string FmPeriod, int CodeId)>();
+
+        // 4) POST /crud/inputdata + link для каждой точки (категория × период).
+        //    `missingCodeTitles` уже наполнен на шаге 1) — здесь только пропускаем
+        //    точки тех категорий, для которых Title не нашёлся в справочнике.
+        int createdCount = 0, skippedCount = 0, failedCount = 0;
+        foreach (var point in planData.InputDataPoints)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            if (!codeIdByTitle.TryGetValue(point.CodeTitle, out var codeId))
+            {
+                // Уже учтено в missingCodeTitles на шаге 1 — просто скип точки.
+                continue;
+            }
+
+            if (existingPoints.Contains((point.FmPeriod, codeId)))
+            {
+                skippedCount++;
+                continue;
+            }
+
+            int inputDataId;
+            try
+            {
+                var created = await _visaryClient.CreateInputDataAsync(
+                    new InputDataCreateRequest
+                    {
+                        FMModelVersionID = versionId,
+                        FMModelVersion = new VisaryRef { ID = versionId },
+                        FMPeriod = point.FmPeriod,
+                        Code = new VisaryRef { ID = codeId, Title = point.CodeTitle },
+                        Summ = point.Summ,
+                        Amount = point.Amount,
+                        Cost = point.Cost,
+                        Percent = 0d,
+                    }, ct);
+                inputDataId = created.ID;
+            }
+            catch (Exception ex)
+            {
+                failedCount++;
+                _log.LogError(ex,
+                    "FinModelImportMapper: ошибка создания inputdata (versionId={VersionId}, period={Period}, code='{Code}')",
+                    versionId, point.FmPeriod, point.CodeTitle);
+                continue;
+            }
+
+            // Линк inputdata → version (см. HAR заказчика). Любая ошибка — non-fatal.
+            try
+            {
+                await _visaryClient.LinkInputDataToVersionAsync(versionId, inputDataId, ct);
+                createdCount++;
+            }
+            catch (Exception ex)
+            {
+                failedCount++;
+                _log.LogError(ex,
+                    "FinModelImportMapper: ошибка привязки inputdata к версии (versionId={VersionId}, inputDataId={Id})",
+                    versionId, inputDataId);
+            }
+        }
+
+        if (missingCodeTitles.Count > 0)
+        {
+            errors.Add(new RowError(null, "inputdata_code_not_found",
+                "В справочнике Visary «Код входных данных» не найдены записи: " +
+                string.Join(", ", missingCodeTitles.Select(t => $"«{t}»")) +
+                ". Часть «Входных данных» Финмодели не создана."));
+        }
+
+        if (failedCount > 0)
+        {
+            errors.Add(new RowError(null, "inputdata_create_failed",
+                $"Не удалось создать/привязать {failedCount} записей `inputdata` в Visary. " +
+                "См. лог приложения для деталей."));
+        }
+
+        _log.LogInformation(
+            "FinModelImportMapper: inputdata загрузка завершена versionId={VersionId} created={Created} skipped={Skipped} failed={Failed}",
+            versionId, createdCount, skippedCount, failedCount);
     }
 
     /// <summary>Видимое имя Финмодели в Visary (требование заказчика).</summary>
     private const string FmModelTitle = "Модель из эксель файла";
 
     /// <summary>
-    /// Парсит лист «План» XLSX-файла и возвращает краевые квартальные значения
-    /// в формате <c>"{Year}Q{N}"</c>. Структура листа:
-    /// <list type="bullet">
-    ///   <item>где-то в первых ~10 строках есть строка с A=«Год» — годы стоят в первой
-    ///     колонке группы из 4 кварталов (forward-fill справа);</item>
-    ///   <item>строкой ниже (обычно r5) — «Квартал»: значения «1 кв»..«4 кв»;</item>
-    ///   <item>колонка B обычно «Сумма» — игнорируется (квартальные данные начинаются с C).</item>
-    /// </list>
-    /// Краевые = первая и последняя колонка, где обе ячейки (год и квартал) присутствуют.
+    /// Префикс Title-а версии Финмодели (требование заказчика, см. doc 112).
+    /// Первая версия — ровно этот префикс; последующие — «… 2», «… 3» и т.д.
     /// </summary>
-    internal static FinModelPlanPeriods ReadPlanPeriods(Stream xlsxStream)
+    internal const string FmModelVersionTitlePrefix = "Версия - Перенос из Эксель";
+
+    /// <summary>
+    /// Подбирает Title для НОВОЙ версии по списку уже существующих. Логика:
+    /// <list type="number">
+    ///   <item>Среди существующих ищем те, чей Title — ровно префикс
+    ///     <see cref="FmModelVersionTitlePrefix"/> или «префикс N» (N — целое ≥ 2).</item>
+    ///   <item>Берём максимальный N (отсутствие номера = N=1) и инкрементируем.</item>
+    ///   <item>Если N&gt;=2 — Title «префикс N», иначе чистый префикс.</item>
+    /// </list>
+    /// Поведение: первая версия = «Версия - Перенос из Эксель»; вторая = «Версия - Перенос
+    /// из Эксель 2»; третья = «Версия - Перенос из Эксель 3» и т.д. Title-конфликтов не
+    /// должно быть (заказчик читает версии по этому префиксу).
+    /// </summary>
+    internal static string BuildNextVersionTitle(IReadOnlyList<FmModelVersionRaw>? existingVersions)
+    {
+        if (existingVersions is null || existingVersions.Count == 0)
+            return FmModelVersionTitlePrefix;
+
+        int maxSeq = 0;
+        bool anyMatched = false;
+        foreach (var v in existingVersions)
+        {
+            var t = v?.Title?.Trim();
+            if (string.IsNullOrEmpty(t)) continue;
+            if (!t.StartsWith(FmModelVersionTitlePrefix, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            anyMatched = true;
+            var rest = t.Substring(FmModelVersionTitlePrefix.Length).Trim();
+            if (rest.Length == 0)
+            {
+                // Ровно префикс — sequence #1.
+                if (maxSeq < 1) maxSeq = 1;
+                continue;
+            }
+            if (int.TryParse(rest, NumberStyles.Integer, CultureInfo.InvariantCulture, out var n) && n >= 2)
+            {
+                if (n > maxSeq) maxSeq = n;
+            }
+            // Прочие хвосты (произвольный текст после префикса) — игнорируем, не считаем
+            // в seq, но всё ещё формально учитываем как «версия с этим префиксом существует».
+        }
+
+        if (!anyMatched) return FmModelVersionTitlePrefix;
+        var next = maxSeq + 1;
+        return next <= 1
+            ? FmModelVersionTitlePrefix
+            : $"{FmModelVersionTitlePrefix} {next}";
+    }
+
+    /// <summary>
+    /// Парсит лист «Общий график» XLSX-файла и возвращает данные для создания
+    /// Финмодели, её Версии и «Входных данных». В файлах заказчика на этом листе
+    /// может быть несколько таблиц — по одной на вид помещения (Квартиры,
+    /// Нежилые-ПСН, Кладовки, Машиноместа). Каждая таблица имеет идентичную форму:
+    /// <list type="bullet">
+    ///   <item>строка <c>A=«Год»</c> с годами в C/D…</item>
+    ///   <item>следующая строка <c>A=«Квартал»</c>, <c>B=«Сумма»</c>, далее «1 кв».. «4 кв»</item>
+    ///   <item>опц. строка-маркер <c>A=«План»</c></item>
+    ///   <item>«Площадь, кв.м» / «Машиноместа, шт.» / «Нежилые, кв.м» / … — A-текст содержит
+    ///     имя категории (по нему резолвится Code в справочнике <c>fmcode</c>);
+    ///     значения колонок = плановая площадь/количество (Amount)</item>
+    ///   <item>следующая строка = стоимость 1 ед. (Cost) — A может быть <c>#GETTING_DATA</c></item>
+    ///   <item>следующая строка = сумма дохода (Summ) — A-текст обычно «Доход» или «Сумма»</item>
+    ///   <item>строка «Доход накопл. Итогом» — игнорируется (cumulative)</item>
+    ///   <item>строка-маркер «Факт» + следующие 4 строки = фактические данные — ВСЕ игнорируются</item>
+    /// </list>
+    /// Парсер берёт только ПЕРВЫЕ ТРИ строки данных (план), фактический блок отсекается.
+    /// См. doc_project/112-finmodel-version-and-inputdata.md.
+    /// </summary>
+    internal static FinModelPlanData ReadGeneralScheduleData(Stream xlsxStream)
     {
         // Читаем поток В МАССИВ БАЙТ один раз: ClosedXML на ошибке в ctor закрывает
         // переданный Stream, поэтому retry поверх того же MemoryStream упадёт с
@@ -800,7 +1064,7 @@ public sealed class FinModelImportMapper : IImportMapper
 
         try
         {
-            return ReadPlanPeriodsFromBytes(bytes);
+            return ReadGeneralScheduleDataFromBytes(bytes);
         }
         catch (Exception ex) when (XlsxParser.IsExternalLinkError(ex))
         {
@@ -808,109 +1072,299 @@ public sealed class FinModelImportMapper : IImportMapper
             // файлы («file:///\\Alt/intern/.../[XYZ.xls]Sheet»). ClosedXML на них падает
             // «Unable to determine token». Чистим zip от external-частей (см. doc 81)
             // и пробуем ещё раз — кэшированные значения в <v> остаются, поэтому
-            // лист «План» (где «Год»/«Квартал» = просто текст) читается успешно.
+            // ячейки с числами читаются успешно.
             var cleaned = XlsxParser.StripExternalLinks(bytes);
-            return ReadPlanPeriodsFromBytes(cleaned);
+            return ReadGeneralScheduleDataFromBytes(cleaned);
         }
     }
 
     /// <summary>
-    /// Открывает байты как <see cref="XLWorkbook"/> и читает краевые квартальные
-    /// значения. Любая ошибка летит наружу — внешний retry ловит её для cleanup.
+    /// Открывает байты как <see cref="XLWorkbook"/> и читает «Общий график»
+    /// целиком (краевые периоды + все таблицы по видам помещений + точки InputData).
+    /// Любая ошибка летит наружу — внешний retry ловит её для external-link cleanup.
     /// </summary>
-    private static FinModelPlanPeriods ReadPlanPeriodsFromBytes(byte[] bytes)
+    private static FinModelPlanData ReadGeneralScheduleDataFromBytes(byte[] bytes)
     {
         // writable: false — ClosedXML не испортит байты на случай retry.
         using var ms = new MemoryStream(bytes, writable: false);
         using var wb = new XLWorkbook(ms);
         var sheet = wb.Worksheets.FirstOrDefault(ws =>
-            string.Equals(ws.Name?.Trim(), "План", StringComparison.OrdinalIgnoreCase));
+            string.Equals(ws.Name?.Trim(), GeneralScheduleSheetName, StringComparison.OrdinalIgnoreCase));
         if (sheet is null)
         {
             throw new FinModelPlanParseException(
-                "Во втором файле не найден лист «План». Доступные листы: " +
+                $"Во втором файле не найден лист «{GeneralScheduleSheetName}». Доступные листы: " +
                 string.Join(", ", wb.Worksheets.Select(w => $"«{w.Name}»")));
         }
 
-        // Ищем строку «Год» и строку «Квартал» в первых ~15 строках (защита от
-        // мелких сдвигов шапки; в эталонном файле — r3 и r5).
-        int? yearRow = null, quarterRow = null;
-        const int MaxHeaderScan = 15;
-        for (int r = 1; r <= MaxHeaderScan; r++)
+        var sheetRange = sheet.RangeUsed();
+        var lastUsedRow = sheetRange?.LastRow().RowNumber() ?? 200;
+        var lastUsedColumn = sheetRange?.LastColumn().ColumnNumber() ?? 30;
+
+        // Скан всех таблиц: для каждой строки A=«Год», следом — A=«Квартал» (допускается
+        // 1 промежуточная строка между ними; в файлах заказчика это помесячная подшапка
+        // с дублированными годами в C..). После заголовка ищем 3 строки данных
+        // (Площадь/Cost/Summ), пропуская опциональный маркер «План». На «Факт»/«Доход
+        // накопл.» — стоп (фактический блок не нужен).
+        //
+        // Категория (вид помещения) резолвится по двум источникам, в порядке приоритета:
+        //   (1) Шапка-«Тип помещения»: A-колонка строки <=5 ВЫШЕ «Год» содержит «Тип
+        //       помещения», а в B-колонке — название («Квартиры»/«Нежилое»/«Кладовые»/
+        //       «Машиноместа»). Раскладка из «Репино-Парк»: A-row генерик («Площадь, кв.м»),
+        //       без шапки таблица бы не резолвилась.
+        //   (2) Fallback — A-текст самой Amount-строки содержит маркер («Квартиры, кв.м»,
+        //       «Нежилые помещения, кв.м», …). Раскладка из «Журавли», тестовый фикстур.
+        var allColumns = new Dictionary<int, FinModelPlanColumn>();
+        var categories = new List<FinModelPlanCategory>();
+        var points = new List<FinModelPlanInputDataPoint>();
+        for (int r = 1; r <= lastUsedRow - 1; r++)
         {
             var aText = sheet.Cell(r, 1).GetString().Trim();
-            if (yearRow is null && string.Equals(aText, "Год", StringComparison.OrdinalIgnoreCase))
-                yearRow = r;
-            else if (quarterRow is null && string.Equals(aText, "Квартал", StringComparison.OrdinalIgnoreCase))
-                quarterRow = r;
-            if (yearRow is not null && quarterRow is not null) break;
-        }
-        if (yearRow is null || quarterRow is null)
-        {
-            throw new FinModelPlanParseException(
-                "На листе «План» не найдены строки «Год» и/или «Квартал» в первых 15 строках " +
-                "(A-колонка). Проверьте, что строки именно так подписаны.");
-        }
+            if (!string.Equals(aText, "Год", StringComparison.OrdinalIgnoreCase)) continue;
 
-        // Сканируем колонки слева направо. Year forward-fill (год — только в первой
-        // колонке группы из 4-х кварталов). Квартал в строке quarterRow.
-        // ⚠️ Колонка B чаще всего «Сумма» — пропускаем её, начинаем с C=3.
-        // Берём ПЕРВУЮ и ПОСЛЕДНЮЮ колонку, где обе ячейки (year forward-filled +
-        // quarter) валидны.
-        int? firstCol = null, lastCol = null;
-        int? firstYear = null, lastYear = null;
-        string? firstQuarter = null, lastQuarter = null;
-
-        int yearCarry = 0;
-        var sheetRange = sheet.RangeUsed();
-        var lastUsedColumn = sheetRange?.LastColumn().ColumnNumber() ?? 30;
-        for (int c = 3; c <= lastUsedColumn; c++)
-        {
-            // Год forward-fill: если в этой колонке непустое — обновляем yearCarry.
-            var yearText = sheet.Cell(yearRow.Value, c).GetString().Trim();
-            if (int.TryParse(yearText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var y))
+            // «Квартал» допускается на r+1 ИЛИ r+2 (между ними может быть помесячная
+            // подшапка с дублированными годами).
+            int quarterRow = -1;
+            for (int rr = r + 1; rr <= Math.Min(r + 2, lastUsedRow); rr++)
             {
-                yearCarry = y;
+                var rrText = sheet.Cell(rr, 1).GetString().Trim();
+                if (string.Equals(rrText, "Квартал", StringComparison.OrdinalIgnoreCase))
+                {
+                    quarterRow = rr;
+                    break;
+                }
+            }
+            if (quarterRow < 0) continue;
+
+            int yearRow = r;
+
+            // Шапка-«Тип помещения» — ищем строго ВЫШЕ Год-строки (≤5 строк назад),
+            // чтобы не подцепить шапку следующей таблицы.
+            string? codeTitleFromHeader = null;
+            int headerScanStart = Math.Max(1, yearRow - 5);
+            for (int hr = yearRow - 1; hr >= headerScanStart; hr--)
+            {
+                var hA = sheet.Cell(hr, 1).GetString().Trim();
+                if (string.IsNullOrEmpty(hA)) continue;
+                if (hA.IndexOf("Тип помещения", StringComparison.OrdinalIgnoreCase) < 0) continue;
+
+                // Значение справа — может быть в любой колонке от B (2) до E (5).
+                for (int hc = 2; hc <= 5; hc++)
+                {
+                    var hVal = sheet.Cell(hr, hc).GetString().Trim();
+                    if (string.IsNullOrEmpty(hVal)) continue;
+                    codeTitleFromHeader = ResolveInputDataCodeTitle(hVal.ToLowerInvariant());
+                    if (codeTitleFromHeader is not null) break;
+                }
+                break;
             }
 
-            var quarterText = sheet.Cell(quarterRow.Value, c).GetString().Trim();
-            var quarterN = ParseQuarter(quarterText);
-            if (yearCarry == 0 || quarterN is null) continue;
-
-            if (firstCol is null)
+            // Колонки этой таблицы: сканируем слева направо, forward-fill года.
+            var tableColumns = new List<FinModelPlanColumn>();
+            int yearCarry = 0;
+            for (int c = 3; c <= lastUsedColumn; c++)
             {
-                firstCol = c;
-                firstYear = yearCarry;
-                firstQuarter = $"{yearCarry}Q{quarterN}";
+                var yearText = sheet.Cell(yearRow, c).GetString().Trim();
+                if (int.TryParse(yearText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var y))
+                    yearCarry = y;
+
+                var quarterText = sheet.Cell(quarterRow, c).GetString().Trim();
+                var quarterN = ParseQuarter(quarterText);
+                if (yearCarry == 0 || quarterN is null) continue;
+
+                tableColumns.Add(new FinModelPlanColumn(c, $"{yearCarry}Q{quarterN}"));
             }
-            lastCol = c;
-            lastYear = yearCarry;
-            lastQuarter = $"{yearCarry}Q{quarterN}";
+            if (tableColumns.Count == 0) continue;
+
+            // Ищем Площадь-строку. Если категория уже резолвлена из шапки — берём ПЕРВУЮ
+            // содержательную строку после quarterRow (skip «План»-маркер, stop на
+            // «Факт»/«накопл»). Если шапки нет — fallback: А-текст самой Amount-строки
+            // должен содержать маркер категории.
+            string? codeTitle = codeTitleFromHeader;
+            int amountRow = -1;
+            int scanLimit = Math.Min(quarterRow + 8, lastUsedRow);
+            for (int rr = quarterRow + 1; rr <= scanLimit; rr++)
+            {
+                var aRaw = sheet.Cell(rr, 1).GetString().Trim();
+                if (string.IsNullOrEmpty(aRaw)) continue;
+                var aLower = aRaw.ToLowerInvariant();
+                // Stop-маркеры — фактический блок начался или идёт накопительный
+                // итог — Площадь-строки в этой таблице больше нет.
+                if (aLower.StartsWith("факт")) break;
+                if (aLower.Contains("накопл")) break;
+                // Маркер начала плана — просто заголовок-разделитель, не строка данных.
+                if (string.Equals(aLower, "план", StringComparison.Ordinal)) continue;
+
+                if (codeTitle is null)
+                {
+                    // Layout-2 (Журавли/тестовый фикстур): категория зашита в А-текст
+                    // самой Amount-строки.
+                    codeTitle = ResolveInputDataCodeTitle(aLower);
+                    if (codeTitle is not null)
+                    {
+                        amountRow = rr;
+                        break;
+                    }
+                    // Ни шапки, ни маркера в А-тексте — пробуем следующую строку.
+                    continue;
+                }
+
+                // Layout-1 (Репино-Парк): категория из шапки; Amount-строка — первая
+                // содержательная после quarterRow («Площадь, кв.м»/«Колич-во м/м»/…).
+                amountRow = rr;
+                break;
+            }
+            if (codeTitle is null || amountRow < 0) continue;
+
+            int costRow = amountRow + 1;
+            int summRow = amountRow + 2;
+
+            // Анти-дубликат: если в одном файле подряд два блока одной категории
+            // (что встречается у заказчика как «План»/«Факт» половины одной и той же
+            // таблицы) — оставляем только первый.
+            if (categories.Any(cat => cat.CodeTitle == codeTitle)) continue;
+
+            categories.Add(new FinModelPlanCategory(codeTitle, AmountRow: amountRow, CostRow: costRow, SummRow: summRow));
+
+            // Сразу материализуем точки этой категории — пока worksheet открыт.
+            foreach (var col in tableColumns)
+            {
+                points.Add(new FinModelPlanInputDataPoint(
+                    FmPeriod: col.FmPeriod,
+                    CodeTitle: codeTitle,
+                    Summ:   ReadPlanCellNumber(sheet, summRow,   col.ColumnIndex),
+                    Amount: ReadPlanCellNumber(sheet, amountRow, col.ColumnIndex),
+                    Cost:   ReadPlanCellNumber(sheet, costRow,   col.ColumnIndex)));
+                allColumns.TryAdd(col.ColumnIndex, col);
+            }
         }
 
-        if (firstQuarter is null || lastQuarter is null)
+        if (categories.Count == 0)
         {
             throw new FinModelPlanParseException(
-                "На листе «План» не удалось найти ни одной валидной пары (Год, Квартал) " +
-                "в колонках C и далее. Проверьте, что заполнены строки «Год» и «Квартал».");
+                $"На листе «{GeneralScheduleSheetName}» не найдено ни одной таблицы. " +
+                "Ожидается пара строк «Год»/«Квартал» (возможно с помесячной подшапкой между ними) " +
+                "и название вида помещения — либо в шапке «Тип помещения» (B-колонка) " +
+                "ВЫШЕ строки «Год», либо в A-тексте Площадь/Колич-во-строки " +
+                "(«Квартиры …»/«Нежилые …»/«Кладовки …»/«Машиноместа …»).");
         }
 
-        return new FinModelPlanPeriods(firstQuarter, lastQuarter);
+        // Краевые периоды — по объединению всех таблиц (FmPeriod отсортирован
+        // лексикографически: «2024Q1» < «2024Q2» < … < «2027Q4»).
+        var orderedColumns = allColumns.Values
+            .OrderBy(c => c.FmPeriod, StringComparer.Ordinal)
+            .ToList();
+        return new FinModelPlanData(
+            PeriodStart: orderedColumns.First().FmPeriod,
+            PeriodEnd: orderedColumns.Last().FmPeriod,
+            Columns: orderedColumns,
+            Categories: categories,
+            InputDataPoints: points);
     }
 
-    /// <summary>«1 кв»/«2 кв»/«3 кв»/«4 кв» → 1..4. Любое отклонение → null.</summary>
-    internal static int? ParseQuarter(string raw)
+    /// <summary>
+    /// Резолв категории InputData по тексту в A-колонке Площадь-строки.
+    /// ⚠️ Порядок важен: «иные нежилые/кладовки» проверяются ДО общего «нежил».
+    /// </summary>
+    private static string? ResolveInputDataCodeTitle(string aLower)
     {
-        if (string.IsNullOrWhiteSpace(raw)) return null;
-        // Берём первую цифру 1..4 — формат «1 кв», «I кв», «1кв», «1 квартал» все обработаются.
-        foreach (var ch in raw.AsSpan())
-        {
-            if (ch >= '1' && ch <= '4') return ch - '0';
-        }
+        if (aLower.Contains("кварт"))
+            return InputDataCodeApartment;
+        if (aLower.Contains("кладов") || aLower.Contains("иные нежил"))
+            return InputDataCodeStoreroom;
+        if (aLower.Contains("нежил"))
+            return InputDataCodeNonResidential;
+        if (aLower.Contains("м/м") || aLower.Contains("машином"))
+            return InputDataCodeParking;
         return null;
     }
 
+    /// <summary>Имя листа в шаблоне заказчика, на котором лежат таблицы Финмодели.</summary>
+    private const string GeneralScheduleSheetName = "Общий график";
+
+    /// <summary>
+    /// «1 кв»/«2 кв»/«3 кв»/«4 кв»/«1кв»/«1 квартал» → 1..4. Любое отклонение → null.
+    /// ⚠️ В файлах заказчика на листе «Общий график» соседствует помесячная таблица,
+    /// где в строке «Квартал» стоят номера месяцев «10», «11», «12». Раньше парсер
+    /// возвращал на «10» цифру 1 (первая 1..4 в строке) — это попадало в data
+    /// как Q1, и помесячные строки засоряли inputdata. Поэтому проверяем
+    /// «после цифры идёт пробел/буква/конец строки, а НЕ ещё одна цифра».
+    /// </summary>
+    internal static int? ParseQuarter(string raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return null;
+        var s = raw.Trim();
+        if (s.Length == 0) return null;
+        var first = s[0];
+        if (first < '1' || first > '4') return null;
+        // Однозначный «1»/«2»/«3»/«4» — OK; либо после цифры идёт нецифровой символ
+        // («1 кв», «1кв», «1 квартал», «1.»). Многозначные числа («10», «12») — NOT a quarter.
+        if (s.Length == 1) return first - '0';
+        if (char.IsDigit(s[1])) return null;
+        return first - '0';
+    }
+
+    /// <summary>
+    /// Считает ячейку с числом из «Плана» и возвращает плановое значение
+    /// (нули — валидное значение, см. doc 112 §3). Текст «#DIV/0!»/пустое/невалидное
+    /// число → 0.
+    /// </summary>
+    internal static double ReadPlanCellNumber(IXLWorksheet sheet, int row, int col)
+    {
+        var cell = sheet.Cell(row, col);
+        if (cell.TryGetValue<double>(out var d) && !double.IsNaN(d) && !double.IsInfinity(d))
+            return d;
+        var text = cell.GetString().Trim();
+        if (string.IsNullOrWhiteSpace(text)) return 0d;
+        // Замена запятой на точку для русской локали + игнор «#DIV/0!»/прочих error-strings.
+        text = text.Replace(',', '.');
+        return double.TryParse(text, NumberStyles.Any, CultureInfo.InvariantCulture, out var v)
+            ? v : 0d;
+    }
+
+    // Title справочника fmcode (HAR заказчика). ID не хардкодятся — резолв
+    // через listview/fmcode (см. FindFmCodeByTitleAsync), Title зашит как контракт
+    // между листом «План» и справочником fmcode.
+    // ⚠️ Внимание на пробелы: «Продажа нежилые ( ком) ПСН (план)» имеет лишний пробел
+    // после «(» — это точное написание из Visary, без него Title не находится по «=».
+    internal const string InputDataCodeApartment       = "Продажа квартиры (план)";
+    internal const string InputDataCodeNonResidential  = "Продажа нежилые ( ком) ПСН (план)";
+    internal const string InputDataCodeStoreroom       = "Продажа иные нежилые (кладовки) (план)";
+    internal const string InputDataCodeParking         = "Продажа м/м (план)";
+
     internal sealed record FinModelPlanPeriods(string PeriodStart, string PeriodEnd);
+
+    /// <summary>Одна колонка периода в листе «План» (после forward-fill года).</summary>
+    internal sealed record FinModelPlanColumn(int ColumnIndex, string FmPeriod);
+
+    /// <summary>
+    /// Триплет строк (Amount, Cost, Summ) для одной категории InputData
+    /// (вид помещения). Номера строк — абсолютные в XLSX.
+    /// </summary>
+    internal sealed record FinModelPlanCategory(
+        string CodeTitle, int AmountRow, int CostRow, int SummRow);
+
+    /// <summary>
+    /// Полная распарсенная картина листа «План»: краевые периоды + столбцы кварталов
+    /// + категории по видам помещений + материализованные точки InputData. Точки
+    /// собираются ВНУТРИ парсера, пока <see cref="XLWorkbook"/> ещё открыт — после
+    /// выхода из using-области в <see cref="ReadPlanDataFromBytes"/> чтение ячеек
+    /// уже невозможно (поэтому отдельной lazy-функции <c>MaterializeInputData</c>
+    /// тут НЕТ — это сознательное решение, см. doc 112 §6 «жизненный цикл ClosedXML»).
+    /// </summary>
+    internal sealed record FinModelPlanData(
+        string PeriodStart,
+        string PeriodEnd,
+        IReadOnlyList<FinModelPlanColumn> Columns,
+        IReadOnlyList<FinModelPlanCategory> Categories,
+        IReadOnlyList<FinModelPlanInputDataPoint> InputDataPoints);
+
+    /// <summary>
+    /// Одна готовая InputData-точка для POST <c>/crud/inputdata</c>:
+    /// период × вид помещения × тройка чисел из листа «План».
+    /// </summary>
+    internal sealed record FinModelPlanInputDataPoint(
+        string FmPeriod, string CodeTitle, double Summ, double Amount, double Cost);
 
     internal sealed class FinModelPlanParseException : Exception
     {

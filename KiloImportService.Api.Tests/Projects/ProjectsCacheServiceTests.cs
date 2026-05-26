@@ -337,7 +337,20 @@ public class ProjectsCacheServiceTests
             => throw new NotImplementedException();
 
         public Task<ListViewResponse<FmModelRaw>> FindFmModelsAsync(
-            int abProjectId, int abConstructionSiteId, CancellationToken ct)
+            int abProjectId, int abConstructionSiteId,
+            string? periodStart, string? periodEnd, CancellationToken ct)
+            => throw new NotImplementedException();
+
+        public Task<ListViewResponse<FmModelVersionRaw>> GetFmModelVersionsByModelAsync(
+            int fmModelId, CancellationToken ct)
+            => throw new NotImplementedException();
+
+        public Task<ListViewResponse<InputDataRaw>> GetInputDataByVersionAsync(
+            int versionId, CancellationToken ct)
+            => throw new NotImplementedException();
+
+        public Task<ListViewResponse<FmCodeRaw>> FindFmCodeByTitleAsync(
+            string title, CancellationToken ct)
             => throw new NotImplementedException();
 
         public Task<ListViewResponse<TownRaw>>                ListTownsAsync(string? titleFilter, CancellationToken ct) => throw new NotImplementedException();

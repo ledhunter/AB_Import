@@ -328,3 +328,73 @@ public sealed class FmModelRaw
     public string? PeriodEnd { get; set; }
     public long RowVersion { get; set; }
 }
+
+/// <summary>
+/// Версия Финмодели (<c>fmmodelversion</c>) — дочерний объект <see cref="FmModelRaw"/>,
+/// в котором хранятся «входные данные» (<see cref="InputDataRaw"/>): квартальные планы
+/// продаж по видам помещений. Импорт «Финмодель» создаёт ровно одну версию
+/// со стандартным <see cref="Title"/> «Версия - Перенос из Эксель» и потом наполняет
+/// её записями <c>inputdata</c>. См. doc_project/112-finmodel-version-and-inputdata.md.
+/// </summary>
+public sealed class FmModelVersionRaw
+{
+    public int ID { get; set; }
+    public string? Title { get; set; }
+    public int? FMModelID { get; set; }
+    public VisaryRef? FMModel { get; set; }
+    public long? RowVersion { get; set; }
+}
+
+/// <summary>
+/// Справочник «Код фин. модели» (<c>fmcode</c>). Используется как
+/// <see cref="InputDataRaw.Code"/> в записях <see cref="InputDataRaw"/>. Импортер
+/// резолвит Title → ID за сессию через точечные запросы
+/// <see cref="ListView.IListViewClient.FindFmCodeByTitleAsync"/>, затем подставляет
+/// <see cref="VisaryRef"/> в payload <c>POST /crud/inputdata</c>. Жёсткий хардкод
+/// ID не используется — справочник может различаться между стендами.
+/// <para/>
+/// Полный набор полей (по HAR заказчика): <see cref="Code"/> — строковый код
+/// (например «020»), <see cref="Group"/> — классификация Доходы/Расходы (план/факт),
+/// <see cref="Sign"/>=±1 (приток/отток), <see cref="Method"/>, <see cref="Priority"/>
+/// и т.д. Импортеру для работы достаточно <see cref="ID"/> и <see cref="Title"/>.
+/// </summary>
+public sealed class FmCodeRaw
+{
+    public int ID { get; set; }
+    public string? Code { get; set; }
+    public string? Title { get; set; }
+    public VisaryRef? Group { get; set; }
+    public int? Priority { get; set; }
+    public VisaryRef? Method { get; set; }
+    public double? Percent { get; set; }
+    public VisaryRef? Type { get; set; }
+    public VisaryRef? Validity { get; set; }
+    public int? Sign { get; set; }
+    public bool? AutoCode { get; set; }
+    public VisaryRef? Unit { get; set; }
+    public string? AddParams { get; set; }
+    public string? Input { get; set; }
+    public bool? Hidden { get; set; }
+}
+
+/// <summary>
+/// Запись «Входные данные» (<c>inputdata</c>) внутри версии Финмодели. Импорт «Финмодель»
+/// создаёт по одной записи на (RoomKind × Quarter): <see cref="FMPeriod"/> формата
+/// <c>"{Year}Q{N}"</c>, <see cref="Code"/> = справочный код (<see cref="InputDataCodeRaw"/>),
+/// <see cref="Summ"/>/<see cref="Amount"/>/<see cref="Cost"/> — значения из листа
+/// «План» второго файла, <see cref="Percent"/> = 0 (всегда).
+/// См. doc_project/112-finmodel-version-and-inputdata.md.
+/// </summary>
+public sealed class InputDataRaw
+{
+    public int ID { get; set; }
+    public string? Title { get; set; }
+    public int? FMModelVersionID { get; set; }
+    public VisaryRef? FMModelVersion { get; set; }
+    public string? FMPeriod { get; set; }
+    public VisaryRef? Code { get; set; }
+    public double? Summ { get; set; }
+    public double? Amount { get; set; }
+    public double? Cost { get; set; }
+    public double? Percent { get; set; }
+}

@@ -92,6 +92,37 @@ public interface ICrudClient
         FmModelCreateRequest request, CancellationToken ct = default);
 
     /// <summary>
+    /// Создать версию Финмодели (<c>fmmodelversion</c>) — дочерний объект Финмодели,
+    /// куда складываются «входные данные» (<c>inputdata</c>) по видам помещений.
+    /// POST <c>/api/visary/crud/fmmodelversion</c>. Идемпотентности на сервере нет —
+    /// caller обязан pre-check'ить через
+    /// <see cref="ListView.IListViewClient.GetFmModelVersionsByModelAsync"/>.
+    /// См. doc_project/112-finmodel-version-and-inputdata.md.
+    /// </summary>
+    Task<FmModelVersionRaw> CreateFmModelVersionAsync(
+        FmModelVersionCreateRequest request, CancellationToken ct = default);
+
+    /// <summary>
+    /// Создать запись «Входные данные» (<c>inputdata</c>) внутри версии Финмодели.
+    /// POST <c>/api/visary/crud/inputdata</c>. Импорт создаёт по одной записи
+    /// на (Квартал × RoomKind); идемпотентности на сервере нет — caller обязан
+    /// pre-check'ить уже привязанные записи через
+    /// <see cref="ListView.IListViewClient.GetInputDataByVersionAsync"/>.
+    /// </summary>
+    Task<InputDataRaw> CreateInputDataAsync(
+        InputDataCreateRequest request, CancellationToken ct = default);
+
+    /// <summary>
+    /// Привязка существующей <c>inputdata</c>-записи к версии Финмодели через
+    /// listview-onetomany эндпоинт (по HAR заказчика):
+    /// <c>POST /api/visary/listview/inputdata/onetomany/FMModelVersion?associationId={versionId}</c>
+    /// с body, содержащим <c>Filter ["ID","=",{inputDataId}]</c>. Возвращает <c>true</c>
+    /// при успехе. Используется сразу после <see cref="CreateInputDataAsync"/>.
+    /// </summary>
+    Task<bool> LinkInputDataToVersionAsync(
+        int versionId, int inputDataId, CancellationToken ct = default);
+
+    /// <summary>
     /// Создать запись <c>typedimportwbs</c> — TypedJournal-задание импорта бюджета (XLSX)
     /// из файла, уже загруженного в файловое хранилище. Поле <c>File</c> в request — это
     /// link-токен, возвращённый <see cref="FileStorage.IFileStorageClient.GetFileLinkAsync"/>.
@@ -552,6 +583,78 @@ public sealed class CrudClient : VisaryHttpBase<CrudClient>, ICrudClient
             request.PeriodStart, request.PeriodEnd);
         return result;
     }
+
+    // ─── FmModelVersion / InputData ──────────────────────────────────────────
+
+    public async Task<FmModelVersionRaw> CreateFmModelVersionAsync(
+        FmModelVersionCreateRequest request, CancellationToken ct)
+    {
+        _log.LogDebug("Visary → POST {Mnemonic} fmModelId={FmModelId} title='{Title}'",
+            VisaryMnemonics.FmModelVersion, request.FMModelID, request.Title);
+        var result = await PostCrudAsync<FmModelVersionRaw>(
+            $"{BaseUrl}/api/visary/crud/{VisaryMnemonics.FmModelVersion}",
+            request, VisaryMnemonics.FmModelVersion, ct);
+        _log.LogInformation(
+            "CrudClient.CreateFmModelVersionAsync: created id={Id} fmModelId={FmModelId} title='{Title}'",
+            result.ID, request.FMModelID, request.Title);
+        return result;
+    }
+
+    public async Task<InputDataRaw> CreateInputDataAsync(
+        InputDataCreateRequest request, CancellationToken ct)
+    {
+        _log.LogDebug(
+            "Visary → POST {Mnemonic} versionId={VersionId} period={Period} codeId={CodeId} summ={Summ}",
+            VisaryMnemonics.InputData, request.FMModelVersionID,
+            request.FMPeriod, request.Code?.ID, request.Summ);
+        var result = await PostCrudAsync<InputDataRaw>(
+            $"{BaseUrl}/api/visary/crud/{VisaryMnemonics.InputData}",
+            request, VisaryMnemonics.InputData, ct);
+        _log.LogInformation(
+            "CrudClient.CreateInputDataAsync: created id={Id} versionId={VersionId} period={Period} codeId={CodeId} summ={Summ}",
+            result.ID, request.FMModelVersionID, request.FMPeriod,
+            request.Code?.ID, request.Summ);
+        return result;
+    }
+
+    public async Task<bool> LinkInputDataToVersionAsync(
+        int versionId, int inputDataId, CancellationToken ct)
+    {
+        // По HAR заказчика — POST listview/inputdata/onetomany/FMModelVersion с
+        // associationId={versionId} и body, описывающим конкретную inputdata-строку
+        // через Filter ["ID","=",{inputDataId}]. Тот же набор Columns, что отдаёт UI.
+        var body = new
+        {
+            Mnemonic = VisaryMnemonics.InputData,
+            Filter = System.Text.Json.JsonSerializer.Serialize(
+                new object[] { "ID", "=", inputDataId }),
+            PageSkip = 0,
+            PageSize = 1,
+            Columns = InputDataLinkColumns,
+        };
+        var url = $"{BaseUrl}/api/visary/listview/{VisaryMnemonics.InputData}/onetomany/FMModelVersion?associationId={versionId}";
+        _log.LogDebug(
+            "Visary → POST {Mnemonic}/onetomany/FMModelVersion versionId={VersionId} inputDataId={Id}",
+            VisaryMnemonics.InputData, versionId, inputDataId);
+        var bodyJson = System.Text.Json.JsonSerializer.Serialize(body, JsonOptions);
+        using var req = NewRequest(HttpMethod.Post, url);
+        req.Content = new StringContent(bodyJson, System.Text.Encoding.UTF8, "application/json");
+        using var response = await _http.SendAsync(req, ct);
+        await HandleAuthErrorAsync(response, ct);
+        await HandleErrorAsync(response, ct);
+        _log.LogInformation(
+            "CrudClient.LinkInputDataToVersionAsync: versionId={VersionId} inputDataId={Id} success",
+            versionId, inputDataId);
+        return true;
+    }
+
+    // Колонки для link-вызова inputdata (HAR заказчика). Сервер требует ровно этот
+    // набор, иначе 400. Включён в CrudClient (а не ListViewClient), поскольку
+    // используется только парным шагом «POST /crud/inputdata → POST link».
+    private static readonly string[] InputDataLinkColumns =
+        ["ID", "Title", "FMModelVersion", "FMPeriod", "Code", "CreditLineCode",
+         "ConstructionSiteCode", "CodeGroup", "Summ", "Amount", "Cost", "Percent",
+         "Replicate", "Group"];
 
     // ─── TypedImportWbs (TypedJournal-импорт бюджета) ────────────────────────
 
