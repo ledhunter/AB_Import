@@ -1,5 +1,7 @@
 # 🔐 Visary token-provider: OIDC refresh_token-flow + DelegatingHandler
 
+> 🔗 **Парный документ:** [111-incoming-jwt-auth.md](./111-incoming-jwt-auth.md) — JWT-валидация **ВХОДЯЩИХ** запросов в наш backend через тот же IdP. Этот документ — про **ИСХОДЯЩИЕ** запросы из backend в Visary.
+
 ## 📋 Описание
 
 Раньше backend `KiloImportService.Api` слепо подставлял `Authorization: Bearer {Visary:BearerToken}` из `.env` в каждый запрос к Visary. Токен жил ~1 час и протухал — приходилось вручную обновлять `.env` и перезапускать контейнер. Теперь токен **получается перед отправкой каждого запроса** через единый pipeline:

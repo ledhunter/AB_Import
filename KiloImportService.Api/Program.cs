@@ -9,7 +9,9 @@ using KiloImportService.Api.Domain.Projects;
 using KiloImportService.Api.Domain.Sites;
 using KiloImportService.Api.Hubs;
 using KiloImportService.Api.Visary;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 using Serilog;
 using Microsoft.Extensions.Options;
 using Visary.Api;
@@ -158,6 +160,64 @@ try
         .AllowAnyMethod()
         .AllowCredentials()));
 
+    // ─── Аутентификация ВХОДЯЩИХ запросов (JWT bearer от того же IdP, что и Visary) ───
+    // Включается только при непустом Auth:Authority — иначе backend работает БЕЗ auth
+    // (legacy/dev-режим, чтобы локальный dev не сломался). На prod Authority должен быть задан.
+    // См. doc_project/111-incoming-jwt-auth.md.
+    var incomingAuthSection = builder.Configuration.GetSection("Auth");
+    var incomingAuthority = incomingAuthSection["Authority"];
+    var incomingAuthEnabled = !string.IsNullOrWhiteSpace(incomingAuthority);
+
+    if (incomingAuthEnabled)
+    {
+        var incomingAudience = incomingAuthSection["Audience"];
+        var requireHttps = incomingAuthSection.GetValue("RequireHttpsMetadata", true);
+
+        builder.Services
+            .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+            .AddJwtBearer(opt =>
+            {
+                opt.Authority = incomingAuthority;
+                opt.Audience  = incomingAudience;
+                opt.RequireHttpsMetadata = requireHttps;
+
+                opt.TokenValidationParameters = new TokenValidationParameters
+                {
+                    ValidateIssuer           = true,
+                    ValidateAudience         = !string.IsNullOrWhiteSpace(incomingAudience),
+                    ValidateLifetime         = true,
+                    ValidateIssuerSigningKey = true,
+                    ClockSkew                = TimeSpan.FromMinutes(2)
+                };
+
+                // SignalR не может слать Authorization-header при WebSocket-апгрейде,
+                // поэтому при запросе на /hubs/* берём токен из query string ?access_token=…
+                opt.Events = new JwtBearerEvents
+                {
+                    OnMessageReceived = ctx =>
+                    {
+                        var token = ctx.Request.Query["access_token"];
+                        var path  = ctx.HttpContext.Request.Path;
+                        if (!string.IsNullOrEmpty(token) &&
+                            path.StartsWithSegments("/hubs"))
+                        {
+                            ctx.Token = token;
+                        }
+                        return Task.CompletedTask;
+                    }
+                };
+            });
+
+        builder.Services.AddAuthorization();
+        Log.Information("Incoming JWT auth ENABLED. Authority={Authority} Audience={Audience}",
+            incomingAuthority, incomingAudience);
+    }
+    else
+    {
+        Log.Warning("Incoming JWT auth DISABLED (Auth:Authority пуст). " +
+                    "Backend принимает запросы БЕЗ аутентификации — допустимо только в dev.");
+    }
+
     var app = builder.Build();
 
     // ─── Auto-apply миграций для service-db при старте ───
@@ -180,9 +240,24 @@ try
     }
 
     app.UseSerilogRequestLogging();
+    app.UseRouting();
     app.UseCors("ui");
-    app.MapControllers();
-    app.MapHub<ImportProgressHub>("/hubs/imports");
+
+    if (incomingAuthEnabled)
+    {
+        app.UseAuthentication();
+        app.UseAuthorization();
+
+        // Deny-by-default: все контроллеры/хабы требуют валидный JWT.
+        // Что должно быть публичным (health, swagger) — пометить [AllowAnonymous].
+        app.MapControllers().RequireAuthorization();
+        app.MapHub<ImportProgressHub>("/hubs/imports").RequireAuthorization();
+    }
+    else
+    {
+        app.MapControllers();
+        app.MapHub<ImportProgressHub>("/hubs/imports");
+    }
 
     Log.Information("Starting KiloImportService.Api on {Urls}", string.Join(", ", builder.WebHost.GetSetting("urls") ?? "default"));
     await app.RunAsync();
