@@ -37,6 +37,11 @@ public class RoomsFormImportMapperApplyTests : IDisposable
     private const int CreatedRoomId = 9001;
     private const int CreatedSaId = 9501;
 
+    /// <summary>doc 113 v1.4: ShareAgreement.Date — ISO-строка <c>yyyy-MM-dd</c>.
+    /// Visary UI шлёт `"Date":"2026-05-26"` строкой — числовой Excel-serial
+    /// не принимается.</summary>
+    private const string Doc113ExpectedDateIso = "2026-04-01";
+
     private readonly Mock<ICrudClient> _mockCrud = new();
     private readonly Mock<IListViewClient> _mockListView = new();
     private readonly RoomsFormImportMapper _mapper;
@@ -925,6 +930,308 @@ public class RoomsFormImportMapperApplyTests : IDisposable
             It.Is<ShareAgreementPatchRequest>(r =>
                 r.RoomID == CreatedRoomId && r.Room!.ID == CreatedRoomId),
             It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ValidateAsync_ReadsDoc113Columns_AndPlacesThemInMappedValues()
+    {
+        // doc 113: новые опциональные колонки «Вывод (да/нет)», «Сумма депонирования»,
+        // «Сумма на эскроу», «Дата ДДУ», «ФИО покупателя» + переиспользуемый
+        // «ПИН застройщика». Validate должен распарсить их и положить в
+        // MappedValues; поиск по этим полям не производится.
+        var ctx = new ImportContext(Guid.NewGuid(), ProjectId, null, null);
+        var cells = new Dictionary<string, string>
+        {
+            ["Номер проекта"] = "PRJ-1",
+            ["Этап"] = "1",
+            ["Номер разрешения"] = "RNS-1",
+            ["Номер помещения/Квартира/Номер квартиры"] = "1",
+            ["Тип/Название/Вид"] = "Квартира",
+            ["№ стр/корп"] = "1.1",
+            ["Подъезд/Секция"] = "1",
+            ["Этаж"] = "5",
+            ["Колич. комнат"] = "1",
+            ["Площадь"] = "42",
+            // ── doc 113 ──
+            ["Вывод\n(да/нет)"]            = "да",
+            ["Сумма депонирования, руб."]  = "3422700",
+            ["Сумма на эскроу"]            = "3422700",
+            ["Дата ДДУ"]                   = "01.04.2026",
+            ["ФИО покупателя"]             = "Иванов И.И.",
+            ["ПИН застройщика"]            = "UBCFBE",
+        };
+        var rows = new[] { new ParsedRow(10, "Квартира", cells) };
+
+        var result = await _mapper.ValidateAsync(ctx, rows, _visaryDb, default);
+
+        var mapped = Assert.Single(result.Rows);
+        Assert.True(mapped.IsValid, "row должна быть валидной (новые поля опциональные)");
+        var v = mapped.MappedValues.RootElement;
+
+        Assert.True(v.GetProperty("IsWithdrawn").GetBoolean());
+        Assert.Equal(3422700.0, v.GetProperty("ShareAgreementCost").GetDouble());
+        Assert.Equal(3422700.0, v.GetProperty("ShareAgreementDepositedAmount").GetDouble());
+        // doc 113 v1.4: «Дата ДДУ» хранится в MappedValues как ISO-строка
+        // `yyyy-MM-dd` — именно так Visary UI шлёт `"Date":"2026-05-26"`.
+        Assert.Equal(Doc113ExpectedDateIso, v.GetProperty("ShareAgreementDate").GetString());
+        Assert.Equal("Иванов И.И.", v.GetProperty("ShareAgreementDepositorFullName").GetString());
+        Assert.Equal("UBCFBE", v.GetProperty("ShareAgreementDeveloperPin").GetString());
+    }
+
+    [Theory]
+    // doc 113 v1.3: реальные файлы заказчика дают заголовки с разной формой
+    // whitespace внутри. NormalizeHeader сворачивает любую whitespace-
+    // последовательность к одному пробелу и матчит alias независимо от
+    // переноса/таба/двойных пробелов. Раньше эти заголовки не матчились с
+    // alias-листом и поля молча оставались пустыми (Visary не получал
+    // IsWithdrawn/Cost/Date/etc).
+    [InlineData("Вывод\r\n(да/нет)")]
+    [InlineData("Вывод\t(да/нет)")]
+    [InlineData("Вывод  (да/нет)")]
+    [InlineData("Вывод (да/нет)")]
+    [InlineData("Вывод\n(да/нет)")]
+    public async Task ValidateAsync_Doc113Headers_WithVariousWhitespace_AreMatched(string headerForm)
+    {
+        var ctx = new ImportContext(Guid.NewGuid(), ProjectId, null, null);
+        var cells = new Dictionary<string, string>
+        {
+            ["Номер проекта"] = "PRJ-1",
+            ["Этап"] = "1",
+            ["Номер разрешения"] = "RNS-1",
+            ["Номер помещения/Квартира/Номер квартиры"] = "1",
+            ["Тип/Название/Вид"] = "Квартира",
+            ["№ стр/корп"] = "1.1",
+            ["Подъезд/Секция"] = "1",
+            ["Этаж"] = "5",
+            ["Колич. комнат"] = "1",
+            ["Площадь"] = "42",
+            [headerForm] = "да",
+        };
+        var rows = new[] { new ParsedRow(10, "Квартира", cells) };
+
+        var result = await _mapper.ValidateAsync(ctx, rows, _visaryDb, default);
+
+        var mapped = Assert.Single(result.Rows);
+        Assert.True(mapped.IsValid);
+        Assert.True(
+            mapped.MappedValues.RootElement.GetProperty("IsWithdrawn").GetBoolean(),
+            $"Заголовок '{headerForm}' должен матчиться whitespace-insensitive");
+    }
+
+    [Fact]
+    public async Task ValidateThenApply_IsWithdrawnDa_EndToEnd_SendsTrueToVisaryRoom()
+    {
+        // Заказчик: «Если в файле в поле "Вывод (да/нет)" указано "Да",
+        // то передавать в Помещение значение "IsWithdrawn":true».
+        // Регрессионный тест полного pipeline'а: Validate (alias-match
+        // header'а + TryParseBoolYesNo("Да") → true → MappedValues) →
+        // Apply (GetBoolOrNull → RoomCreateRequest.IsWithdrawn → JSON
+        // payload). DTO PascalCase + WhenWritingNull сохраняют true в
+        // payload как `"IsWithdrawn": true`.
+        RoomCreateRequest? capturedRoom = null;
+        _mockCrud.Setup(c => c.CreateRoomAsync(It.IsAny<RoomCreateRequest>(), It.IsAny<CancellationToken>()))
+            .Callback<RoomCreateRequest, CancellationToken>((r, _) => capturedRoom = r)
+            .ReturnsAsync(new RoomRaw { ID = CreatedRoomId });
+        _mockCrud.Setup(c => c.CreateShareAgreementAsync(It.IsAny<ShareAgreementCreateRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ShareAgreementRaw { ID = CreatedSaId });
+
+        var ctx = new ImportContext(Guid.NewGuid(), ProjectId, null, null);
+        var cells = new Dictionary<string, string>
+        {
+            ["Номер проекта"] = "PRJ-1",
+            ["Этап"] = "1",
+            ["Номер разрешения"] = "RNS-1",
+            ["Номер помещения/Квартира/Номер квартиры"] = "1",
+            ["Тип/Название/Вид"] = "Квартира",
+            ["№ стр/корп"] = "1.1",
+            ["Подъезд/Секция"] = "1",
+            ["Этаж"] = "5",
+            ["Колич. комнат"] = "1",
+            ["Площадь"] = "42",
+            ["Вывод (да/нет)"] = "Да",
+        };
+        var rows = new[] { new ParsedRow(10, "Квартира", cells) };
+
+        var validate = await _mapper.ValidateAsync(ctx, rows, _visaryDb, default);
+        var mapped = Assert.Single(validate.Rows);
+        Assert.True(mapped.IsValid);
+        Assert.True(mapped.MappedValues.RootElement.GetProperty("IsWithdrawn").GetBoolean());
+
+        var apply = await _mapper.ApplyAsync(ctx, _visaryDb, validate.Rows, default);
+        Assert.Equal(1, apply.AppliedCount);
+        Assert.Empty(apply.Errors);
+
+        Assert.NotNull(capturedRoom);
+        Assert.True(capturedRoom!.IsWithdrawn, "IsWithdrawn должно быть true для значения 'Да'");
+    }
+
+    [Fact]
+    public async Task ValidateAsync_SaCost_SlashCombinedHeader_IsMatched()
+    {
+        // doc 113 v1.5: реальный шаблон заказчика объединяет «Стоимость ДКП, руб»
+        // и «Сумма депонирования, руб.» в одной ячейке через `,/` — это форма,
+        // которой не было в alias-листе SaCostAliases. Без slash-aware fallback'а
+        // в ReadString ShareAgreement.Cost молча оставался null и Visary не получал
+        // значение. Тест регрессионный.
+        var ctx = new ImportContext(Guid.NewGuid(), ProjectId, null, null);
+        var cells = new Dictionary<string, string>
+        {
+            ["Номер проекта"] = "PRJ-1",
+            ["Этап"] = "1",
+            ["Номер разрешения"] = "RNS-1",
+            ["Номер помещения/Квартира/Номер квартиры"] = "1",
+            ["Тип/Название/Вид"] = "Квартира",
+            ["№ стр/корп"] = "1.1",
+            ["Подъезд/Секция"] = "1",
+            ["Этаж"] = "5",
+            ["Колич. комнат"] = "1",
+            ["Площадь"] = "42",
+            ["Стоимость ДКП, руб,/Сумма депонирования, руб."] = "1234567",
+        };
+        var rows = new[] { new ParsedRow(10, "Квартира", cells) };
+
+        var result = await _mapper.ValidateAsync(ctx, rows, _visaryDb, default);
+
+        var mapped = Assert.Single(result.Rows);
+        Assert.True(mapped.IsValid);
+        Assert.Equal(1234567.0,
+            mapped.MappedValues.RootElement.GetProperty("ShareAgreementCost").GetDouble());
+    }
+
+    [Fact]
+    public async Task ApplyAsync_NewRow_WithDoc113Fields_SendsThemToVisaryRoomAndShareAgreement()
+    {
+        // Apply должен прокинуть IsWithdrawn в RoomCreateRequest и
+        // Cost/DepositedAmount/Date/DepositorFullName/DeveloperPIN — в
+        // ShareAgreementCreateRequest. Это интеграционный регресс-тест на
+        // полный путь «MappedValues → CRUD-payload».
+        RoomCreateRequest? capturedRoom = null;
+        ShareAgreementCreateRequest? capturedSa = null;
+        _mockCrud.Setup(c => c.CreateRoomAsync(It.IsAny<RoomCreateRequest>(), It.IsAny<CancellationToken>()))
+            .Callback<RoomCreateRequest, CancellationToken>((r, _) => capturedRoom = r)
+            .ReturnsAsync(new RoomRaw { ID = CreatedRoomId });
+        _mockCrud.Setup(c => c.CreateShareAgreementAsync(It.IsAny<ShareAgreementCreateRequest>(), It.IsAny<CancellationToken>()))
+            .Callback<ShareAgreementCreateRequest, CancellationToken>((s, _) => capturedSa = s)
+            .ReturnsAsync(new ShareAgreementRaw { ID = CreatedSaId });
+
+        var ctx = new ImportContext(Guid.NewGuid(), ProjectId, null, null);
+        var rows = new[] { MakeRowWithDoc113Fields(10, "Квартира", "1", "1", 42.5) };
+
+        var result = await _mapper.ApplyAsync(ctx, _visaryDb, rows, default);
+
+        Assert.Equal(1, result.AppliedCount);
+        Assert.Empty(result.Errors);
+
+        Assert.NotNull(capturedRoom);
+        Assert.True(capturedRoom!.IsWithdrawn);
+
+        Assert.NotNull(capturedSa);
+        Assert.Equal(3422700.0, capturedSa!.Cost);
+        Assert.Equal(3300000.0, capturedSa.DepositedAmount);
+        Assert.Equal(Doc113ExpectedDateIso, capturedSa.Date);
+        Assert.Equal("Иванов И.И.", capturedSa.DepositorFullName);
+        Assert.Equal("UBCFBE", capturedSa.DeveloperPIN);
+    }
+
+    [Fact]
+    public async Task ApplyAsync_ExistingRoomAndSa_WithDoc113Fields_PatchesBothEntitiesWithNewValues()
+    {
+        // Сценарий повторного импорта: Room и ДДУ существуют — Apply должен
+        // отправить IsWithdrawn в PATCH Room и Cost/Date/… в PATCH SA.
+        _mockListView.Setup(c => c.GetRoomsBySectionAsync(SectionId, It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ListViewResponse<RoomRaw>
+            {
+                Data =
+                [
+                    new RoomRaw
+                    {
+                        ID = CreatedRoomId, Number = "1", ExplicationNumber = "1",
+                        BuildingSection = "1",
+                        Kind = new VisaryRef { ID = RoomKindIdApartment },
+                    }
+                ],
+                Total = 1,
+            });
+        _mockListView.Setup(c => c.GetShareAgreementsByRoomAsync(CreatedRoomId, It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ListViewResponse<ShareAgreementRaw>
+            {
+                Data =
+                [
+                    new ShareAgreementRaw
+                    {
+                        ID = CreatedSaId, Number = "ДДУ-1",
+                        Room = new VisaryRef { ID = CreatedRoomId },
+                        RoomKindRef = new VisaryRef { ID = RoomKindIdApartment },
+                    }
+                ],
+                Total = 1,
+            });
+
+        RoomPatchRequest? roomPatch = null;
+        ShareAgreementPatchRequest? saPatch = null;
+        _mockCrud.Setup(c => c.PatchRoomAsync(CreatedRoomId, It.IsAny<RoomPatchRequest>(), It.IsAny<CancellationToken>()))
+            .Callback<int, RoomPatchRequest, CancellationToken>((_, r, _) => roomPatch = r)
+            .ReturnsAsync(true);
+        _mockCrud.Setup(c => c.PatchShareAgreementAsync(CreatedSaId, It.IsAny<ShareAgreementPatchRequest>(), It.IsAny<CancellationToken>()))
+            .Callback<int, ShareAgreementPatchRequest, CancellationToken>((_, r, _) => saPatch = r)
+            .ReturnsAsync(true);
+
+        var ctx = new ImportContext(Guid.NewGuid(), ProjectId, null, null);
+        var rows = new[] { MakeRowWithDoc113Fields(10, "Квартира", "1", "1", 42.5) };
+
+        var result = await _mapper.ApplyAsync(ctx, _visaryDb, rows, default);
+
+        Assert.Equal(1, result.AppliedCount);
+        Assert.NotNull(roomPatch);
+        Assert.True(roomPatch!.IsWithdrawn);
+
+        Assert.NotNull(saPatch);
+        Assert.Equal(3422700.0, saPatch!.Cost);
+        Assert.Equal(3300000.0, saPatch.DepositedAmount);
+        Assert.Equal(Doc113ExpectedDateIso, saPatch.Date);
+        Assert.Equal("Иванов И.И.", saPatch.DepositorFullName);
+        Assert.Equal("UBCFBE", saPatch.DeveloperPIN);
+    }
+
+    private static MappedRow MakeRowWithDoc113Fields(int row, string sheet, string roomNumber,
+        string buildingSection, double area)
+    {
+        // Вариант MakeRow с заполненными «новыми» полями doc 113.
+        var mapped = new Dictionary<string, object?>
+        {
+            ["Sheet"] = sheet,
+            ["SiteId"] = SiteId,
+            ["RoomNumber"] = roomNumber,
+            ["RoomKindId"] = RoomKindIdApartment,
+            ["RoomKindTitle"] = "Квартира",
+            ["RoomCategory"] = 0,
+            ["SectionTitle"] = "1.1",
+            ["SectionTitleNumeric"] = "1.1",
+            ["BuildingSection"] = buildingSection,
+            ["Floor"] = "5",
+            ["RoomsCount"] = 1,
+            ["IsStudio"] = false,
+            ["ProjectArea"] = area,
+            ["CostForOne"] = 100000.0,
+            ["MarketCostPerM"] = 120000.0,
+            ["ZalogCostPerM"] = 90000.0,
+            ["ShareAgreementNumber"] = $"ДДУ-{roomNumber}",
+            ["StageNumber"] = 1,
+            ["StageNumberRaw"] = "1",
+            ["ProjectNumber"] = "PRJ-1",
+            ["PermissionNumber"] = "RNS-1",
+            // doc 113 — заполнено
+            ["IsWithdrawn"] = true,
+            ["ShareAgreementCost"] = 3422700.0,
+            ["ShareAgreementDepositedAmount"] = 3300000.0,
+            // doc 113 v1.4: ISO-строка `yyyy-MM-dd` — именно так Visary UI шлёт
+            // `"Date":"2026-05-26"`. До v1.4 был Excel-serial (double).
+            ["ShareAgreementDate"] = Doc113ExpectedDateIso,
+            ["ShareAgreementDepositorFullName"] = "Иванов И.И.",
+            ["ShareAgreementDeveloperPin"] = "UBCFBE",
+        };
+        return new MappedRow(row, sheet, true,
+            JsonSerializer.SerializeToDocument(mapped), []);
     }
 
     [Fact]

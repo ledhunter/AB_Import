@@ -39,6 +39,12 @@ public sealed class RoomPatchRequest
     /// (см. doc 108). В этом же случае <see cref="RoomsNumber"/> = 0.
     /// </summary>
     public bool? IsStudio { get; set; }
+    /// <summary>
+    /// Признак «Вывод» помещения (заполняется из колонки «Вывод (да/нет)»
+    /// импорта «Помещения»). Visary хранит как <c>bool?</c>. Поиск перед
+    /// PATCH по этому полю НЕ выполняется (см. doc 113) — пишем как есть.
+    /// </summary>
+    public bool? IsWithdrawn { get; set; }
     public double? ProjectArea { get; set; }
     /// <summary>
     /// Заполняется только для нежилых помещений (Kind.RoomCategory ≠ 0):
@@ -74,6 +80,18 @@ public sealed class ShareAgreementPatchRequest
     public string? ConditionalNumber { get; set; }
     public string? StageNumber { get; set; }
     public string? ProjectNumber { get; set; }
+
+    // ── Опциональные поля импорта «Помещения» (doc 113) ─────────────────
+    /// <summary>См. <see cref="ShareAgreementCreateRequest.Cost"/>.</summary>
+    public double? Cost { get; set; }
+    /// <summary>См. <see cref="ShareAgreementCreateRequest.DepositedAmount"/>.</summary>
+    public double? DepositedAmount { get; set; }
+    /// <summary>См. <see cref="ShareAgreementCreateRequest.Date"/>.</summary>
+    public string? Date { get; set; }
+    /// <summary>См. <see cref="ShareAgreementCreateRequest.DepositorFullName"/>.</summary>
+    public string? DepositorFullName { get; set; }
+    /// <summary>См. <see cref="ShareAgreementCreateRequest.DeveloperPIN"/>.</summary>
+    public string? DeveloperPIN { get; set; }
 }
 
 public sealed class SiteCreateRequest
@@ -243,6 +261,8 @@ public sealed class RoomCreateRequest
     /// Студия: см. <see cref="RoomPatchRequest.IsStudio"/>.
     /// </summary>
     public bool? IsStudio { get; set; }
+    /// <summary>Признак «Вывод»; см. <see cref="RoomPatchRequest.IsWithdrawn"/>.</summary>
+    public bool? IsWithdrawn { get; set; }
     public double? ProjectArea { get; set; }
     /// <summary>
     /// Заполняется для нежилых помещений (Kind.RoomCategory ≠ 0). См.
@@ -270,6 +290,23 @@ public sealed class ShareAgreementCreateRequest
     public string? ProjectNumber { get; set; }
     public string? StageNumber { get; set; }
     public string? ConditionalNumber { get; set; }
+
+    // ── Опциональные поля импорта «Помещения» (doc 113) ─────────────────
+    // Заполняются из соответствующих колонок XLSX. Поиск перед CREATE/PATCH
+    // по этим полям НЕ выполняется — пишем как есть (см. doc 113).
+    /// <summary>Колонка «Стоимость ДКП, руб.» / «Сумма депонирования, руб.».</summary>
+    public double? Cost { get; set; }
+    /// <summary>Колонка «Сумма на эскроу».</summary>
+    public double? DepositedAmount { get; set; }
+    /// <summary>Колонка «Дата ДДУ». ISO-строка <c>yyyy-MM-dd</c> — именно так
+    /// принимает Visary UI (`POST /crud/shareagreement` шлёт `"Date":"2026-05-26"`),
+    /// см. doc 113 v1.4. Excel-serial из ячейки конвертируется в строку через
+    /// <see cref="DateTime.FromOADate"/> в маппере.</summary>
+    public string? Date { get; set; }
+    /// <summary>Колонка «ФИО покупателя».</summary>
+    public string? DepositorFullName { get; set; }
+    /// <summary>Колонка «ПИН застройщика» — кладём как есть, без поиска организации.</summary>
+    public string? DeveloperPIN { get; set; }
 }
 
 /// <summary>
