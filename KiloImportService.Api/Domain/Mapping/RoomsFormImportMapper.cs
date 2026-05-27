@@ -143,6 +143,35 @@ public sealed class RoomsFormImportMapper : IImportMapper
     private static readonly string[] ZalogCostAliases        = ["Залоговая стоимость.", "ZalogCostPerM"];
     private static readonly string[] ShareAgreementAliases   = ["№ ДДУ", "ShareAgreementNumber"];
 
+    // ── Дополнительные колонки (doc 113) — пишутся в Visary как есть,    ─
+    // поиск перед CREATE/PATCH по ним не выполняется. Алиасы перечисляются ─
+    // в обеих формах (с реальным \n, как кладёт ClosedXML для много-строчных ─
+    // заголовков типа «Вывод\n(да/нет)», и без \n — на случай ручной правки ─
+    // шаблона). ReadString сравнивает alias целиком, без нормализации, поэтому ─
+    // каждую форму нужно перечислить явно. ──────────────────────────────────
+    private static readonly string[] IsWithdrawnAliases          = [
+        "Вывод\n(да/нет)", "Вывод (да/нет)", "Вывод", "IsWithdrawn"];
+    private static readonly string[] SaCostAliases               = [
+        "Стоимость ДКП, руб.", "Стоимость ДКП, руб,", "Стоимость ДКП, руб",
+        "Сумма депонирования, руб.", "Сумма депонирования, руб",
+        "Сумма депонирования",
+        // Реальный шаблон заказчика объединяет оба лейбла одной ячейкой через
+        // запятую-слэш (`, руб,/Сумма`). ReadString строго сравнивает alias
+        // целиком — без явных «комбинированных» форм здесь поле молча
+        // оставалось пустым и Visary не получал ShareAgreement.Cost. Slash-aware
+        // fallback в ReadString также покрывает любые `A,/B` варианты.
+        "Стоимость ДКП, руб,/Сумма депонирования, руб.",
+        "Стоимость ДКП, руб./Сумма депонирования, руб.",
+        "Стоимость ДКП, руб,/Сумма депонирования, руб",
+        "Стоимость ДКП, руб./Сумма депонирования, руб",
+        "Cost"];
+    private static readonly string[] SaDepositedAmountAliases    = [
+        "Сумма на эскроу", "DepositedAmount"];
+    private static readonly string[] SaDateAliases               = [
+        "Дата ДДУ", "Date"];
+    private static readonly string[] SaDepositorFullNameAliases  = [
+        "ФИО покупателя", "ФИО", "DepositorFullName"];
+
     private readonly ILogger<RoomsFormImportMapper> _log;
     private readonly IListViewClient _listView;
     private readonly ICrudClient     _crud;
@@ -545,6 +574,29 @@ public sealed class RoomsFormImportMapper : IImportMapper
             double? zalogCost  = TryParseNullableDouble(ReadString(row, ZalogCostAliases), out var zErr);
             if (zErr != null) rowErrors.Add(new RowError(string.Join(" / ", ZalogCostAliases), "invalid_number", zErr));
 
+            // ── Дополнительные поля Помещения/ДДУ (doc 113) ─────────────────
+            // Поиск перед CREATE/PATCH по ним НЕ выполняется — пишем в Visary
+            // как есть. Все поля опциональные: пустая ячейка → null → не уйдёт
+            // в payload (`WhenWritingNull`-семантика DTO).
+            bool? isWithdrawn = TryParseBoolYesNo(ReadString(row, IsWithdrawnAliases));
+
+            double? saCost = TryParseNullableDouble(ReadString(row, SaCostAliases), out var saCostErr);
+            if (saCostErr != null) rowErrors.Add(new RowError(string.Join(" / ", SaCostAliases), "invalid_number", saCostErr));
+
+            double? saDeposited = TryParseNullableDouble(ReadString(row, SaDepositedAmountAliases), out var saDepErr);
+            if (saDepErr != null) rowErrors.Add(new RowError(string.Join(" / ", SaDepositedAmountAliases), "invalid_number", saDepErr));
+
+            string? saDate = TryParseExcelDate(ReadString(row, SaDateAliases), out var saDateErr);
+            if (saDateErr != null) rowErrors.Add(new RowError(string.Join(" / ", SaDateAliases), "invalid_date", saDateErr));
+
+            var saDepositorFullName = ReadString(row, SaDepositorFullNameAliases);
+            if (ExcelErrorMarkers.Contains(saDepositorFullName.Trim())) saDepositorFullName = string.Empty;
+
+            // ПИН застройщика уже прочитан выше как `developerPin` (используется
+            // в developer-link flow). Кладём его же в SA.DeveloperPIN — заказчик
+            // просил прокинуть значение без дополнительных проверок.
+            var saDeveloperPin = developerPin;
+
             // Категория Kind (residential/non-residential) — нужна Apply, чтобы
             // решить, в какое поле положить площадь.
             int? roomCategory = (kindId != 0 && categoryByKindId.TryGetValue(kindId, out var cat))
@@ -579,6 +631,13 @@ public sealed class RoomsFormImportMapper : IImportMapper
                 ["MarketCostPerM"]       = marketCost,
                 ["ZalogCostPerM"]        = zalogCost,
                 ["ShareAgreementNumber"] = shareAgreement,
+                // doc 113 — дополнительные поля Помещения/ДДУ.
+                ["IsWithdrawn"]                  = isWithdrawn,
+                ["ShareAgreementCost"]           = saCost,
+                ["ShareAgreementDepositedAmount"] = saDeposited,
+                ["ShareAgreementDate"]           = saDate,
+                ["ShareAgreementDepositorFullName"] = saDepositorFullName,
+                ["ShareAgreementDeveloperPin"]   = saDeveloperPin,
             };
             mappedRows.Add(new MappedRow(
                 row.SourceRowNumber,
@@ -874,6 +933,28 @@ public sealed class RoomsFormImportMapper : IImportMapper
                         ? (totalAreaFile ?? projectAreaFile)
                         : null;
 
+                    // doc 113 diagnostics: явно логируем парсенные значения новых полей
+                    // на каждой строке. Помогает выявить случаи, когда «Признак вывода»
+                    // в Visary остаётся пустым: видно, дошло ли значение до payload,
+                    // или MappedValues уже null (header не совпал / TryParseBoolYesNo не
+                    // распознал значение / snapshot diff-skip).
+                    var diagIsWithdrawn  = GetBoolOrNull(v, "IsWithdrawn");
+                    var diagSaCost       = GetDoubleOrNull(v, "ShareAgreementCost");
+                    var diagSaDate       = GetStringOrNull(v, "ShareAgreementDate");
+                    var diagSaDeposited  = GetDoubleOrNull(v, "ShareAgreementDepositedAmount");
+                    var diagSaDepositor  = GetStringOrNull(v, "ShareAgreementDepositorFullName");
+                    _log.LogInformation(
+                        "RoomsForm.Apply.Doc113 sheet='{Sheet}' row={Row} roomNumber='{RoomNumber}' "
+                        + "IsWithdrawn={IsWithdrawn} ShareAgreementCost={Cost} "
+                        + "ShareAgreementDate={Date} ShareAgreementDepositedAmount={Deposited} "
+                        + "ShareAgreementDepositorFullName='{Depositor}'",
+                        sheetForRow, mr.SourceRowNumber, roomNumber,
+                        diagIsWithdrawn?.ToString() ?? "null",
+                        diagSaCost?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "null",
+                        diagSaDate ?? "null",
+                        diagSaDeposited?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "null",
+                        diagSaDepositor ?? "null");
+
                     if (roomId is null)
                     {
                         var created = await _crud.CreateRoomAsync(new RoomCreateRequest
@@ -889,6 +970,7 @@ public sealed class RoomsFormImportMapper : IImportMapper
                             BuildingSection   = buildingSection,
                             RoomsNumber       = GetIntOrNull(v, "RoomsCount"),
                             IsStudio          = GetBoolOrNull(v, "IsStudio"),
+                            IsWithdrawn       = GetBoolOrNull(v, "IsWithdrawn"),
                             ProjectArea       = projectAreaForCrud,
                             TotalArea         = totalAreaForCrud,
                             CostForOne        = GetDoubleOrNull(v, "CostForOne"),
@@ -910,6 +992,7 @@ public sealed class RoomsFormImportMapper : IImportMapper
                             BuildingSection = buildingSection,
                             RoomsNumber     = GetIntOrNull(v, "RoomsCount"),
                             IsStudio        = GetBoolOrNull(v, "IsStudio"),
+                            IsWithdrawn     = GetBoolOrNull(v, "IsWithdrawn"),
                             ProjectArea     = projectAreaForCrud,
                             TotalArea       = totalAreaForCrud,
                             CostForOne      = GetDoubleOrNull(v, "CostForOne"),
@@ -1044,6 +1127,15 @@ public sealed class RoomsFormImportMapper : IImportMapper
                             }
                         }
 
+                        // Дополнительные поля ДДУ (doc 113) — пишем как есть,
+                        // без поиска перед CREATE/PATCH. Берём из MappedValues
+                        // строки (заполняется в Validate из колонок XLSX).
+                        var saExtraCost           = GetDoubleOrNull(v, "ShareAgreementCost");
+                        var saExtraDeposited      = GetDoubleOrNull(v, "ShareAgreementDepositedAmount");
+                        var saExtraDate           = GetStringOrNull(v, "ShareAgreementDate");
+                        var saExtraDepositor      = GetStringOrNull(v, "ShareAgreementDepositorFullName");
+                        var saExtraDeveloperPin   = GetStringOrNull(v, "ShareAgreementDeveloperPin");
+
                         if (saMatch is null)
                         {
                             var saCreated = await _crud.CreateShareAgreementAsync(new ShareAgreementCreateRequest
@@ -1060,6 +1152,11 @@ public sealed class RoomsFormImportMapper : IImportMapper
                                 ProjectNumber     = projectNumberForSa,
                                 StageNumber       = stageNumberForSa,
                                 ConditionalNumber = roomNumber,
+                                Cost              = saExtraCost,
+                                DepositedAmount   = saExtraDeposited,
+                                Date              = saExtraDate,
+                                DepositorFullName = string.IsNullOrWhiteSpace(saExtraDepositor) ? null : saExtraDepositor,
+                                DeveloperPIN      = string.IsNullOrWhiteSpace(saExtraDeveloperPin) ? null : saExtraDeveloperPin,
                             }, gct);
                             saId = saCreated.ID;
                             Log(sheetForRow, mr.SourceRowNumber, $"ДДУ создан (№{saNumber})");
@@ -1094,8 +1191,39 @@ public sealed class RoomsFormImportMapper : IImportMapper
                                 ConditionalNumber = roomNumber,
                                 StageNumber       = stageNumberForSa,
                                 ProjectNumber     = projectNumberForSa,
+                                Cost              = saExtraCost,
+                                DepositedAmount   = saExtraDeposited,
+                                Date              = saExtraDate,
+                                DepositorFullName = string.IsNullOrWhiteSpace(saExtraDepositor) ? null : saExtraDepositor,
+                                DeveloperPIN      = string.IsNullOrWhiteSpace(saExtraDeveloperPin) ? null : saExtraDeveloperPin,
                             }, gct);
                         }
+                    }
+
+                    // ── (c.1) Финальный PATCH помещения (doc 113 workaround) ──
+                    // Visary `POST /crud/room` ТИХО ДРОПАЕТ поле `IsWithdrawn` —
+                    // в payload CREATE отправляем `true`, но GET потом возвращает
+                    // `false` (дефолт). Подтверждено логами: POST body с
+                    // `"IsWithdrawn":true` → GET /room/24899 → `"IsWithdrawn":false`.
+                    // Видимо, CREATE-эндпоинт принимает ограниченный набор полей;
+                    // PATCH (`forceUpdate=true`) принимает корректно.
+                    //
+                    // Кроме того, привязка/создание ДДУ выше может на стороне Visary
+                    // пересчитать поля Room (ActiveShareAgreement и т.п.) — финальный
+                    // PATCH ПОСЛЕ блока SA гарантирует, что наше значение
+                    // `IsWithdrawn` зафиксировано в актуальном состоянии.
+                    //
+                    // Шлём только если из файла пришло non-null значение (пользователь
+                    // явно указал «да»/«нет»). Пусто → не трогаем, Visary оставит
+                    // дефолт. Накладные расходы — 1 PATCH/строку при наличии данных.
+                    if (roomId is int finalRoomId && diagIsWithdrawn is bool isWithdrawnVal)
+                    {
+                        await _crud.PatchRoomAsync(finalRoomId, new RoomPatchRequest
+                        {
+                            IsWithdrawn = isWithdrawnVal,
+                        }, gct);
+                        Log(sheetForRow, mr.SourceRowNumber,
+                            $"Помещение: IsWithdrawn={isWithdrawnVal} применён через follow-up PATCH после привязки ДДУ");
                     }
 
                     // ── (d) Snapshot для batch-upsert ────────────────────────
@@ -1131,8 +1259,15 @@ public sealed class RoomsFormImportMapper : IImportMapper
                         GetIntOrNull(ctx, "RoomKindId"),
                         GetStringOrNull(ctx, "ShareAgreementNumber"),
                         ex.InnerException?.Message);
+                    // doc 113 v1.3 / doc 100-pattern: привязываем ошибку к
+                    // (Sheet, SourceRowNumber), чтобы фронт показал её под
+                    // нужной строкой листа, а не в file-level блоке без
+                    // понятного контекста. Текст префиксом «row N» оставлен
+                    // для совместимости с UI-фильтром и логами.
                     errors.Add(new RowError(null, "apply_failed",
-                        $"row {mr.SourceRowNumber}: {ex.Message}"));
+                        $"row {mr.SourceRowNumber}: {ex.Message}",
+                        SourceRowNumber: mr.SourceRowNumber,
+                        Sheet: sheetForRow));
                 }
             } // end foreach row in group
         }); // end Parallel.ForEachAsync
@@ -1591,6 +1726,104 @@ public sealed class RoomsFormImportMapper : IImportMapper
             || string.Equals(s, "студия", StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// Парсит значение колонки «Вывод (да/нет)» (doc 113) в <see cref="bool"/>:
+    /// <list type="bullet">
+    ///   <item><description><c>true</c>  → «да», «yes», «y», «true», «1», «+», «✓»</description></item>
+    ///   <item><description><c>false</c> → «нет», «no», «n», «false», «0», «-», «—»</description></item>
+    ///   <item><description><c>null</c>  → пусто/whitespace/неизвестное значение</description></item>
+    /// </list>
+    /// Сравнение case-insensitive после Trim. На незнакомом значении возвращаем
+    /// <c>null</c> (не ошибку): по требованию заказчика поле опциональное и не
+    /// блокирующее — в Visary просто не уйдёт.
+    /// </summary>
+    internal static bool? TryParseBoolYesNo(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return null;
+        var s = raw.Trim();
+        if (string.Equals(s, "да",   StringComparison.OrdinalIgnoreCase)
+         || string.Equals(s, "yes",  StringComparison.OrdinalIgnoreCase)
+         || string.Equals(s, "y",    StringComparison.OrdinalIgnoreCase)
+         || string.Equals(s, "true", StringComparison.OrdinalIgnoreCase)
+         || s == "1" || s == "+" || s == "✓") return true;
+        if (string.Equals(s, "нет",  StringComparison.OrdinalIgnoreCase)
+         || string.Equals(s, "no",   StringComparison.OrdinalIgnoreCase)
+         || string.Equals(s, "n",    StringComparison.OrdinalIgnoreCase)
+         || string.Equals(s, "false",StringComparison.OrdinalIgnoreCase)
+         || s == "0" || s == "-" || s == "—") return false;
+        return null;
+    }
+
+    /// <summary>
+    /// Парсит дату из ячейки XLSX в ISO-формат <c>yyyy-MM-dd</c> для Visary
+    /// (см. doc 113 v1.4). Реальный payload Visary UI (`POST /crud/shareagreement`)
+    /// шлёт `"Date":"2026-05-26"` строкой — числовой Excel-serial не принимается.
+    /// ClosedXML возвращает либо отформатированную строку (для cell-format = Date),
+    /// либо «голый» Excel-serial (для General). Распознаём оба варианта:
+    /// <list type="number">
+    ///   <item><description>Число в диапазоне <c>[1, 80000]</c> — Excel-serial,
+    ///     конвертируется через <see cref="DateTime.FromOADate(double)"/> →
+    ///     <c>yyyy-MM-dd</c>. Диапазон закрывает реальные даты ДДУ (~1900..2118).</description></item>
+    ///   <item><description>Текстовая дата в форматах <c>dd.MM.yyyy</c>,
+    ///     <c>yyyy-MM-dd</c>, <c>dd/MM/yyyy</c>, <c>MM/dd/yyyy</c> (опц. с
+    ///     <c>HH:mm:ss</c>) — <see cref="DateTime.TryParseExact"/> →
+    ///     <c>yyyy-MM-dd</c>.</description></item>
+    /// </list>
+    /// Возвращает <c>null</c> на пустой строке (прочерк/«—» — тоже null без
+    /// ошибки) и записывает причину в <paramref name="error"/> для row-error.
+    /// </summary>
+    internal static string? TryParseExcelDate(string? raw, out string? error)
+    {
+        error = null;
+        if (string.IsNullOrWhiteSpace(raw)) return null;
+        var s = raw.Trim();
+        if (s == "-" || s == "—") return null;
+
+        // 1) Excel-serial (число) — конвертируем в `yyyy-MM-dd` через FromOADate.
+        // Диапазон [1; 80000] закрывает реальные даты ДДУ (~1900..2118) и
+        // исключает случайные суммы из других колонок.
+        var normalized = s.Replace(',', '.').Replace(" ", string.Empty);
+        if (double.TryParse(normalized, NumberStyles.Float, CultureInfo.InvariantCulture, out var serial)
+            && serial >= 1 && serial <= 80000)
+        {
+            return DateTime.FromOADate(serial).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        }
+
+        // 2) Текстовые форматы (русский dd.MM.yyyy + ISO + слэши, опц. время).
+        // ClosedXML возвращает разные строковые формы в зависимости от формата
+        // ячейки и локали шаблона. Поддерживаем:
+        //   • dd.MM.yyyy / d.M.yyyy            (русский, точки)
+        //   • yyyy-MM-dd                       (ISO)
+        //   • dd/MM/yyyy / d/M/yyyy            (русский, слэши — `04/07/2025` → Jul 4)
+        //   • MM/dd/yyyy / M/d/yyyy            (US — `11/27/2025` → Nov 27, fallback)
+        // Все варианты — с опциональным `HH:mm:ss` и `H:mm:ss` (без leading zero).
+        // ВАЖНО: dd/MM* стоит ДО MM/dd* — для неоднозначных строк (оба ≤12,
+        // напр. `04/07/2025`) сохраняется русская семантика.
+        string[] formats =
+        {
+            "dd.MM.yyyy", "d.M.yyyy",
+            "yyyy-MM-dd", "yyyy-MM-ddTHH:mm:ss", "yyyy-MM-ddTHH:mm:ssZ",
+            "dd/MM/yyyy", "d/M/yyyy",
+            "MM/dd/yyyy", "M/d/yyyy",
+            "dd.MM.yyyy HH:mm:ss", "d.M.yyyy HH:mm:ss",
+            "yyyy-MM-dd HH:mm:ss",
+            "dd/MM/yyyy HH:mm:ss", "d/M/yyyy HH:mm:ss",
+            "dd/MM/yyyy H:mm:ss",  "d/M/yyyy H:mm:ss",
+            "MM/dd/yyyy HH:mm:ss", "M/d/yyyy HH:mm:ss",
+            "MM/dd/yyyy H:mm:ss",  "M/d/yyyy H:mm:ss",
+            "dd.MM.yyyy H:mm:ss",  "d.M.yyyy H:mm:ss",
+            "yyyy-MM-dd H:mm:ss",
+        };
+        if (DateTime.TryParseExact(s, formats, CultureInfo.InvariantCulture,
+                DateTimeStyles.None, out var parsed))
+        {
+            return parsed.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        }
+
+        error = $"'{s}' не является валидной датой (поддерживаются Excel-serial и форматы dd.MM.yyyy / yyyy-MM-dd / dd/MM/yyyy / MM/dd/yyyy, опционально с HH:mm:ss).";
+        return null;
+    }
+
     /// <summary>«п1» → «1»; «12А» → «12»; «кв. 7» → «7»; «—» → <c>""</c>.
     /// Игнорирует все символы кроме цифр (включая точки/запятые).</summary>
     private static string ExtractDigitsOnly(string? raw)
@@ -1616,19 +1849,85 @@ public sealed class RoomsFormImportMapper : IImportMapper
 
     private static string ReadString(ParsedRow row, string[] aliases)
     {
+        // 1) Быстрый путь — exact match по ключу (для алиасов вроде `IsWithdrawn`).
         foreach (var key in aliases)
         {
             if (row.Cells.TryGetValue(key, out var v) && !string.IsNullOrWhiteSpace(v))
                 return v.Trim();
         }
+        // 2) Whitespace-insensitive fallback. ClosedXML возвращает многострочные
+        // заголовки с реальным `\n` / `\r\n` / `\t` / двойными пробелами; alias
+        // в коде может содержать одиночный `\n` либо одиночный пробел. `Trim()`
+        // нормализует только края — нужна полная collapse-нормализация, иначе
+        // doc 113 поля (Вывод/Стоимость/Сумма на эскроу/Дата/ФИО) теряются
+        // из-за рассинхрона форм заголовка.
         foreach (var key in aliases)
         {
+            var keyNorm = NormalizeHeader(key);
             var match = row.Cells.FirstOrDefault(p =>
-                string.Equals(p.Key.Trim(), key.Trim(), StringComparison.OrdinalIgnoreCase));
+                string.Equals(NormalizeHeader(p.Key), keyNorm, StringComparison.OrdinalIgnoreCase));
             if (!string.IsNullOrEmpty(match.Key) && !string.IsNullOrWhiteSpace(match.Value))
                 return match.Value.Trim();
         }
+        // 3) Slash-aware fallback. Шаблоны заказчика часто объединяют два
+        // альтернативных лейбла в одной ячейке через `,/` (русская конвенция):
+        // «Стоимость ДКП, руб,/Сумма депонирования, руб.». Без явного
+        // перечисления комбинаций ReadString их не ловит и поле молча
+        // остаётся пустым (Visary не получает ShareAgreement.Cost).
+        //
+        // Сегментируем ТОЛЬКО по `,/` (запятая-слэш) — не по голому `/`,
+        // иначе «Вывод (да/нет)» разорвалось бы на «Вывод (да» / «нет)»
+        // и сломались бы другие алиасы со слэшем внутри парных меток.
+        var separator = new[] { ",/" };
+        foreach (var key in aliases)
+        {
+            var keyNorm = NormalizeHeader(key);
+            foreach (var (cellKey, cellValue) in row.Cells)
+            {
+                if (string.IsNullOrWhiteSpace(cellValue)) continue;
+                if (!cellKey.Contains(",/", StringComparison.Ordinal)) continue;
+                var segments = cellKey.Split(separator, StringSplitOptions.None);
+                foreach (var seg in segments)
+                {
+                    if (string.Equals(NormalizeHeader(seg), keyNorm, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return cellValue.Trim();
+                    }
+                }
+            }
+        }
         return string.Empty;
+    }
+
+    /// <summary>
+    /// Сворачивает любую последовательность whitespace (`\n`, `\r`, `\t`,
+    /// неразрывный пробел, NBSP, многократные пробелы) в один пробел и
+    /// тримит края. Используется в <see cref="ReadString"/>: реальный
+    /// заголовок «Вывод\n(да/нет)» матчится с alias «Вывод (да/нет)» и
+    /// наоборот.
+    /// </summary>
+    private static string NormalizeHeader(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return string.Empty;
+        var sb = new System.Text.StringBuilder(s.Length);
+        var prevWasSpace = false;
+        foreach (var ch in s)
+        {
+            //   — NBSP, тоже попадает из Excel.
+            if (char.IsWhiteSpace(ch) || ch == ' ')
+            {
+                if (!prevWasSpace && sb.Length > 0) sb.Append(' ');
+                prevWasSpace = true;
+            }
+            else
+            {
+                sb.Append(ch);
+                prevWasSpace = false;
+            }
+        }
+        // Trailing space, если последний был whitespace.
+        if (sb.Length > 0 && sb[^1] == ' ') sb.Length--;
+        return sb.ToString();
     }
 
     private static bool TryParseDouble(string s, out double result)

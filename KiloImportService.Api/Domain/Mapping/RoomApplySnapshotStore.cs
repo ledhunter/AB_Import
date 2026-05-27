@@ -55,6 +55,13 @@ public sealed class RoomApplySnapshotStore
         "CostForOne", "MarketCostPerM", "ZalogCostPerM",
         "ShareAgreementNumber",
         "StageNumberRaw", "StageNumber", "ProjectNumber",
+        // doc 113 — дополнительные поля Помещения/ДДУ. Включены в хэш, иначе
+        // при первом импорте без этих колонок и втором — с ними diff-skip
+        // решит «без изменений», и значения никогда не дойдут до Visary.
+        "IsWithdrawn",
+        "ShareAgreementCost", "ShareAgreementDepositedAmount",
+        "ShareAgreementDate",
+        "ShareAgreementDepositorFullName", "ShareAgreementDeveloperPin",
     ];
 
     private readonly ImportServiceDbContext _db;

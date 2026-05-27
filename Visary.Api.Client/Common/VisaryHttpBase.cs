@@ -76,8 +76,29 @@ public abstract class VisaryHttpBase<T>
         {
             var body = await SafeReadBodyAsync(response, ct);
             _log.LogError("Visary error {Status}: {Body}", (int)response.StatusCode, body);
-            throw new HttpRequestException($"Visary вернул {(int)response.StatusCode} {response.ReasonPhrase}");
+            // Раньше body уходил только в лог, в exception.Message было голое
+            // «Visary вернул 500 Internal Server Error» — пользователь видел
+            // это в UI и не понимал, что именно пошло не так. Подмешиваем
+            // усечённый body в текст исключения для row-error в отчёте.
+            var bodySnippet = TruncateForExceptionMessage(body);
+            var suffix = string.IsNullOrWhiteSpace(bodySnippet) ? string.Empty : $". Body: {bodySnippet}";
+            throw new HttpRequestException(
+                $"Visary вернул {(int)response.StatusCode} {response.ReasonPhrase}{suffix}");
         }
+    }
+
+    /// <summary>
+    /// Усекает тело ответа до ~400 символов и сворачивает переносы строк —
+    /// чтобы row-error в построчном отчёте оставался читабельным и не
+    /// засорял UI многострочным stack-trace-ом Visary.
+    /// </summary>
+    private static string TruncateForExceptionMessage(string body)
+    {
+        if (string.IsNullOrWhiteSpace(body)) return string.Empty;
+        const int max = 400;
+        var collapsed = body.Replace("\r", " ").Replace("\n", " ").Replace("\t", " ").Trim();
+        while (collapsed.Contains("  ")) collapsed = collapsed.Replace("  ", " ");
+        return collapsed.Length <= max ? collapsed : collapsed[..max] + "…";
     }
 
     private static async Task<string> SafeReadBodyAsync(HttpResponseMessage r, CancellationToken ct)
