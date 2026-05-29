@@ -187,4 +187,91 @@ public class RoomsFormImportMapperTests
         Assert.Null(result);
         Assert.False(string.IsNullOrEmpty(error), "Ожидался текст ошибки для невалидной даты.");
     }
+
+    /// <summary>
+    /// Наименование корпуса/строения нормализуется через ExtractNumericPart:
+    /// префиксы «лит/литер/корп/корпус/стр/строение» отбрасываются, а из
+    /// остатка берутся цифры и разделители «.» «,» «-» «/» «\».
+    /// Заказчик: «литер 1-1» → «1-1», «лит 1/1» → «1/1», «лит 1\1» → «1\1».
+    /// Регрессии — старые формы должны продолжать работать.
+    /// </summary>
+    /// <summary>
+    /// Резолв имени листа в Title справочника RoomKind. Plural-trim применяется
+    /// к каждому слову независимо, поэтому многословные «Коммерческие помещения»
+    /// тоже корректно матчатся. Substring-fallback запрещён (doc 90) — «Кв_…»
+    /// не должно совпадать с «Квартира».
+    /// </summary>
+    [Fact]
+    public void ResolveKindBySheetName_SingularDirectMatch()
+    {
+        var dict = MakeKindDict("Квартира", "Машиноместо", "Кладовая",
+            "Коммерческое помещение", "Нежилое помещение", "Апартамент", "Гараж", "Комната");
+
+        Assert.Equal("Квартира",              ResolveTitle("Квартира", dict));
+        Assert.Equal("Гараж",                 ResolveTitle("Гараж", dict));
+        Assert.Equal("Комната",               ResolveTitle("Комната", dict));
+        Assert.Equal("Нежилое помещение",     ResolveTitle("Нежилое помещение", dict));
+    }
+
+    [Fact]
+    public void ResolveKindBySheetName_PluralSingleWord()
+    {
+        var dict = MakeKindDict("Квартира", "Машиноместо", "Кладовая", "Апартамент");
+
+        Assert.Equal("Квартира",    ResolveTitle("Квартиры",     dict));
+        Assert.Equal("Машиноместо", ResolveTitle("Машиноместа",  dict));
+        Assert.Equal("Кладовая",    ResolveTitle("Кладовые",     dict)); // ые → ая (новое)
+        Assert.Equal("Апартамент",  ResolveTitle("Апартаменты",  dict));
+    }
+
+    [Fact]
+    public void ResolveKindBySheetName_PluralMultiWord()
+    {
+        var dict = MakeKindDict("Коммерческое помещение", "Нежилое помещение", "Иное нежилое помещение");
+
+        // ие→ое (Коммерческие→Коммерческое) + ия→ие (помещения→помещение)
+        Assert.Equal("Коммерческое помещение", ResolveTitle("Коммерческие помещения", dict));
+        // Уже singular — direct match
+        Assert.Equal("Нежилое помещение",      ResolveTitle("Нежилое помещение",     dict));
+    }
+
+    [Fact]
+    public void ResolveKindBySheetName_UnknownReturnsNull()
+    {
+        var dict = MakeKindDict("Квартира", "Машиноместо");
+
+        // «Кв_01.04.26» — исторический снапшот, substring-fallback запрещён.
+        Assert.Null(ResolveTitle("Кв_01.04.26", dict));
+        // Совсем непонятное имя.
+        Assert.Null(ResolveTitle("Итог",        dict));
+        Assert.Null(ResolveTitle("",            dict));
+        Assert.Null(ResolveTitle("   ",         dict));
+    }
+
+    private static Dictionary<string, int> MakeKindDict(params string[] titles)
+    {
+        var d = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        for (int i = 0; i < titles.Length; i++) d[titles[i]] = i + 1;
+        return d;
+    }
+
+    private static string? ResolveTitle(string sheet, IDictionary<string, int> dict)
+        => RoomsFormImportMapper.ResolveKindBySheetName(sheet, dict).Title;
+
+    [Theory]
+    [InlineData("литер 1-1", "1-1")]
+    [InlineData("лит 1/1",   "1/1")]
+    [InlineData("лит 1\\1",  "1\\1")]
+    [InlineData("Лит 1.1",   "1.1")]   // регрессия (см. xmldoc)
+    [InlineData("корп 2",    "2")]      // регрессия
+    [InlineData("3.А",       "3")]      // регрессия — буква обрывает
+    [InlineData("лит. 1",    "1")]      // регрессия
+    [InlineData(null,        null)]
+    [InlineData("",          null)]
+    [InlineData("   ",       null)]
+    public void ExtractNumericPart_KeepsDashSlashBackslashSeparators(string? raw, string? expected)
+    {
+        var actual = RoomsFormImportMapper.ExtractNumericPart(raw);
+        Assert.Equal(expected, actual);
+    }
 }

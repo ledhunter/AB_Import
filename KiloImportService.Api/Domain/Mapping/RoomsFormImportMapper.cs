@@ -1636,14 +1636,19 @@ public sealed class RoomsFormImportMapper : IImportMapper
     // ──────────────────────────── Helpers ──────────────────────────────────
 
     /// <summary>
-    /// Резолвит имя листа («Квартиры», «Машиноместа», «Кладовые», …) в Title/ID
-    /// из справочника RoomKind. Стратегии (по порядку):
+    /// Резолвит имя листа («Квартиры», «Машиноместа», «Кладовые»,
+    /// «Коммерческие помещения», «Нежилое помещение», …) в Title/ID из
+    /// справочника RoomKind. Стратегии (по порядку):
     ///   1) точное совпадение `kindByTitle[sheetName]`;
-    ///   2) совпадение нормализованных строк (lower + trim);
-    ///   3) обрезка типичных русских plural-окончаний (а/я/ы/и) и повтор поиска.
-    /// Возвращает (null, null) если ничего не подошло.
+    ///   2) plural-trim КАЖДОГО слова независимо: имя листа разбивается
+    ///      по пробелам, для каждого слова собираются ед.ч.-кандидаты,
+    ///      перебирается декартово произведение, склеенный кандидат
+    ///      ищется в справочнике.
+    /// Возвращает (null, null) если ничего не подошло. Substring-fallback
+    /// сознательно не используется (см. doc 90): иначе «Кв_01.04.26»
+    /// совпало бы с «Квартира».
     /// </summary>
-    private static (int? Id, string? Title) ResolveKindBySheetName(
+    internal static (int? Id, string? Title) ResolveKindBySheetName(
         string sheetName, IDictionary<string, int> kindByTitle)
     {
         if (string.IsNullOrWhiteSpace(sheetName)) return (null, null);
@@ -1653,31 +1658,74 @@ public sealed class RoomsFormImportMapper : IImportMapper
         if (kindByTitle.TryGetValue(name, out var id1))
             return (id1, FindMatchingTitle(name, kindByTitle));
 
-        // 2. Plural-trimming heuristics для русского:
-        //    «Квартиры» → «Квартир» / «Квартира»; «Машиноместа» → «Машиномест» / «Машиноместо»
-        var candidates = new List<string>();
-        if (name.Length > 1)
-        {
-            var last = name[^1];
-            // Срезаем последнюю букву (а/я/ы/и/е) и пробуем
-            if ("аяыиеёАЯЫИЕЁ".Contains(last))
-                candidates.Add(name[..^1]);
-            // Заменяем «ы» / «и» на «а» / «я» (обратное преобразование плюрала)
-            if (last == 'ы') candidates.Add(name[..^1] + "а");
-            if (last == 'и') candidates.Add(name[..^1] + "я");
-            // «Машиноместа» → «Машиноместо» (а → о)
-            if (last == 'а') candidates.Add(name[..^1] + "о");
-        }
-        foreach (var cand in candidates)
-        {
-            if (kindByTitle.TryGetValue(cand, out var id2))
-                return (id2, FindMatchingTitle(cand, kindByTitle));
-        }
+        // 2. Plural-trim per-word + декартово произведение.
+        //    Однословное имя — обычная plural-эвристика.
+        //    Многословное (например, «Коммерческие помещения») — каждое слово
+        //    приводится к ед.ч. независимо: «Коммерческие»→«Коммерческое»,
+        //    «помещения»→«помещение»; склейка ищется в справочнике.
+        var words = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var perWord = words.Select(w => SingularCandidates(w).Distinct().ToList()).ToList();
+        // Защита от комбинаторного взрыва. Реальные имена — до 3 слов × ~4 кандидата = 64.
+        long total = 1;
+        foreach (var s in perWord) total *= s.Count;
+        if (total > 512) return (null, null);
 
-        // Substring-fallback не используем сознательно: «Машиноместа» может
-        // случайно совпасть с «Машино…» / «…меcт…» и т. п. Если plural-trim
-        // не сработал — лучше потребовать явное «Тип/Название/Вид» в строке.
+        foreach (var combo in CartesianProduct(perWord))
+        {
+            var candidate = string.Join(' ', combo);
+            if (string.Equals(candidate, name, StringComparison.OrdinalIgnoreCase)) continue;
+            if (kindByTitle.TryGetValue(candidate, out var idN))
+                return (idN, FindMatchingTitle(candidate, kindByTitle));
+        }
         return (null, null);
+    }
+
+    /// <summary>
+    /// Для слова в множественном числе возвращает потенциальные формы
+    /// единственного числа. Эвристика «срез последней буквы» + типичные
+    /// замены русских окончаний (мн.ч.→ед.ч.):
+    /// <list type="bullet">
+    ///   <item><c>«ые» → «ая»</c> («Кладовые» → «Кладовая», «Жилые» → «Жилая»)</item>
+    ///   <item><c>«ие» → «ое»</c> («Коммерческие» → «Коммерческое»)</item>
+    ///   <item><c>«ия» → «ие»</c> («помещения» → «помещение»)</item>
+    ///   <item><c>«ы» → «а»</c>, <c>«и» → «я»</c>, <c>«а» → «о»</c> (старая логика)</item>
+    /// </list>
+    /// Кандидаты, не совпавшие ни с одним Title в справочнике, безопасно
+    /// отбрасываются — главное не пропустить корректный матч.
+    /// </summary>
+    private static IEnumerable<string> SingularCandidates(string word)
+    {
+        if (string.IsNullOrEmpty(word)) { yield return word; yield break; }
+        yield return word; // уже singular либо direct-match
+        if (word.Length < 2) yield break;
+
+        var head1 = word[..^1];
+        var head2 = word.Length >= 2 ? word[..^2] : string.Empty;
+        var last1 = word[^1];
+        var last2 = word.Length >= 2 ? word[^2..] : string.Empty;
+
+        // 2-буквенные суффиксы — берём сначала, чтобы «Кладовые» → «Кладовая»,
+        // а не остановиться на ложном candidate «Кладовы».
+        if (string.Equals(last2, "ые", StringComparison.OrdinalIgnoreCase)) yield return head2 + "ая";
+        if (string.Equals(last2, "ие", StringComparison.OrdinalIgnoreCase)) yield return head2 + "ое";
+        if (string.Equals(last2, "ия", StringComparison.OrdinalIgnoreCase)) yield return head2 + "ие";
+
+        // Однобуквенные plural-эвристики (старая логика).
+        if ("аяыиеёАЯЫИЕЁ".IndexOf(last1) >= 0) yield return head1;
+        if (last1 == 'ы' || last1 == 'Ы') yield return head1 + "а";
+        if (last1 == 'и' || last1 == 'И') yield return head1 + "я";
+        if (last1 == 'а' || last1 == 'А') yield return head1 + "о";
+    }
+
+    private static IEnumerable<IEnumerable<string>> CartesianProduct(IList<List<string>> sets)
+    {
+        IEnumerable<IEnumerable<string>> result = new[] { Enumerable.Empty<string>() };
+        foreach (var s in sets)
+        {
+            var snapshot = s;
+            result = result.SelectMany(prefix => snapshot.Select(item => prefix.Append(item)));
+        }
+        return result;
     }
 
     private static string? FindMatchingTitle(string title, IDictionary<string, int> kindByTitle)
@@ -1832,14 +1880,15 @@ public sealed class RoomsFormImportMapper : IImportMapper
         return new string(raw.Where(char.IsDigit).ToArray());
     }
 
-    /// <summary>«Лит 1.1» → «1.1»; «корп 2» → «2»; «3.А» → «3»; «лит. 1» → «1».</summary>
-    private static string? ExtractNumericPart(string? raw)
+    /// <summary>«Лит 1.1» → «1.1»; «корп 2» → «2»; «3.А» → «3»; «лит. 1» → «1»;
+    /// «литер 1-1» → «1-1»; «лит 1/1» → «1/1»; «лит 1\1» → «1\1».</summary>
+    internal static string? ExtractNumericPart(string? raw)
     {
         if (string.IsNullOrWhiteSpace(raw)) return null;
         var sb = new System.Text.StringBuilder();
         foreach (var ch in raw)
         {
-            if (char.IsDigit(ch) || ch == '.' || ch == ',')
+            if (char.IsDigit(ch) || ch == '.' || ch == ',' || ch == '-' || ch == '/' || ch == '\\')
                 sb.Append(ch == ',' ? '.' : ch);
             else if (sb.Length > 0 && ch != ' ')
                 break;
