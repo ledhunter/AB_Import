@@ -915,8 +915,8 @@ public sealed class ListViewClient : VisaryHttpBase<ListViewClient>, IListViewCl
             "Visary → GET {Mnemonic} number='{Number}' kindId={Kind} cond='{Cond}' stage='{Stage}' projectNum='{Proj}'",
             VisaryMnemonics.ShareAgreement, number, roomKindId, conditionalNumber, stageNumber, projectNumber);
         return PostListViewAsync<ShareAgreementRaw>(
-            $"{BaseUrl}/api/visary/listview/{VisaryMnemonics.ShareAgreement}",
-            body, $"{VisaryMnemonics.ShareAgreement} find", ct);
+            $"{BaseUrl}/api/visary/listview/{VisaryMnemonics.ShareAgreement}all",
+            body, $"{VisaryMnemonics.ShareAgreement}all find", ct);
     }
 
     // ─── CadastralAreas list ─────────────────────────────────────────────────
