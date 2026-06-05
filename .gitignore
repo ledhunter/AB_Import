@@ -24,7 +24,13 @@ build/
 .vs/
 .idea/
 .vscode/
+.windsurf/
+.claude/
 
 # ────────── OS ──────────
 Thumbs.db
 .DS_Store
+
+# ────────── files ──────────
+Context/
+RoomImport/

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { devError, devInfo, devWarn } from '../services/devLog';
 import type { ListViewQuery, ListViewService } from '../services/listView/types';
 
 /**
@@ -76,11 +77,11 @@ export function useListView<TItem>(
     }
     queryRef.current = query;
     if (inFlightRef.current) {
-      console.info(`${logTag} query изменился — отменяю активный запрос`);
+      devInfo(`${logTag} query изменился — отменяю активный запрос`);
       inFlightRef.current.abort();
       inFlightRef.current = null;
     }
-    console.info(`${logTag} query изменился → сброс в idle`);
+    devInfo(`${logTag} query изменился → сброс в idle`);
     setData([]);
     setTotalCount(0);
     setError(null);
@@ -89,13 +90,13 @@ export function useListView<TItem>(
 
   const run = useCallback(() => {
     if (inFlightRef.current) {
-      console.warn(`${logTag} прерываю предыдущий запрос`);
+      devWarn(`${logTag} прерываю предыдущий запрос`);
       inFlightRef.current.abort();
     }
     const controller = new AbortController();
     inFlightRef.current = controller;
 
-    console.info(`${logTag} status: → loading`);
+    devInfo(`${logTag} status: → loading`);
     setStatus('loading');
     setError(null);
 
@@ -103,11 +104,11 @@ export function useListView<TItem>(
       .fetch({ ...queryRef.current, signal: controller.signal })
       .then((res) => {
         if (controller.signal.aborted) return;
-        console.info(
+        devInfo(
           `${logTag} ✓ status: loading → success | получено ${res.items.length} из ${res.totalCount}`,
         );
         if (res.items.length > 0) {
-          console.info(`${logTag} первые 3 элемента:`, res.items.slice(0, 3));
+          devInfo(`${logTag} первые 3 элемента:`, res.items.slice(0, 3));
         }
         setData(res.items);
         setTotalCount(res.totalCount);
@@ -117,7 +118,7 @@ export function useListView<TItem>(
       .catch((err: unknown) => {
         if (err instanceof Error && err.name === 'AbortError') return;
         const message = err instanceof Error ? err.message : String(err);
-        console.error(`${logTag} ✗ status: loading → error |`, message);
+        devError(`${logTag} ✗ status: loading → error |`, message);
         setError(message);
         setStatus('error');
         inFlightRef.current = null;
@@ -126,21 +127,21 @@ export function useListView<TItem>(
 
   const load = useCallback(() => {
     if (status === 'loading') {
-      console.info(`${logTag} load() пропущен — запрос уже в полёте`);
+      devInfo(`${logTag} load() пропущен — запрос уже в полёте`);
       return;
     }
     if (status === 'success') {
-      console.info(
+      devInfo(
         `${logTag} load() пропущен — данные уже загружены (${data.length}). Используй refetch() для перезагрузки.`,
       );
       return;
     }
-    console.info(`${logTag} load() вызван (текущий status: ${status})`);
+    devInfo(`${logTag} load() вызван (текущий status: ${status})`);
     run();
   }, [status, data.length, run, logTag]);
 
   const refetch = useCallback(() => {
-    console.info(`${logTag} refetch() вызван — принудительная перезагрузка`);
+    devInfo(`${logTag} refetch() вызван — принудительная перезагрузка`);
     run();
   }, [run, logTag]);
 

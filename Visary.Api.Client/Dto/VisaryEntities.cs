@@ -349,7 +349,7 @@ public sealed class FmModelVersionRaw
 /// Справочник «Код фин. модели» (<c>fmcode</c>). Используется как
 /// <see cref="InputDataRaw.Code"/> в записях <see cref="InputDataRaw"/>. Импортер
 /// резолвит Title → ID за сессию через точечные запросы
-/// <see cref="ListView.IListViewClient.FindFmCodeByTitleAsync"/>, затем подставляет
+/// <see cref="ListView.IListViewClient.FindFmCodeByCodeAsync"/>, затем подставляет
 /// <see cref="VisaryRef"/> в payload <c>POST /crud/inputdata</c>. Жёсткий хардкод
 /// ID не используется — справочник может различаться между стендами.
 /// <para/>
@@ -363,15 +363,21 @@ public sealed class FmCodeRaw
     public int ID { get; set; }
     public string? Code { get; set; }
     public string? Title { get; set; }
-    public VisaryRef? Group { get; set; }
+    // ⚠️ Variant-поля. Visary listview/fmcode возвращает Group/Method/Type/Validity/Unit
+    // как объекты с произвольным набором полей (не строго {ID,Title}), либо как
+    // primitive (int/string), в зависимости от настроек справочника на стенде.
+    // Прежняя десериализация в VisaryRef падала на Path: $.Data[0].Type
+    // («The JSON value could not be converted to Visary.Api.Dto.VisaryRef»).
+    // Импортеру эти поля НЕ нужны — нам достаточно ID/Code/Title; см. doc 56.
+    public JsonElement? Group { get; set; }
     public int? Priority { get; set; }
-    public VisaryRef? Method { get; set; }
+    public JsonElement? Method { get; set; }
     public double? Percent { get; set; }
-    public VisaryRef? Type { get; set; }
-    public VisaryRef? Validity { get; set; }
+    public JsonElement? Type { get; set; }
+    public JsonElement? Validity { get; set; }
     public int? Sign { get; set; }
     public bool? AutoCode { get; set; }
-    public VisaryRef? Unit { get; set; }
+    public JsonElement? Unit { get; set; }
     public string? AddParams { get; set; }
     public string? Input { get; set; }
     public bool? Hidden { get; set; }

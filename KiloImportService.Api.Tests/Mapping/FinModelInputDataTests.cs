@@ -70,31 +70,32 @@ public class FinModelInputDataTests : IDisposable
                 PeriodStart = req.PeriodStart, PeriodEnd = req.PeriodEnd,
             });
 
-        // Справочник fmcode: per-title резолв. Каждый известный Title — 1 строка
-        // в ответе, иные — пустой ответ (Total=0). Сетевая ошибка эмулируется в
-        // отдельных тестах через ThrowsAsync.
+        // Справочник fmcode: per-code резолв (поле Code в Visary). Каждый известный
+        // Code — 1 строка в ответе с каноничным Title-ом из справочника
+        // («010 Продажа квартиры (план)»). Иные — пустой ответ (Total=0).
+        // Сетевая ошибка эмулируется в отдельных тестах через ThrowsAsync.
         _mockListView
-            .Setup(c => c.FindFmCodeByTitleAsync(
-                FinModelImportMapper.InputDataCodeApartment, It.IsAny<CancellationToken>()))
+            .Setup(c => c.FindFmCodeByCodeAsync(
+                FinModelImportMapper.FmCodeApartment, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new ListViewResponse<FmCodeRaw>
             {
-                Data = [new FmCodeRaw { ID = CodeApartmentId, Title = FinModelImportMapper.InputDataCodeApartment }],
+                Data = [new FmCodeRaw { ID = CodeApartmentId, Code = FinModelImportMapper.FmCodeApartment, Title = "010 Продажа квартиры (план)" }],
                 Total = 1,
             });
         _mockListView
-            .Setup(c => c.FindFmCodeByTitleAsync(
-                FinModelImportMapper.InputDataCodeNonResidential, It.IsAny<CancellationToken>()))
+            .Setup(c => c.FindFmCodeByCodeAsync(
+                FinModelImportMapper.FmCodeNonResidential, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new ListViewResponse<FmCodeRaw>
             {
-                Data = [new FmCodeRaw { ID = CodeNonResidentialId, Title = FinModelImportMapper.InputDataCodeNonResidential }],
+                Data = [new FmCodeRaw { ID = CodeNonResidentialId, Code = FinModelImportMapper.FmCodeNonResidential, Title = "020 Продажа нежилые ( ком) ПСН (план)" }],
                 Total = 1,
             });
         _mockListView
-            .Setup(c => c.FindFmCodeByTitleAsync(
-                FinModelImportMapper.InputDataCodeParking, It.IsAny<CancellationToken>()))
+            .Setup(c => c.FindFmCodeByCodeAsync(
+                FinModelImportMapper.FmCodeParking, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new ListViewResponse<FmCodeRaw>
             {
-                Data = [new FmCodeRaw { ID = CodeParkingId, Title = FinModelImportMapper.InputDataCodeParking }],
+                Data = [new FmCodeRaw { ID = CodeParkingId, Code = FinModelImportMapper.FmCodeParking, Title = "040 Продажа м/м (план)" }],
                 Total = 1,
             });
 
@@ -168,28 +169,31 @@ public class FinModelInputDataTests : IDisposable
     {
         // Эталонная раскладка по «Общий график» из spec (Журавли):
         //   Таблица 1 (r3..r14): Квартиры — план r6/r7/r8 + skip r9..r14 (Доход накопл./Факт).
-        //   Таблица 2 (r20..r25): Нежилые ПСН — нули.
-        //   Таблица 3 (r30..r35): Машиноместа — нули.
+        //   Таблица 2 (r20..r25): Нежилые ПСН — ВСЕ ячейки пустые (новый кейс: skip).
+        //   Таблица 3 (r30..r35): Машиноместа — явные нули (план = 0 → точки эмитятся).
         var bytes = BuildReferencePlanXlsx();
         using var stream = new MemoryStream(bytes);
 
         var data = FinModelImportMapper.ReadGeneralScheduleData(stream);
 
+        // PeriodStart/PeriodEnd берутся из шапки, а НЕ из факт-данных — даже если
+        // часть категорий пустая, диапазон планирования сохраняется (см. doc 112 v1.5).
         Assert.Equal("2024Q1", data.PeriodStart);
         Assert.Equal("2024Q4", data.PeriodEnd);
         Assert.Equal(4, data.Columns.Count); // 4 квартала 2024
 
         Assert.Equal(3, data.Categories.Count);
-        Assert.Contains(data.Categories, c => c.CodeTitle == FinModelImportMapper.InputDataCodeApartment);
-        Assert.Contains(data.Categories, c => c.CodeTitle == FinModelImportMapper.InputDataCodeNonResidential);
-        Assert.Contains(data.Categories, c => c.CodeTitle == FinModelImportMapper.InputDataCodeParking);
+        Assert.Contains(data.Categories, c => c.FmCode == FinModelImportMapper.FmCodeApartment);
+        Assert.Contains(data.Categories, c => c.FmCode == FinModelImportMapper.FmCodeNonResidential);
+        Assert.Contains(data.Categories, c => c.FmCode == FinModelImportMapper.FmCodeParking);
 
-        // 3 категории × 4 квартала = 12 точек (нулевые тоже эмитятся).
-        Assert.Equal(12, data.InputDataPoints.Count);
+        // Квартиры (4 квартала с данными) + м/м (4 квартала с явными 0) = 8 точек.
+        // Нежилые с полностью пустыми ячейками — 0 точек (см. doc 112 v1.5).
+        Assert.Equal(8, data.InputDataPoints.Count);
 
         // Q1 квартиры — пример из спеки: Summ=243685102, Amount=2459.85, Cost=99065.03.
         var q1Apt = data.InputDataPoints
-            .Single(p => p.FmPeriod == "2024Q1" && p.CodeTitle == FinModelImportMapper.InputDataCodeApartment);
+            .Single(p => p.FmPeriod == "2024Q1" && p.FmCode == FinModelImportMapper.FmCodeApartment);
         Assert.Equal(243685102, q1Apt.Summ, 1);
         Assert.Equal(2459.85,   q1Apt.Amount, 2);
         Assert.Equal(99065.03,  q1Apt.Cost, 2);
@@ -199,12 +203,53 @@ public class FinModelInputDataTests : IDisposable
         Assert.DoesNotContain(data.InputDataPoints, p => p.Summ == 88_888_888);
         Assert.DoesNotContain(data.InputDataPoints, p => p.Amount == 11111);
 
-        // Машиноместа в эталонном файле — все нули; точки всё равно эмитятся.
+        // Машиноместа с явными нулями — точки эмитятся (план = 0 валиден).
         var q1Park = data.InputDataPoints
-            .Single(p => p.FmPeriod == "2024Q1" && p.CodeTitle == FinModelImportMapper.InputDataCodeParking);
+            .Single(p => p.FmPeriod == "2024Q1" && p.FmCode == FinModelImportMapper.FmCodeParking);
         Assert.Equal(0, q1Park.Summ);
         Assert.Equal(0, q1Park.Amount);
         Assert.Equal(0, q1Park.Cost);
+
+        // Нежилые с полностью пустыми ячейками — точек нет вообще (новое поведение).
+        Assert.DoesNotContain(data.InputDataPoints,
+            p => p.FmCode == FinModelImportMapper.FmCodeNonResidential);
+    }
+
+    [Fact]
+    public void ReadGeneralScheduleData_EmptyQuartersSkipped_ExplicitZeroEmitted()
+    {
+        // Файл с одной таблицей квартир: Q1 заполнен (1000/100/100000), Q2 явные нули,
+        // Q3 полностью пустой (skip), Q4 только Summ=5000000 (остальное пустое — точка эмитится,
+        // пустые → 0).
+        var bytes = BuildPartialEmptyPlanXlsx();
+        using var stream = new MemoryStream(bytes);
+
+        var data = FinModelImportMapper.ReadGeneralScheduleData(stream);
+
+        // Диапазон шапки сохранён, даже если Q3 без данных.
+        Assert.Equal("2024Q1", data.PeriodStart);
+        Assert.Equal("2024Q4", data.PeriodEnd);
+        Assert.Equal(4, data.Columns.Count);
+
+        // 3 точки: Q1 (полный), Q2 (нули), Q4 (частичный). Q3 пропущен.
+        Assert.Equal(3, data.InputDataPoints.Count);
+        Assert.DoesNotContain(data.InputDataPoints, p => p.FmPeriod == "2024Q3");
+
+        var q1 = data.InputDataPoints.Single(p => p.FmPeriod == "2024Q1");
+        Assert.Equal(100_000, q1.Summ);
+        Assert.Equal(1000, q1.Amount);
+        Assert.Equal(100, q1.Cost);
+
+        var q2 = data.InputDataPoints.Single(p => p.FmPeriod == "2024Q2");
+        Assert.Equal(0, q2.Summ);
+        Assert.Equal(0, q2.Amount);
+        Assert.Equal(0, q2.Cost);
+
+        // Q4 — частично заполнен: Summ есть, остальные пустые → подменяются на 0.
+        var q4 = data.InputDataPoints.Single(p => p.FmPeriod == "2024Q4");
+        Assert.Equal(5_000_000, q4.Summ);
+        Assert.Equal(0, q4.Amount);
+        Assert.Equal(0, q4.Cost);
     }
 
     // ─────────── ReadGeneralScheduleData — layout-1 (Репино-Парк) ───────────
@@ -226,10 +271,10 @@ public class FinModelInputDataTests : IDisposable
 
         // Все 4 категории (Квартиры/Нежилое/Кладовые/Машиноместа) распознаны.
         Assert.Equal(4, data.Categories.Count);
-        Assert.Contains(data.Categories, c => c.CodeTitle == FinModelImportMapper.InputDataCodeApartment);
-        Assert.Contains(data.Categories, c => c.CodeTitle == FinModelImportMapper.InputDataCodeNonResidential);
-        Assert.Contains(data.Categories, c => c.CodeTitle == FinModelImportMapper.InputDataCodeStoreroom);
-        Assert.Contains(data.Categories, c => c.CodeTitle == FinModelImportMapper.InputDataCodeParking);
+        Assert.Contains(data.Categories, c => c.FmCode == FinModelImportMapper.FmCodeApartment);
+        Assert.Contains(data.Categories, c => c.FmCode == FinModelImportMapper.FmCodeNonResidential);
+        Assert.Contains(data.Categories, c => c.FmCode == FinModelImportMapper.FmCodeStoreroom);
+        Assert.Contains(data.Categories, c => c.FmCode == FinModelImportMapper.FmCodeParking);
 
         // Колонки = 4 квартала 2024 года.
         Assert.Equal(4, data.Columns.Count);
@@ -238,7 +283,7 @@ public class FinModelInputDataTests : IDisposable
 
         // Q1 квартир — Amount=1500, Cost=120000, Summ=180000000 (значения из фикстуры).
         var q1Apt = data.InputDataPoints.Single(p =>
-            p.FmPeriod == "2024Q1" && p.CodeTitle == FinModelImportMapper.InputDataCodeApartment);
+            p.FmPeriod == "2024Q1" && p.FmCode == FinModelImportMapper.FmCodeApartment);
         Assert.Equal(1500, q1Apt.Amount);
         Assert.Equal(120000, q1Apt.Cost);
         Assert.Equal(180_000_000, q1Apt.Summ);
@@ -324,15 +369,17 @@ public class FinModelInputDataTests : IDisposable
             It.IsAny<CancellationToken>()),
             Times.Once);
 
-        // 12 точек inputdata создано (3 категории × 4 квартала).
+        // 8 точек inputdata создано: квартиры (4 квартала с данными) +
+        // м/м (4 квартала с явными 0). Нежилые в фикстуре полностью пустые —
+        // 0 точек (см. doc 112 v1.5).
         _mockCrud.Verify(c => c.CreateInputDataAsync(
             It.IsAny<InputDataCreateRequest>(), It.IsAny<CancellationToken>()),
-            Times.Exactly(12));
+            Times.Exactly(8));
 
         // Каждая точка — линкуется к версии.
         _mockCrud.Verify(c => c.LinkInputDataToVersionAsync(
             VersionId, It.IsAny<int>(), It.IsAny<CancellationToken>()),
-            Times.Exactly(12));
+            Times.Exactly(8));
 
         // Конкретный пример из спеки (Q1, квартиры) — Code.ID=20, Summ=243685102.
         _mockCrud.Verify(c => c.CreateInputDataAsync(
@@ -394,12 +441,13 @@ public class FinModelInputDataTests : IDisposable
         Assert.NotNull(capturedReq);
         Assert.Equal("Версия - Перенос из Эксель 2", capturedReq!.Title);
 
-        // 12 точек inputdata создано в НОВОЙ (заведомо пустой) версии. Pre-check
+        // 8 точек inputdata создано в НОВОЙ (заведомо пустой) версии. Pre-check
         // inputdata-by-version больше не выполняется (новая версия = нет дубликатов).
+        // Нежилые в фикстуре пустые → 0 точек по этой категории (doc 112 v1.5).
         _mockCrud.Verify(c => c.CreateInputDataAsync(
             It.Is<InputDataCreateRequest>(r => r.FMModelVersionID == VersionId),
             It.IsAny<CancellationToken>()),
-            Times.Exactly(12));
+            Times.Exactly(8));
     }
 
     [Fact]
@@ -440,10 +488,11 @@ public class FinModelInputDataTests : IDisposable
         Assert.NotNull(capturedReq);
         Assert.Equal("Версия - Перенос из Эксель 3", capturedReq!.Title);
 
-        // Все 12 точек создаются в новой версии — pre-check старых версий не влияет.
+        // Все 8 точек создаются в новой версии — pre-check старых версий не влияет.
+        // (Квартиры 4 + м/м 4; нежилые в фикстуре пустые. См. doc 112 v1.5.)
         _mockCrud.Verify(c => c.CreateInputDataAsync(
             It.IsAny<InputDataCreateRequest>(), It.IsAny<CancellationToken>()),
-            Times.Exactly(12));
+            Times.Exactly(8));
     }
 
     // ─────────── ApplyAsync — деградации ───────────
@@ -457,7 +506,7 @@ public class FinModelInputDataTests : IDisposable
         // Любая категория — сетевая ошибка резолва fmcode. Достаточно одного,
         // чтобы маппер вышел с inputdata_codes_unavailable; дальнейшие запросы не идут.
         _mockListView
-            .Setup(c => c.FindFmCodeByTitleAsync(
+            .Setup(c => c.FindFmCodeByCodeAsync(
                 It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new HttpRequestException("404 Not Found"));
 
@@ -485,11 +534,11 @@ public class FinModelInputDataTests : IDisposable
         var bytes = BuildReferencePlanXlsx();
         _fileStorage.Put("plan.xlsx", bytes);
 
-        // В справочнике нет «Продажа м/м (план)» — Visary возвращает пустой Data,
+        // В справочнике нет Code «040» — Visary возвращает пустой Data,
         // точки этой категории должны быть пропущены, остальные категории — созданы.
         _mockListView
-            .Setup(c => c.FindFmCodeByTitleAsync(
-                FinModelImportMapper.InputDataCodeParking, It.IsAny<CancellationToken>()))
+            .Setup(c => c.FindFmCodeByCodeAsync(
+                FinModelImportMapper.FmCodeParking, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new ListViewResponse<FmCodeRaw> { Data = [], Total = 0 });
 
         var ctx = new ImportContext(
@@ -497,10 +546,12 @@ public class FinModelInputDataTests : IDisposable
             SecondaryFileRelativePath: "plan.xlsx");
         var result = await _mapper.ApplyAsync(ctx, _dbContext, [], default);
 
-        // 8 точек (2 категории × 4 квартала). Машиноместа пропущены.
+        // Машиноместа пропущены (Title не найден в справочнике). Нежилые в фикстуре —
+        // полностью пустые (doc 112 v1.5), точек по ним нет. Остаются только квартиры:
+        // 4 квартала × 1 категория = 4 точки.
         _mockCrud.Verify(c => c.CreateInputDataAsync(
             It.IsAny<InputDataCreateRequest>(), It.IsAny<CancellationToken>()),
-            Times.Exactly(8));
+            Times.Exactly(4));
         Assert.Contains(result.Errors, e => e.ErrorCode == "inputdata_code_not_found");
     }
 
@@ -583,7 +634,8 @@ public class FinModelInputDataTests : IDisposable
             ws.Cell(24, 1).Value = "Стоимость 1 кв.м";
             ws.Cell(25, 1).Value = "Доход";
 
-            // Таблица 3 — Машиноместа (тоже нули).
+            // Таблица 3 — Машиноместа (ЯВНЫЕ нули во всех 4 кварталах — план = 0).
+            // С этими нулями точки эмитятся (см. doc 112 v1.5: явный 0 ≠ пустая ячейка).
             ws.Cell(30, 1).Value = "Год";
             ws.Cell(30, 3).Value = 2024;
             ws.Cell(31, 1).Value = "Квартал";
@@ -596,6 +648,59 @@ public class FinModelInputDataTests : IDisposable
             ws.Cell(33, 1).Value = "Машиноместа, шт.";
             ws.Cell(34, 1).Value = "Стоимость 1 м/м";
             ws.Cell(35, 1).Value = "Доход";
+            for (int c = 3; c <= 6; c++)
+            {
+                ws.Cell(33, c).Value = 0;
+                ws.Cell(34, c).Value = 0;
+                ws.Cell(35, c).Value = 0;
+            }
+
+            wb.SaveAs(ms);
+        }
+        return ms.ToArray();
+    }
+
+    /// <summary>
+    /// Фикстура для проверки разграничения «пустая ячейка» vs «явный 0».
+    /// Одна таблица квартир: Q1 — полные данные, Q2 — явные нули, Q3 — пусто,
+    /// Q4 — заполнен только Summ.
+    /// </summary>
+    private static byte[] BuildPartialEmptyPlanXlsx()
+    {
+        using var ms = new MemoryStream();
+        using (var wb = new XLWorkbook())
+        {
+            var ws = wb.AddWorksheet("Общий график");
+
+            ws.Cell(3, 1).Value = "Год";
+            ws.Cell(3, 3).Value = 2024;
+            ws.Cell(4, 1).Value = "Квартал";
+            ws.Cell(4, 2).Value = "Сумма";
+            ws.Cell(4, 3).Value = "1 кв";
+            ws.Cell(4, 4).Value = "2 кв";
+            ws.Cell(4, 5).Value = "3 кв";
+            ws.Cell(4, 6).Value = "4 кв";
+            ws.Cell(5, 1).Value = "План";
+
+            // Amount-строка.
+            ws.Cell(6, 1).Value = "Квартиры, кв.м";
+            ws.Cell(6, 3).Value = 1000;  // Q1 — заполнен
+            ws.Cell(6, 4).Value = 0;     // Q2 — явный 0
+            // Q3 (c=5) — НЕ записываем (пустая ячейка)
+            // Q4 (c=6) — НЕ записываем
+
+            // Cost-строка.
+            ws.Cell(7, 1).Value = "Стоимость 1 кв.м";
+            ws.Cell(7, 3).Value = 100;
+            ws.Cell(7, 4).Value = 0;
+            // Q3, Q4 — пусто
+
+            // Summ-строка.
+            ws.Cell(8, 1).Value = "Доход";
+            ws.Cell(8, 3).Value = 100_000;
+            ws.Cell(8, 4).Value = 0;
+            // Q3 — пусто
+            ws.Cell(8, 6).Value = 5_000_000;  // Q4 — только Summ заполнен
 
             wb.SaveAs(ms);
         }

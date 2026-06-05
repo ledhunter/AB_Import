@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { devError, devInfo, devWarn } from '../services/devLog';
 import {
   searchProjects,
   syncProjects,
@@ -78,7 +79,7 @@ export function useBackendProjects(
     inFlightRef.current = controller;
 
     const q = searchRef.current;
-    console.info(`${logTag} search → loading q='${q}'`);
+    devInfo(`${logTag} search → loading q='${q}'`);
     setStatus('loading');
     setError(null);
 
@@ -88,13 +89,13 @@ export function useBackendProjects(
       setData(res.items.map(toProjectItem));
       setFromFallback(res.fromFallback);
       setStatus('success');
-      console.info(
+      devInfo(
         `${logTag} ✓ search success q='${q}' items=${res.items.length} fromFallback=${res.fromFallback}`,
       );
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
       const message = err instanceof Error ? err.message : String(err);
-      console.error(`${logTag} ✗ search error q='${q}'`, message);
+      devError(`${logTag} ✗ search error q='${q}'`, message);
       setError(message);
       setStatus('error');
     } finally {
@@ -104,7 +105,7 @@ export function useBackendProjects(
 
   const sync = useCallback(async () => {
     if (isWarmedRef.current) {
-      console.info(`${logTag} sync пропущен — кэш уже прогрет в этой сессии`);
+      devInfo(`${logTag} sync пропущен — кэш уже прогрет в этой сессии`);
       return;
     }
 
@@ -115,7 +116,7 @@ export function useBackendProjects(
     inFlightRef.current = probeController;
     setStatus('loading');
     setError(null);
-    console.info(`${logTag} sync → проверка локального кэша`);
+    devInfo(`${logTag} sync → проверка локального кэша`);
 
     let cacheHasData = false;
     try {
@@ -128,7 +129,7 @@ export function useBackendProjects(
         setStatus('success');
         isWarmedRef.current = true;
         setIsWarmed(true);
-        console.info(
+        devInfo(
           `${logTag} ✓ кэш уже прогрет (${probe.items.length} items) — sync пропущен`,
         );
         return;
@@ -136,7 +137,7 @@ export function useBackendProjects(
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
       // Если probe-search упал — пробуем sync, может бэк всё-таки поднимется.
-      console.warn(
+      devWarn(
         `${logTag} probe-search не сработал, пробуем sync`,
         err instanceof Error ? err.message : err,
       );
@@ -148,18 +149,18 @@ export function useBackendProjects(
     const syncController = new AbortController();
     inFlightRef.current = syncController;
     setStatus('syncing');
-    console.info(`${logTag} кэш пуст → sync с Visary`);
+    devInfo(`${logTag} кэш пуст → sync с Visary`);
     try {
       const res = await syncProjects(syncController.signal);
       if (syncController.signal.aborted) return;
-      console.info(`${logTag} ✓ sync OK total=${res.total} upserted=${res.upserted}`);
+      devInfo(`${logTag} ✓ sync OK total=${res.total} upserted=${res.upserted}`);
       isWarmedRef.current = true;
       setIsWarmed(true);
       await runSearch();
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
       const message = err instanceof Error ? err.message : String(err);
-      console.error(`${logTag} ✗ sync error`, message);
+      devError(`${logTag} ✗ sync error`, message);
       // ⚠️ Даже при failed sync пробуем последний раз search'ом — вдруг кэш
       // частично заполнился, или прошлый sync уже что-то положил.
       try {
@@ -170,7 +171,7 @@ export function useBackendProjects(
           setStatus('success');
           isWarmedRef.current = true;
           setIsWarmed(true);
-          console.info(
+          devInfo(
             `${logTag} ⚠️ sync упал, но кэш отдаёт ${fallback.items.length} items — продолжаем`,
           );
           return;

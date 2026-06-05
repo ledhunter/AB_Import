@@ -818,36 +818,47 @@ public sealed class FinModelImportMapper : IImportMapper
         List<RowError> errors,
         CancellationToken ct)
     {
-        // 1) Резолв уникальных Title → ID через точечные запросы listview/fmcode.
-        //    Не один большой запрос на весь справочник (как раньше с inputdatacode),
-        //    потому что fmcode содержит сотни кодов — нам нужно 3–4 конкретных.
-        //    Транспортная ошибка (любой запрос упал не из-за «не найдено») → выходим.
-        var codeIdByTitle = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-        var missingCodeTitles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var uniqueTitles = planData.InputDataPoints
-            .Select(p => p.CodeTitle)
+        // 1) Резолв уникальных строковых Code'ов → (ID, Title) через точечные
+        //    запросы listview/fmcode по полю `Code` (например «010», «020», …).
+        //    Раньше искали по Title — Title справочника начинается с самого Code'а
+        //    («010 Продажа квартиры (план)»), строгий `=` не матчился (см. doc 112 v1.6).
+        //    Не один большой запрос на весь справочник — fmcode содержит сотни кодов,
+        //    нам нужно 3–4 конкретных.
+        var fmCodeRefByCode = new Dictionary<string, (int Id, string Title)>(StringComparer.OrdinalIgnoreCase);
+        var missingFmCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var uniqueCodes = planData.InputDataPoints
+            .Select(p => p.FmCode)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
-        foreach (var title in uniqueTitles)
+        foreach (var fmCode in uniqueCodes)
         {
             ct.ThrowIfCancellationRequested();
             try
             {
-                var resp = await _listViewClient.FindFmCodeByTitleAsync(title, ct);
+                var resp = await _listViewClient.FindFmCodeByCodeAsync(fmCode, ct);
                 var found = resp.Data?.FirstOrDefault(c => c.ID > 0);
                 if (found is not null)
-                    codeIdByTitle[title] = found.ID;
+                {
+                    // Title из ответа — каноничный из справочника Visary (с префиксом-кодом).
+                    // Если по какой-то причине пуст, подставляем fallback из контракта.
+                    var title = !string.IsNullOrWhiteSpace(found.Title)
+                        ? found.Title!
+                        : ResolveFallbackTitle(fmCode);
+                    fmCodeRefByCode[fmCode] = (found.ID, title);
+                }
                 else
-                    missingCodeTitles.Add(title);
+                {
+                    missingFmCodes.Add(fmCode);
+                }
             }
             catch (Exception ex)
             {
                 _log.LogError(ex,
-                    "FinModelImportMapper: не удалось получить fmcode title='{Title}' (fmModelId={FmModelId})",
-                    title, fmModelId);
+                    "FinModelImportMapper: не удалось получить fmcode code='{Code}' (fmModelId={FmModelId})",
+                    fmCode, fmModelId);
                 errors.Add(new RowError(null, "inputdata_codes_unavailable",
                     "Не удалось получить справочник «Код фин. модели» из Visary " +
-                    $"(listview/fmcode, title=«{title}»): {ex.Message}. " +
+                    $"(listview/fmcode, code=«{fmCode}»): {ex.Message}. " +
                     "Версия Финмодели и входные данные не созданы."));
                 return;
             }
@@ -892,20 +903,20 @@ public sealed class FinModelImportMapper : IImportMapper
         var existingPoints = new HashSet<(string FmPeriod, int CodeId)>();
 
         // 4) POST /crud/inputdata + link для каждой точки (категория × период).
-        //    `missingCodeTitles` уже наполнен на шаге 1) — здесь только пропускаем
-        //    точки тех категорий, для которых Title не нашёлся в справочнике.
+        //    `missingFmCodes` уже наполнен на шаге 1) — здесь только пропускаем
+        //    точки тех категорий, для которых Code не нашёлся в справочнике.
         int createdCount = 0, skippedCount = 0, failedCount = 0;
         foreach (var point in planData.InputDataPoints)
         {
             ct.ThrowIfCancellationRequested();
 
-            if (!codeIdByTitle.TryGetValue(point.CodeTitle, out var codeId))
+            if (!fmCodeRefByCode.TryGetValue(point.FmCode, out var codeRef))
             {
-                // Уже учтено в missingCodeTitles на шаге 1 — просто скип точки.
+                // Уже учтено в missingFmCodes на шаге 1 — просто скип точки.
                 continue;
             }
 
-            if (existingPoints.Contains((point.FmPeriod, codeId)))
+            if (existingPoints.Contains((point.FmPeriod, codeRef.Id)))
             {
                 skippedCount++;
                 continue;
@@ -920,7 +931,7 @@ public sealed class FinModelImportMapper : IImportMapper
                         FMModelVersionID = versionId,
                         FMModelVersion = new VisaryRef { ID = versionId },
                         FMPeriod = point.FmPeriod,
-                        Code = new VisaryRef { ID = codeId, Title = point.CodeTitle },
+                        Code = new VisaryRef { ID = codeRef.Id, Title = codeRef.Title },
                         Summ = point.Summ,
                         Amount = point.Amount,
                         Cost = point.Cost,
@@ -932,8 +943,8 @@ public sealed class FinModelImportMapper : IImportMapper
             {
                 failedCount++;
                 _log.LogError(ex,
-                    "FinModelImportMapper: ошибка создания inputdata (versionId={VersionId}, period={Period}, code='{Code}')",
-                    versionId, point.FmPeriod, point.CodeTitle);
+                    "FinModelImportMapper: ошибка создания inputdata (versionId={VersionId}, period={Period}, fmCode='{Code}')",
+                    versionId, point.FmPeriod, point.FmCode);
                 continue;
             }
 
@@ -952,11 +963,11 @@ public sealed class FinModelImportMapper : IImportMapper
             }
         }
 
-        if (missingCodeTitles.Count > 0)
+        if (missingFmCodes.Count > 0)
         {
             errors.Add(new RowError(null, "inputdata_code_not_found",
-                "В справочнике Visary «Код входных данных» не найдены записи: " +
-                string.Join(", ", missingCodeTitles.Select(t => $"«{t}»")) +
+                "В справочнике Visary «Код фин. модели» не найдены записи с Code: " +
+                string.Join(", ", missingFmCodes.Select(c => $"«{c}»")) +
                 ". Часть «Входных данных» Финмодели не создана."));
         }
 
@@ -1140,7 +1151,7 @@ public sealed class FinModelImportMapper : IImportMapper
 
             // Шапка-«Тип помещения» — ищем строго ВЫШЕ Год-строки (≤5 строк назад),
             // чтобы не подцепить шапку следующей таблицы.
-            string? codeTitleFromHeader = null;
+            string? fmCodeFromHeader = null;
             int headerScanStart = Math.Max(1, yearRow - 5);
             for (int hr = yearRow - 1; hr >= headerScanStart; hr--)
             {
@@ -1153,8 +1164,8 @@ public sealed class FinModelImportMapper : IImportMapper
                 {
                     var hVal = sheet.Cell(hr, hc).GetString().Trim();
                     if (string.IsNullOrEmpty(hVal)) continue;
-                    codeTitleFromHeader = ResolveInputDataCodeTitle(hVal.ToLowerInvariant());
-                    if (codeTitleFromHeader is not null) break;
+                    fmCodeFromHeader = ResolveFmCode(hVal.ToLowerInvariant());
+                    if (fmCodeFromHeader is not null) break;
                 }
                 break;
             }
@@ -1180,7 +1191,7 @@ public sealed class FinModelImportMapper : IImportMapper
             // содержательную строку после quarterRow (skip «План»-маркер, stop на
             // «Факт»/«накопл»). Если шапки нет — fallback: А-текст самой Amount-строки
             // должен содержать маркер категории.
-            string? codeTitle = codeTitleFromHeader;
+            string? fmCode = fmCodeFromHeader;
             int amountRow = -1;
             int scanLimit = Math.Min(quarterRow + 8, lastUsedRow);
             for (int rr = quarterRow + 1; rr <= scanLimit; rr++)
@@ -1195,12 +1206,12 @@ public sealed class FinModelImportMapper : IImportMapper
                 // Маркер начала плана — просто заголовок-разделитель, не строка данных.
                 if (string.Equals(aLower, "план", StringComparison.Ordinal)) continue;
 
-                if (codeTitle is null)
+                if (fmCode is null)
                 {
                     // Layout-2 (Журавли/тестовый фикстур): категория зашита в А-текст
                     // самой Amount-строки.
-                    codeTitle = ResolveInputDataCodeTitle(aLower);
-                    if (codeTitle is not null)
+                    fmCode = ResolveFmCode(aLower);
+                    if (fmCode is not null)
                     {
                         amountRow = rr;
                         break;
@@ -1214,7 +1225,7 @@ public sealed class FinModelImportMapper : IImportMapper
                 amountRow = rr;
                 break;
             }
-            if (codeTitle is null || amountRow < 0) continue;
+            if (fmCode is null || amountRow < 0) continue;
 
             int costRow = amountRow + 1;
             int summRow = amountRow + 2;
@@ -1222,20 +1233,31 @@ public sealed class FinModelImportMapper : IImportMapper
             // Анти-дубликат: если в одном файле подряд два блока одной категории
             // (что встречается у заказчика как «План»/«Факт» половины одной и той же
             // таблицы) — оставляем только первый.
-            if (categories.Any(cat => cat.CodeTitle == codeTitle)) continue;
+            if (categories.Any(cat => cat.FmCode == fmCode)) continue;
 
-            categories.Add(new FinModelPlanCategory(codeTitle, AmountRow: amountRow, CostRow: costRow, SummRow: summRow));
+            categories.Add(new FinModelPlanCategory(fmCode, AmountRow: amountRow, CostRow: costRow, SummRow: summRow));
 
             // Сразу материализуем точки этой категории — пока worksheet открыт.
+            // Кварталы с ПОЛНОСТЬЮ пустыми ячейками (ни Summ, ни Amount, ни Cost)
+            // пропускаем — заказчик не хочет переносить незаполненные периоды.
+            // Явный 0 в любой из трёх ячеек = заполненное значение → точка эмитится.
+            // `allColumns` собирается ДО фильтра: PeriodStart/PeriodEnd — это
+            // диапазон планирования из шапки, он не должен схлопываться по данным.
             foreach (var col in tableColumns)
             {
+                allColumns.TryAdd(col.ColumnIndex, col);
+
+                var (hasSumm,   summ)   = TryReadPlanCellNumber(sheet, summRow,   col.ColumnIndex);
+                var (hasAmount, amount) = TryReadPlanCellNumber(sheet, amountRow, col.ColumnIndex);
+                var (hasCost,   cost)   = TryReadPlanCellNumber(sheet, costRow,   col.ColumnIndex);
+                if (!hasSumm && !hasAmount && !hasCost) continue;
+
                 points.Add(new FinModelPlanInputDataPoint(
                     FmPeriod: col.FmPeriod,
-                    CodeTitle: codeTitle,
-                    Summ:   ReadPlanCellNumber(sheet, summRow,   col.ColumnIndex),
-                    Amount: ReadPlanCellNumber(sheet, amountRow, col.ColumnIndex),
-                    Cost:   ReadPlanCellNumber(sheet, costRow,   col.ColumnIndex)));
-                allColumns.TryAdd(col.ColumnIndex, col);
+                    FmCode: fmCode,
+                    Summ:   summ,
+                    Amount: amount,
+                    Cost:   cost));
             }
         }
 
@@ -1263,21 +1285,37 @@ public sealed class FinModelImportMapper : IImportMapper
     }
 
     /// <summary>
-    /// Резолв категории InputData по тексту в A-колонке Площадь-строки.
+    /// Резолв строкового кода справочника <c>fmcode</c> по тексту в A-колонке
+    /// Площадь-строки. Возвращает Code (например «010»), а не Title — поиск
+    /// в Visary идёт по полю Code (см. doc 112 v1.6).
     /// ⚠️ Порядок важен: «иные нежилые/кладовки» проверяются ДО общего «нежил».
     /// </summary>
-    private static string? ResolveInputDataCodeTitle(string aLower)
+    private static string? ResolveFmCode(string aLower)
     {
         if (aLower.Contains("кварт"))
-            return InputDataCodeApartment;
+            return FmCodeApartment;
         if (aLower.Contains("кладов") || aLower.Contains("иные нежил"))
-            return InputDataCodeStoreroom;
+            return FmCodeStoreroom;
         if (aLower.Contains("нежил"))
-            return InputDataCodeNonResidential;
+            return FmCodeNonResidential;
         if (aLower.Contains("м/м") || aLower.Contains("машином"))
-            return InputDataCodeParking;
+            return FmCodeParking;
         return null;
     }
+
+    /// <summary>
+    /// Fallback-Title для случая, когда Visary вернул запись fmcode без Title.
+    /// В нормальном flow Title приходит из ответа (каноничный — «010 Продажа
+    /// квартиры (план)») и подставляется в <see cref="InputDataCreateRequest.Code"/>.
+    /// </summary>
+    private static string ResolveFallbackTitle(string fmCode) => fmCode switch
+    {
+        FmCodeApartment      => FallbackTitleApartment,
+        FmCodeNonResidential => FallbackTitleNonResidential,
+        FmCodeStoreroom      => FallbackTitleStoreroom,
+        FmCodeParking        => FallbackTitleParking,
+        _                    => fmCode,
+    };
 
     /// <summary>Имя листа в шаблоне заказчика, на котором лежат таблицы Финмодели.</summary>
     private const string GeneralScheduleSheetName = "Общий график";
@@ -1305,32 +1343,63 @@ public sealed class FinModelImportMapper : IImportMapper
     }
 
     /// <summary>
-    /// Считает ячейку с числом из «Плана» и возвращает плановое значение
-    /// (нули — валидное значение, см. doc 112 §3). Текст «#DIV/0!»/пустое/невалидное
-    /// число → 0.
+    /// Считывает плановое значение из ячейки с разделением «ячейка пустая»
+    /// vs «явный 0». Используется фильтрацией кварталов в `ReadGeneralScheduleDataFromBytes`:
+    /// квартал, у которого все 3 ячейки (Summ/Amount/Cost) пустые, не эмитится
+    /// как точка inputdata; явный 0 в любой ячейке = заполненное значение.
     /// </summary>
-    internal static double ReadPlanCellNumber(IXLWorksheet sheet, int row, int col)
+    /// <returns>
+    /// `HasValue=true` для непустой ячейки с числом (включая 0).
+    /// `HasValue=false` для пустой ячейки или нечислового мусора («#DIV/0!»,
+    /// «н/д», «—» и т.п.) — Value = 0.
+    /// </returns>
+    internal static (bool HasValue, double Value) TryReadPlanCellNumber(IXLWorksheet sheet, int row, int col)
     {
         var cell = sheet.Cell(row, col);
+        // ClosedXML 0.104: IsEmpty() → true когда у ячейки тип Blank (нет значения и
+        // нет формулы). TryGetValue<double> для Blank-ячейки отдаёт (true, 0) —
+        // именно из-за этой подмены раньше пустые квартилы эмитились с нулями.
+        if (cell.IsEmpty()) return (false, 0d);
+
         if (cell.TryGetValue<double>(out var d) && !double.IsNaN(d) && !double.IsInfinity(d))
-            return d;
+            return (true, d);
+
         var text = cell.GetString().Trim();
-        if (string.IsNullOrWhiteSpace(text)) return 0d;
+        if (string.IsNullOrWhiteSpace(text)) return (false, 0d);
         // Замена запятой на точку для русской локали + игнор «#DIV/0!»/прочих error-strings.
         text = text.Replace(',', '.');
         return double.TryParse(text, NumberStyles.Any, CultureInfo.InvariantCulture, out var v)
-            ? v : 0d;
+            ? (true, v) : (false, 0d);
     }
 
-    // Title справочника fmcode (HAR заказчика). ID не хардкодятся — резолв
-    // через listview/fmcode (см. FindFmCodeByTitleAsync), Title зашит как контракт
-    // между листом «План» и справочником fmcode.
-    // ⚠️ Внимание на пробелы: «Продажа нежилые ( ком) ПСН (план)» имеет лишний пробел
-    // после «(» — это точное написание из Visary, без него Title не находится по «=».
-    internal const string InputDataCodeApartment       = "Продажа квартиры (план)";
-    internal const string InputDataCodeNonResidential  = "Продажа нежилые ( ком) ПСН (план)";
-    internal const string InputDataCodeStoreroom       = "Продажа иные нежилые (кладовки) (план)";
-    internal const string InputDataCodeParking         = "Продажа м/м (план)";
+    /// <summary>
+    /// Считает ячейку с числом из «Плана» и возвращает плановое значение
+    /// (нули — валидное значение, см. doc 112 §3). Текст «#DIV/0!»/пустое/невалидное
+    /// число → 0. ⚠️ Не различает пустую ячейку и явный 0 — для фильтрации
+    /// кварталов используйте `TryReadPlanCellNumber`.
+    /// </summary>
+    internal static double ReadPlanCellNumber(IXLWorksheet sheet, int row, int col)
+        => TryReadPlanCellNumber(sheet, row, col).Value;
+
+    // Строковые коды справочника fmcode (поле Code, например «010»). ID не
+    // хардкодятся — резолв через listview/fmcode по `["Code","=",X]`
+    // (см. FindFmCodeByCodeAsync, doc 112 v1.6). Раньше искали по Title —
+    // Title справочника начинается с самого Code'а («010 Продажа квартиры
+    // (план)»), и точное `=` не матчилось.
+    internal const string FmCodeApartment      = "010";
+    internal const string FmCodeNonResidential = "020";
+    internal const string FmCodeStoreroom      = "030";
+    internal const string FmCodeParking        = "040";
+
+    // Fallback-Title (используется ТОЛЬКО при подстановке в `Code.Title` payload
+    // POST /crud/inputdata, если Visary в ответе вернул пустой Title — например,
+    // при неполном DTO). В нормальном случае Title идёт из ответа Visary
+    // («010 Продажа квартиры (план)»). Зашитые здесь значения — это написание
+    // из исходного контракта (до v1.6) без префикса-кода, теперь — резервные.
+    private const string FallbackTitleApartment      = "Продажа квартиры (план)";
+    private const string FallbackTitleNonResidential = "Продажа нежилые ( ком) ПСН (план)";
+    private const string FallbackTitleStoreroom     = "Продажа иные нежилые (кладовки) (план)";
+    private const string FallbackTitleParking       = "Продажа м/м (план)";
 
     internal sealed record FinModelPlanPeriods(string PeriodStart, string PeriodEnd);
 
@@ -1342,7 +1411,7 @@ public sealed class FinModelImportMapper : IImportMapper
     /// (вид помещения). Номера строк — абсолютные в XLSX.
     /// </summary>
     internal sealed record FinModelPlanCategory(
-        string CodeTitle, int AmountRow, int CostRow, int SummRow);
+        string FmCode, int AmountRow, int CostRow, int SummRow);
 
     /// <summary>
     /// Полная распарсенная картина листа «План»: краевые периоды + столбцы кварталов
@@ -1364,7 +1433,7 @@ public sealed class FinModelImportMapper : IImportMapper
     /// период × вид помещения × тройка чисел из листа «План».
     /// </summary>
     internal sealed record FinModelPlanInputDataPoint(
-        string FmPeriod, string CodeTitle, double Summ, double Amount, double Cost);
+        string FmPeriod, string FmCode, double Summ, double Amount, double Cost);
 
     internal sealed class FinModelPlanParseException : Exception
     {

@@ -5,6 +5,8 @@
  * перед запуском импорта.
  */
 
+import { apiUrl } from './apiUrl';
+import { devError, devInfo } from './devLog';
 import { VisaryApiError } from './visaryApi';
 
 export interface SiteSyncResult {
@@ -14,11 +16,12 @@ export interface SiteSyncResult {
 
 export async function syncSite(siteId: number, projectId: number): Promise<SiteSyncResult> {
   const requestId = Math.random().toString(36).slice(2, 8);
+  const url = apiUrl.sites(`/sync/${siteId}?projectId=${projectId}`);
 
-  console.info(`[SitesSync] → POST /api/sites/sync/${siteId}?projectId=${projectId} #${requestId}`);
+  devInfo(`[SitesSync] → POST ${url} #${requestId}`);
 
   const start = performance.now();
-  const response = await fetch(`/api/sites/sync/${siteId}?projectId=${projectId}`, {
+  const response = await fetch(url, {
     method: 'POST',
   });
 
@@ -26,15 +29,15 @@ export async function syncSite(siteId: number, projectId: number): Promise<SiteS
 
   if (!response.ok) {
     const errBody = await response.text().catch(() => undefined);
-    console.error(
-      `[SitesSync] ✗ ${response.status} ${response.statusText} /api/sites/sync/${siteId} #${requestId} (${ms}ms)`,
+    devError(
+      `[SitesSync] ✗ ${response.status} ${response.statusText} ${url} #${requestId} (${ms}ms)`,
       errBody,
     );
-    
+
     if (response.status === 404) {
       throw new VisaryApiError(`Объект строительства ${siteId} не найден в Visary`, 404, errBody);
     }
-    
+
     throw new VisaryApiError(
       `Синхронизация объекта ${siteId} не удалась: ${response.status} ${response.statusText}`,
       response.status,
@@ -43,7 +46,7 @@ export async function syncSite(siteId: number, projectId: number): Promise<SiteS
   }
 
   const data = (await response.json()) as SiteSyncResult;
-  console.info(`[SitesSync] ← ${response.status} /api/sites/sync/${siteId} #${requestId} (${ms}ms)`, data);
-  
+  devInfo(`[SitesSync] ← ${response.status} ${url} #${requestId} (${ms}ms)`, data);
+
   return data;
 }

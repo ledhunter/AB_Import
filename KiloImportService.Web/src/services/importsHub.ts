@@ -15,9 +15,11 @@ import {
   type HubConnection,
 } from '@microsoft/signalr';
 import type { ApiImportStageKind, ApiImportStatus } from '../types/api';
+import { apiUrl } from './apiUrl';
 import { getAccessToken } from './auth';
+import { devInfo, devWarn } from './devLog';
 
-const HUB_PATH = '/hubs/imports';
+const HUB_PATH = apiUrl.hubs('/imports');
 const LOG_TAG = '[ImportsHub]';
 
 export interface StageStartedEvent {
@@ -88,63 +90,63 @@ export async function createImportsHub(
   // ─── Server → client события ───
   if (handlers.onStageStarted) {
     connection.on('StageStarted', (e: StageStartedEvent) => {
-      console.info(`${LOG_TAG} ← StageStarted`, e);
+      devInfo(`${LOG_TAG} ← StageStarted`, e);
       handlers.onStageStarted?.(e);
     });
   }
   if (handlers.onStageCompleted) {
     connection.on('StageCompleted', (e: StageCompletedEvent) => {
-      console.info(`${LOG_TAG} ← StageCompleted`, e);
+      devInfo(`${LOG_TAG} ← StageCompleted`, e);
       handlers.onStageCompleted?.(e);
     });
   }
   if (handlers.onSessionStatus) {
     connection.on('SessionStatus', (e: SessionStatusEvent) => {
-      console.info(`${LOG_TAG} ← SessionStatus`, e);
+      devInfo(`${LOG_TAG} ← SessionStatus`, e);
       handlers.onSessionStatus?.(e);
     });
   }
   if (handlers.onStageProgress) {
     connection.on('StageProgress', (e: StageProgressEvent) => {
       // StageProgress может приходить ~50 раз — лог в debug-уровне, чтобы не засорять.
-      console.debug(`${LOG_TAG} ← StageProgress`, e);
+      devInfo(`${LOG_TAG} ← StageProgress`, e);
       handlers.onStageProgress?.(e);
     });
   }
 
   connection.onclose((err) => {
     if (err) {
-      console.warn(`${LOG_TAG} connection closed with error:`, err.message);
+      devWarn(`${LOG_TAG} connection closed with error:`, err.message);
       handlers.onError?.(err);
     } else {
-      console.info(`${LOG_TAG} connection closed`);
+      devInfo(`${LOG_TAG} connection closed`);
     }
   });
 
   connection.onreconnecting((err) => {
-    console.warn(`${LOG_TAG} reconnecting…`, err?.message ?? '');
+    devWarn(`${LOG_TAG} reconnecting…`, err?.message ?? '');
   });
 
   connection.onreconnected((id) => {
-    console.info(`${LOG_TAG} reconnected (connectionId=${id ?? 'n/a'})`);
+    devInfo(`${LOG_TAG} reconnected (connectionId=${id ?? 'n/a'})`);
   });
 
   await connection.start();
-  console.info(`${LOG_TAG} ✓ connected (state=${connection.state})`);
+  devInfo(`${LOG_TAG} ✓ connected (state=${connection.state})`);
 
   return {
     connection,
     joinSession: async (sessionId: string) => {
       if (connection.state !== HubConnectionState.Connected) {
-        console.warn(`${LOG_TAG} joinSession пропущен — state=${connection.state}`);
+        devWarn(`${LOG_TAG} joinSession пропущен — state=${connection.state}`);
         return;
       }
-      console.info(`${LOG_TAG} → JoinSession ${sessionId}`);
+      devInfo(`${LOG_TAG} → JoinSession ${sessionId}`);
       await connection.invoke('JoinSession', sessionId);
     },
     leaveSession: async (sessionId: string) => {
       if (connection.state !== HubConnectionState.Connected) return;
-      console.info(`${LOG_TAG} → LeaveSession ${sessionId}`);
+      devInfo(`${LOG_TAG} → LeaveSession ${sessionId}`);
       await connection.invoke('LeaveSession', sessionId);
     },
     stop: async () => {
@@ -152,7 +154,7 @@ export async function createImportsHub(
       try {
         await connection.stop();
       } catch (err) {
-        console.warn(
+        devWarn(
           `${LOG_TAG} stop() error:`,
           err instanceof Error ? err.message : String(err),
         );

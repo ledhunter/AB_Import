@@ -20,6 +20,8 @@
 
 ### 1. Нормализация номера помещения
 
+> ⚠️ **Отменено в [doc 118](./118-rooms-room-number-accept-any-string.md) (2026-06-02)** — `RoomNumber` теперь принимается **как есть** (только `Trim()`), включая текстовые/составные обозначения («ПХ-15», «Кладовка-А»). `ExtractDigitsOnly` удалён. Раздел оставлен для истории — фиксирует, **почему** была введена цифровая нормализация и какие риски она ловила.
+
 ```csharp
 // KiloImportService.Api/Domain/Mapping/RoomsFormImportMapper.cs
 
@@ -51,7 +53,7 @@ private static string ExtractDigitsOnly(string? raw)
 }
 ```
 
-### ⚠️ Важно
+### ⚠️ Важно (исторический контекст; см. doc 118 для актуального поведения)
 
 - `ExtractDigitsOnly` **отличается** от существующего `ExtractNumericPart`
   (последний сохраняет точки/запятые — используется для `SectionTitleNumeric`

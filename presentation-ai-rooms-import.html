@@ -466,6 +466,95 @@
   }
   .pill.red { background: var(--red-light); color: var(--red-dark); }
 
+  /* Roadmap (stages) */
+  :root {
+    --done: #18a957;
+    --done-bg: #e6f7ec;
+    --done-text: #0c6c3a;
+    --partial: #ff9500;
+    --partial-bg: #fff3e0;
+    --partial-text: #b35e00;
+    --todo: #b0b0b0;
+    --todo-bg: #f0f0f0;
+    --todo-text: #6b6b6b;
+  }
+  .roadmap {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 14px;
+    margin: 18px 0 22px;
+  }
+  .stage-card {
+    border: 1px solid var(--border);
+    border-top: 6px solid var(--todo);
+    border-radius: 6px;
+    padding: 14px 16px;
+    background: #fff;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .stage-card.done    { border-top-color: var(--done); }
+  .stage-card.partial { border-top-color: var(--partial); }
+  .stage-card.todo    { border-top-color: var(--todo); }
+  .stage-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+  }
+  .stage-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--black);
+  }
+  .stage-status {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 999px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .stage-card.done    .stage-status { background: var(--done-bg);    color: var(--done-text); }
+  .stage-card.partial .stage-status { background: var(--partial-bg); color: var(--partial-text); }
+  .stage-card.todo    .stage-status { background: var(--todo-bg);    color: var(--todo-text); }
+  .stage-block {
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--black);
+  }
+  .stage-block .block-label {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--gray);
+    margin-bottom: 4px;
+  }
+  .stage-block.debt .block-label { color: var(--red); }
+
+  .legend {
+    display: flex;
+    gap: 22px;
+    margin: 4px 0 0;
+    font-size: 14px;
+    color: var(--gray);
+    align-items: center;
+  }
+  .legend .dot-color {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+    vertical-align: middle;
+    margin-right: 6px;
+  }
+  .legend .done    .dot-color { background: var(--done); }
+  .legend .partial .dot-color { background: var(--partial); }
+  .legend .todo    .dot-color { background: var(--todo); }
+
   /* Scrollbar */
   .slide::-webkit-scrollbar { width: 8px; }
   .slide::-webkit-scrollbar-track { background: transparent; }
@@ -493,18 +582,19 @@
       сервиса импорта Квартирограммы
     </div>
     <div class="lead">
-      Как искусственный интеллект сократил срок разработки в 2,6 раза
-      и ускорил работу пользователей в 5 раз
+      Как искусственный интеллект может сократить срок разработки в 2,6 раза
+      и ускорить работу пользователей в 5 раз
     </div>
     <div class="badges">
       <div class="badge">Апрель — Май 2026</div>
       <div class="badge">≈ 1 месяц разработки</div>
+      <div class="badge">Стадия прохождения AppSec</div>
     </div>
   </section>
 
   <!-- Slide 2: Context -->
   <section class="slide">
-    <div class="slide-num">01 / 08</div>
+    <div class="slide-num">01 / 09</div>
     <h1>Контекст задачи</h1>
     <p class="subtitle">Что нужно было сделать</p>
 
@@ -517,16 +607,15 @@
       <li>Каждый файл содержит несколько разделов (<em>Квартиры / Нежилые / Кладовые / Машино-места</em>)</li>
       <li>В файлах встречаются служебные листы, скрытые листы, итоговые строки — их нужно отличать от полезных данных</li>
       <li>Один и тот же файл может загружаться повторно — система <strong>не должна создавать дубликаты</strong></li>
-      <li>Все изменения должны корректно отражаться во внешней системе Visary</li>
+      <li>Все изменения должны корректно отражаться в системе Visary</li>
       <li>Пользователь должен видеть <strong>понятный отчёт</strong>: что создано, что обновлено, что пропущено, где ошибка</li>
     </ul>
   </section>
 
   <!-- Slide 3: Volume -->
   <section class="slide">
-    <div class="slide-num">02 / 08</div>
+    <div class="slide-num">02 / 09</div>
     <h1>Объём выполненной работы</h1>
-    <p class="subtitle">Что получил бизнес за месяц разработки</p>
 
     <table>
       <thead>
@@ -547,40 +636,12 @@
       </tbody>
     </table>
 
-    <h3 style="margin-top:32px"><span class="icon">▸</span> Прогресс по неделям</h3>
-    <div class="weeks">
-      <div class="week-row">
-        <div class="week-label">Неделя 1</div>
-        <div class="week-date">29.04 – 06.05</div>
-        <div class="week-bar"><span class="seg filled"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span></div>
-      </div>
-      <div class="week-row">
-        <div class="week-label">Неделя 2</div>
-        <div class="week-date">07.05 – 13.05</div>
-        <div class="week-bar"><span class="seg filled"></span><span class="seg filled"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span></div>
-      </div>
-      <div class="week-row">
-        <div class="week-label">Неделя 3</div>
-        <div class="week-date">14.05 – 20.05</div>
-        <div class="week-bar"><span class="seg filled"></span><span class="seg filled"></span><span class="seg filled"></span><span class="seg"></span><span class="seg"></span></div>
-      </div>
-      <div class="week-row">
-        <div class="week-label">Неделя 4</div>
-        <div class="week-date">21.05 – 27.05</div>
-        <div class="week-bar"><span class="seg filled"></span><span class="seg filled"></span><span class="seg filled"></span><span class="seg filled"></span><span class="seg"></span></div>
-      </div>
-      <div class="week-row">
-        <div class="week-label">Финал</div>
-        <div class="week-date">28.05 – 29.05</div>
-        <div class="week-bar"><span class="seg filled"></span><span class="seg filled"></span><span class="seg filled"></span><span class="seg filled"></span><span class="seg filled"></span></div>
-      </div>
-    </div>
   </section>
 
   <!-- Slide 4: Business value -->
   <section class="slide">
-    <div class="slide-num">03 / 08</div>
-    <h1>Что получил бизнес</h1>
+    <div class="slide-num">03 / 09</div>
+    <h1>Что получит бизнес</h1>
     <p class="subtitle">Ценность сервиса в пяти направлениях</p>
 
     <div class="cards">
@@ -589,7 +650,6 @@
         <ul>
           <li>Загрузка файла с ~300 строками — <strong>около 1 минуты</strong></li>
           <li>Раньше тот же объём — <strong>4 файла за 5 минут</strong></li>
-          <li>Повторная загрузка — <strong>мгновенно</strong></li>
         </ul>
       </div>
       <div class="card">
@@ -603,7 +663,7 @@
       <div class="card">
         <h3>📂 Универсальность</h3>
         <ul>
-          <li>Понимает файлы <strong>разной структуры</strong> без подгонки</li>
+          <li>Понимает файлы <strong>разной структуры</strong></li>
           <li>Определяет, <strong>где квартиры, где кладовые, где машино-места</strong></li>
           <li>Игнорирует скрытые и служебные листы</li>
         </ul>
@@ -620,7 +680,7 @@
         <h3>💰 Экономия</h3>
         <ul>
           <li>На загрузку — <strong>1 минута вместо 5</strong> (тот же объём)</li>
-          <li>Не нужен технический специалист для разбора файлов</li>
+          <li>Не нужен технический специалист для импорта</li>
           <li>Снижается риск ошибок ручного ввода</li>
         </ul>
       </div>
@@ -629,7 +689,7 @@
 
   <!-- Slide 5: Plan vs Fact -->
   <section class="slide">
-    <div class="slide-num">04 / 08</div>
+    <div class="slide-num">04 / 09</div>
     <h1>Сроки разработки: <span class="accent">план / факт</span></h1>
     <p class="subtitle">Эффект использования ИИ в цифрах</p>
 
@@ -665,15 +725,15 @@
 
     <blockquote>
       Команда сделала за <strong>17 дней</strong> работу, на которую планировалось <strong>45 дней</strong>.<br>
-      Сэкономлено <strong>≈ 28 рабочих дней</strong> разработчика — это бюджет на следующую фичу.
+      Сэкономлено <strong>≈ 28 рабочих дней</strong> — это бюджет на следующую фичу.
     </blockquote>
   </section>
 
   <!-- Slide 6: User speed -->
   <section class="slide">
-    <div class="slide-num">05 / 08</div>
+    <div class="slide-num">05 / 09</div>
     <h1>Ускорение работы пользователя</h1>
-    <p class="subtitle">Как изменился процесс загрузки данных</p>
+    <p class="subtitle">Как изменится процесс загрузки данных</p>
 
     <div class="compare">
       <div class="compare-box before">
@@ -713,19 +773,10 @@
 
   <!-- Slide 7: Quality side-effect -->
   <section class="slide">
-    <div class="slide-num">06 / 08</div>
-    <h1>Качество как побочный эффект</h1>
-    <p class="subtitle">Что появилось «бесплатно» благодаря ИИ</p>
+    <div class="slide-num">06 / 09</div>
+    <h1>Побочный эффект</h1>
 
     <div class="cards">
-      <div class="card">
-        <h3>📚 База знаний по проекту</h3>
-        <p>Каждое нестандартное решение зафиксировано в проектной документации. Новый сотрудник вникает в проект <strong>за часы, а не недели</strong>.</p>
-      </div>
-      <div class="card">
-        <h3>✅ Автоматические проверки</h3>
-        <p>Система регулярно проверяет, что ничего не сломалось при доработках. Старые ошибки <strong>не возвращаются</strong>.</p>
-      </div>
       <div class="card">
         <h3>💬 Понятные отчёты об ошибках</h3>
         <p>Пользователь видит, что именно пошло не так и в какой строке, и может <strong>исправить файл и перезагрузить</strong>.</p>
@@ -738,16 +789,14 @@
 
     <h3 style="margin-top:32px"><span class="icon">▸</span> Эффект для бизнеса</h3>
     <div class="pills">
-      <span class="pill red">Быстрая адаптация новых сотрудников</span>
-      <span class="pill red">Меньше регрессий</span>
-      <span class="pill red">Дешевле поддержка</span>
+      <span class="pill red">Поддержка становится проще</span>
       <span class="pill red">Готовность к новым требованиям</span>
     </div>
   </section>
 
   <!-- Slide 8: Overhead -->
   <section class="slide">
-    <div class="slide-num">07 / 08</div>
+    <div class="slide-num">07 / 09</div>
     <h1>Накладные расходы</h1>
     <p class="subtitle">Что нужно для работы с ИИ</p>
 
@@ -780,16 +829,102 @@
     </table>
 
     <div class="insight" style="margin-top: 40px">
-      Настройка делается <strong>один раз</strong>, а используется <strong>на каждой следующей задаче</strong>.<br>
-      На этой фиче расходы уже окупились. Все следующие фичи идут с тем же ускорением — <strong>бесплатно</strong>.
+      Настройка делается <strong>один раз</strong>, а используется <strong>на каждой следующей задаче</strong>.
     </div>
   </section>
 
-  <!-- Slide 9: Summary -->
+  <!-- Slide 9 Stages roadmap -->
   <section class="slide">
-    <div class="slide-num">08 / 08</div>
+    <div class="slide-num">08 / 09</div>
+    <h1>Стадии и статус</h1>
+    <p class="subtitle">Что пройдено, что в работе, что впереди</p>
+
+    <div class="legend">
+      <span class="done"><span class="dot-color"></span>пройдено</span>
+      <span class="partial"><span class="dot-color"></span>сделано не полностью</span>
+      <span class="todo"><span class="dot-color"></span>не сделано</span>
+    </div>
+
+    <div class="roadmap">
+      <div class="stage-card done">
+        <div class="stage-head">
+          <div class="stage-title">1. Аналитика</div>
+          <span class="stage-status">Пройдено</span>
+        </div>
+        <div class="stage-block">
+          <div class="block-label">Что получили</div>
+          FSD, flow процесса, прототипы, тест-кейсы
+        </div>
+      </div>
+
+      <div class="stage-card done">
+        <div class="stage-head">
+          <div class="stage-title">2. Разработка</div>
+          <span class="stage-status">Пройдено</span>
+        </div>
+        <div class="stage-block">
+          <div class="block-label">Что получили</div>
+          Технологический стек, верхнеуровневая архитектура, сервис (фронтенд, бэкенд, база данных), ревью кода через ИИ
+        </div>
+      </div>
+
+      <div class="stage-card done">
+        <div class="stage-head">
+          <div class="stage-title">3. Тестирование</div>
+          <span class="stage-status">Пройдено</span>
+        </div>
+        <div class="stage-block">
+          <div class="block-label">Что получили</div>
+          Функциональное тестирование на тестовых файлах
+        </div>
+        <div class="stage-block debt">
+          <div class="block-label">Техдолг</div>
+          Нагрузочное и интеграционное тестирование
+        </div>
+      </div>
+
+      <div class="stage-card partial">
+        <div class="stage-head">
+          <div class="stage-title">4. Внедрение</div>
+          <span class="stage-status">Частично</span>
+        </div>
+        <div class="stage-block">
+          <div class="block-label">Что получили</div>
+          Отчёты из AppSec, первая партия фиксов уязвимостей выполнена
+        </div>
+        <div class="stage-block debt">
+          <div class="block-label">Техдолг</div>
+          Полная сборка через А-Платформу и закрытие оставшихся пунктов AppSec
+        </div>
+      </div>
+
+      <div class="stage-card todo">
+        <div class="stage-head">
+          <div class="stage-title">5. Техдолг</div>
+          <span class="stage-status">Не сделано</span>
+        </div>
+        <div class="stage-block">
+          <div class="block-label">Текущий уровень</div>
+          MVP-сервис: <strong>≈ 50%</strong> соответствия требованиям банковской разработки
+        </div>
+        <div class="stage-block debt">
+          <div class="block-label">Цель</div>
+          Довести до <strong>100%</strong> с учётом допустимых отклонений
+        </div>
+      </div>
+    </div>
+
+    <div class="insight">
+      Импорт <strong>Квартирограммы</strong> реализован. Сейчас идёт приведение сервиса к стандартам банковской разработки.<br>
+      
+    </div>
+  </section>
+
+    <!-- Slide 10: Summary -->
+  <section class="slide">
+    <div class="slide-num">09 / 09</div>
     <h1>Итоги</h1>
-    <p class="subtitle">Что получил бизнес</p>
+    <p class="subtitle">Что получит бизнес</p>
 
     <div class="kpi-grid">
       <div class="kpi">
@@ -820,11 +955,6 @@
       ИИ берёт на себя <strong>рутину</strong>: пишет рядовой код, проверяет десятки сценариев, документирует.
     </div>
 
-    <h3><span class="icon">▸</span> Окупаемость</h3>
-    <p style="font-size: 19px; line-height: 1.6">
-      Стоимость настройки инструмента — <strong>разовая</strong>. Эффект — <strong>на каждой следующей задаче</strong>.<br>
-      По проекту уже сэкономлено <strong>≈ 28 рабочих дней разработчика</strong> — это бюджет следующей крупной фичи.
-    </p>
   </section>
 
 </div>

@@ -466,6 +466,95 @@
   }
   .pill.red { background: var(--red-light); color: var(--red-dark); }
 
+  /* Roadmap (stages) */
+  :root {
+    --done: #18a957;
+    --done-bg: #e6f7ec;
+    --done-text: #0c6c3a;
+    --partial: #ff9500;
+    --partial-bg: #fff3e0;
+    --partial-text: #b35e00;
+    --todo: #b0b0b0;
+    --todo-bg: #f0f0f0;
+    --todo-text: #6b6b6b;
+  }
+  .roadmap {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 14px;
+    margin: 18px 0 22px;
+  }
+  .stage-card {
+    border: 1px solid var(--border);
+    border-top: 6px solid var(--todo);
+    border-radius: 6px;
+    padding: 14px 16px;
+    background: #fff;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .stage-card.done    { border-top-color: var(--done); }
+  .stage-card.partial { border-top-color: var(--partial); }
+  .stage-card.todo    { border-top-color: var(--todo); }
+  .stage-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+  }
+  .stage-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--black);
+  }
+  .stage-status {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 999px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .stage-card.done    .stage-status { background: var(--done-bg);    color: var(--done-text); }
+  .stage-card.partial .stage-status { background: var(--partial-bg); color: var(--partial-text); }
+  .stage-card.todo    .stage-status { background: var(--todo-bg);    color: var(--todo-text); }
+  .stage-block {
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--black);
+  }
+  .stage-block .block-label {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--gray);
+    margin-bottom: 4px;
+  }
+  .stage-block.debt .block-label { color: var(--red); }
+
+  .legend {
+    display: flex;
+    gap: 22px;
+    margin: 4px 0 0;
+    font-size: 14px;
+    color: var(--gray);
+    align-items: center;
+  }
+  .legend .dot-color {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+    vertical-align: middle;
+    margin-right: 6px;
+  }
+  .legend .done    .dot-color { background: var(--done); }
+  .legend .partial .dot-color { background: var(--partial); }
+  .legend .todo    .dot-color { background: var(--todo); }
+
   /* Scrollbar */
   .slide::-webkit-scrollbar { width: 8px; }
   .slide::-webkit-scrollbar-track { background: transparent; }
@@ -493,19 +582,19 @@
       сервиса импорта Финмодели
     </div>
     <div class="lead">
-      Как искусственный интеллект сократил срок разработки в 11 раз
-      и ускорит работу пользователей в 8 раз
+      Как искусственный интеллект может сократить срок разработки почти в 6 раз
+      и ускорить работу пользователей в 8 раз
     </div>
     <div class="badges">
       <div class="badge">с 29.04.2026</div>
-      <div class="badge">≈ 4 недели разработки</div>
-      <div class="badge">Финальная стадия</div>
+      <div class="badge">≈ 3 недели разработки</div>
+      <div class="badge">Стадия тестирования</div>
     </div>
   </section>
 
   <!-- Slide 2: Context -->
   <section class="slide">
-    <div class="slide-num">01 / 08</div>
+    <div class="slide-num">01 / 09</div>
     <h1>Контекст задачи</h1>
     <p class="subtitle">Что нужно было сделать</p>
 
@@ -525,13 +614,8 @@
 
   <!-- Slide 3: Volume -->
   <section class="slide">
-    <div class="slide-num">02 / 08</div>
+    <div class="slide-num">02 / 09</div>
     <h1>Объём выполненной работы</h1>
-    <p class="subtitle">Что уже сделано за 4 недели разработки</p>
-
-    <blockquote style="margin-bottom: 20px">
-      ⚠️ <strong>Импорт ещё не готов</strong> — находится в финальной стадии. Реализованы все ключевые сценарии, идёт стабилизация на реальных файлах.
-    </blockquote>
 
     <table>
       <thead>
@@ -553,34 +637,11 @@
       </tbody>
     </table>
 
-    <h3 style="margin-top:24px"><span class="icon">▸</span> Прогресс по неделям</h3>
-    <div class="weeks">
-      <div class="week-row">
-        <div class="week-label">Неделя 1</div>
-        <div class="week-date">29.04 – 06.05</div>
-        <div class="week-bar"><span class="seg filled"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span></div>
-      </div>
-      <div class="week-row">
-        <div class="week-label">Неделя 2</div>
-        <div class="week-date">07.05 – 13.05</div>
-        <div class="week-bar"><span class="seg filled"></span><span class="seg filled"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span></div>
-      </div>
-      <div class="week-row">
-        <div class="week-label">Неделя 3</div>
-        <div class="week-date">14.05 – 20.05</div>
-        <div class="week-bar"><span class="seg filled"></span><span class="seg filled"></span><span class="seg filled"></span><span class="seg"></span><span class="seg"></span></div>
-      </div>
-      <div class="week-row">
-        <div class="week-label">Неделя 4</div>
-        <div class="week-date">21.05 – 26.05</div>
-        <div class="week-bar"><span class="seg filled"></span><span class="seg filled"></span><span class="seg filled"></span><span class="seg filled"></span><span class="seg"></span></div>
-      </div>
-    </div>
   </section>
 
   <!-- Slide 4: Business value -->
   <section class="slide">
-    <div class="slide-num">03 / 08</div>
+    <div class="slide-num">03 / 09</div>
     <h1>Что получит бизнес</h1>
     <p class="subtitle">Ценность сервиса в пяти направлениях</p>
 
@@ -590,7 +651,6 @@
         <ul>
           <li>Полный перенос одной Финмодели — <strong>около 1 часа</strong></li>
           <li>Раньше — <strong>от 1 рабочего дня</strong> опытному пользователю</li>
-          <li>Повторная загрузка — <strong>мгновенно</strong></li>
         </ul>
       </div>
       <div class="card">
@@ -598,15 +658,13 @@
         <ul>
           <li><strong>Защита от дубликатов</strong> на всех 8 разделах Visary</li>
           <li><strong>Ручные правки в Visary сохраняются</strong> — не перетираются</li>
-          <li>«Угон» чужого договора из другого проекта <strong>запрещён</strong></li>
         </ul>
       </div>
       <div class="card">
         <h3>📂 Универсальность</h3>
         <ul>
-          <li>Файлы <strong>разной структуры</strong> работают из коробки</li>
-          <li>Лист «План» — несколько вариантов оформления автоматически</li>
-          <li>Опциональные блоки (Организация, Группа компаний, Договор) не обязательны</li>
+          <li>Обработка файлов <strong>разной структуры</strong></li>
+          <li>Импорт с учетом опциональных блоков (Организация, Группа компаний, и т.д.)</li>
         </ul>
       </div>
       <div class="card">
@@ -621,7 +679,7 @@
         <h3>💰 Экономия</h3>
         <ul>
           <li>На перенос — <strong>1 час вместо 1 дня</strong></li>
-          <li>Не нужен технический специалист</li>
+          <li>Не нужен технический специалист для импорта</li>
           <li>Меньше ошибок при ручном вводе в 8 форм</li>
         </ul>
       </div>
@@ -630,7 +688,7 @@
 
   <!-- Slide 5: Plan vs Fact -->
   <section class="slide">
-    <div class="slide-num">04 / 08</div>
+    <div class="slide-num">04 / 09</div>
     <h1>Сроки разработки: <span class="accent">план / факт</span></h1>
     <p class="subtitle">Эффект использования ИИ в цифрах</p>
 
@@ -639,12 +697,12 @@
         <tr><th>Этап</th><th>План (дней)</th><th>Факт (дней)</th><th>Сокращение</th></tr>
       </thead>
       <tbody>
-        <tr><td><strong>Аналитика</strong></td><td>20</td><td>3</td><td class="highlight">−85%</td></tr>
-        <tr><td><strong>Разработка</strong></td><td>30</td><td>3</td><td class="highlight">−90%</td></tr>
-        <tr><td><strong>Тестирование</strong></td><td>30</td><td>1</td><td class="highlight">−97%</td></tr>
+        <tr><td><strong>Аналитика</strong></td><td>20</td><td>6</td><td class="highlight">−70%</td></tr>
+        <tr><td><strong>Разработка</strong></td><td>30</td><td>6</td><td class="highlight">−80%</td></tr>
+        <tr><td><strong>Тестирование</strong></td><td>30</td><td>2</td><td class="highlight">−93%</td></tr>
       </tbody>
       <tfoot>
-        <tr><td>ИТОГО</td><td>80</td><td>7</td><td class="highlight" style="font-size:20px">≈ −91%</td></tr>
+        <tr><td>ИТОГО</td><td>80</td><td>14</td><td class="highlight" style="font-size:20px">≈ −82.5%</td></tr>
       </tfoot>
     </table>
 
@@ -665,14 +723,14 @@
     </div>
 
     <blockquote>
-      Команда сделала за <strong>7 дней</strong> работу, на которую планировалось <strong>80 дней</strong>.<br>
-      Сэкономлено <strong>≈ 73 рабочих дня</strong> разработчика — это бюджет на крупный следующий этап.
+      Команда сделала за <strong>14 дней</strong> работу, на которую планировалось <strong>80 дней</strong>.<br>
+      Сэкономлено <strong>≈ 66 рабочих дней</strong> — это бюджет на крупный следующий этап.
     </blockquote>
   </section>
 
   <!-- Slide 6: User speed -->
   <section class="slide">
-    <div class="slide-num">05 / 08</div>
+    <div class="slide-num">05 / 09</div>
     <h1>Ускорение работы пользователя</h1>
     <p class="subtitle">Как изменился процесс переноса Финмодели</p>
 
@@ -680,13 +738,13 @@
       <div class="compare-box before">
         <div class="label">Было</div>
         <div class="value">от 1 дня</div>
-        <div class="note">8 разных форм в Visary<br>(объект строительства, Организация, Группа компаний, Договор, бюджет, график финансирования, Финмодель, версия модели)<br><br>Переключение между Excel и Visary, ручной ввод, риск опечаток</div>
+        <div class="note">Заполнение вручную разных сущностей в Visary<br>(например, Объект строительства, Бюджет, Финмодель и т.д.)<br><br>Переключение между Excel и Visary, ручной ввод, риск опечаток</div>
       </div>
       <div class="compare-arrow">→</div>
       <div class="compare-box after">
         <div class="label">Стало</div>
         <div class="value">≈ 1 час</div>
-        <div class="note">1–2 файла → 8 разделов создаются автоматически<br><br>Ошибки видны в отчёте с указанием конкретной строки, листа и причины</div>
+        <div class="note">1–2 файла → Все выбранные для реализации разделы создаются или заполняются автоматически<br><br>Ошибки видны в отчёте с указанием конкретной строки, листа и причины</div>
       </div>
     </div>
 
@@ -714,41 +772,30 @@
 
   <!-- Slide 7: Quality side-effect -->
   <section class="slide">
-    <div class="slide-num">06 / 08</div>
-    <h1>Качество как побочный эффект</h1>
-    <p class="subtitle">Что появилось «бесплатно» благодаря ИИ</p>
+    <div class="slide-num">06 / 09</div>
+    <h1>Побочный эффект</h1>
 
     <div class="cards">
       <div class="card">
-        <h3>📚 База знаний по проекту</h3>
-        <p><strong>116 документов</strong>: каждое нестандартное решение зафиксировано. Новый сотрудник вникает в проект <strong>за часы, а не недели</strong>.</p>
-      </div>
-      <div class="card">
-        <h3>✅ Автоматические проверки</h3>
-        <p><strong>200+ автотестов</strong> регулярно проверяют, что ничего не сломалось при доработках. Каждая исправленная ошибка покрыта тестом — старые проблемы <strong>не возвращаются</strong>.</p>
-      </div>
-      <div class="card">
         <h3>💬 Понятные отчёты об ошибках</h3>
-        <p>Пользователь видит, что именно пошло не так, в какой строке и на каком листе, и может <strong>исправить файл и перезагрузить</strong>.</p>
+        <p>Пользователь видит, что именно пошло не так и в какой строке, и может <strong>исправить файл и перезагрузить</strong>.</p>
       </div>
       <div class="card">
         <h3>🔧 Готовность к новым форматам</h3>
-        <p>Поддержка нового варианта оформления листа «План» добавляется <strong>за часы</strong>. Архитектура переиспользуема для следующих типов импорта.</p>
+        <p>Добавление поддержки файла новой структуры занимает <strong>часы, а не недели</strong>.</p>
       </div>
     </div>
 
     <h3 style="margin-top:32px"><span class="icon">▸</span> Эффект для бизнеса</h3>
     <div class="pills">
-      <span class="pill red">Быстрая адаптация новых сотрудников</span>
-      <span class="pill red">Меньше регрессий</span>
-      <span class="pill red">Дешевле поддержка</span>
-      <span class="pill red">Готовность к новым шаблонам</span>
+      <span class="pill red">Поддержка проще</span>
+      <span class="pill red">Готовность к новым требованиям</span>
     </div>
   </section>
 
   <!-- Slide 8: Overhead -->
   <section class="slide">
-    <div class="slide-num">07 / 08</div>
+    <div class="slide-num">07 / 09</div>
     <h1>Накладные расходы</h1>
     <p class="subtitle">Что нужно для работы с ИИ</p>
 
@@ -782,25 +829,112 @@
 
     <div class="insight" style="margin-top: 40px">
       Настройка делается <strong>один раз</strong>, а используется <strong>на каждой следующей задаче</strong>.<br>
-      Финмодель — это импорт, который разрабатывался <strong>параллельно</strong> импорту Квартирограммы, с тем же ускорением.<br>
-      Каждый следующий тип импорта идёт с тем же ускорением — <strong>без дополнительной настройки</strong>.
+      Финмодель — это импорт, который разрабатывается <strong>параллельно</strong> импорту Квартирограммы.<br>
+      Поэтому в проекте заложена единая база методов, которую можно переиспользовать для работы новых импортов.
     </div>
   </section>
 
-  <!-- Slide 9: Summary -->
+
+  <!-- Slide 9: Stages roadmap -->
   <section class="slide">
-    <div class="slide-num">08 / 08</div>
+    <div class="slide-num">08 / 09</div>
+    <h1>Стадии и статус</h1>
+    <p class="subtitle">Что пройдено, что в работе, что впереди</p>
+
+    <div class="legend">
+      <span class="done"><span class="dot-color"></span>пройдено</span>
+      <span class="partial"><span class="dot-color"></span>сделано не полностью</span>
+      <span class="todo"><span class="dot-color"></span>не сделано</span>
+    </div>
+
+    <div class="roadmap">
+      <div class="stage-card done">
+        <div class="stage-head">
+          <div class="stage-title">1. Аналитика</div>
+          <span class="stage-status">Пройдено</span>
+        </div>
+        <div class="stage-block">
+          <div class="block-label">Что получили</div>
+          FSD, flow процесса, прототипы, тест-кейсы
+        </div>
+      </div>
+
+      <div class="stage-card done">
+        <div class="stage-head">
+          <div class="stage-title">2. Разработка</div>
+          <span class="stage-status">Пройдено</span>
+        </div>
+        <div class="stage-block">
+          <div class="block-label">Что получили</div>
+          Технологический стек, верхнеуровневая архитектура, сервис (фронтенд, бэкенд, база данных), ревью кода через ИИ
+        </div>
+      </div>
+
+      <div class="stage-card partial">
+        <div class="stage-head">
+          <div class="stage-title">3. Тестирование</div>
+          <span class="stage-status">Частично</span>
+        </div>
+        <div class="stage-block">
+          <div class="block-label">Что получили</div>
+          Функциональное тестирование на тестовых файлах
+        </div>
+        <div class="stage-block debt">
+          <div class="block-label">Техдолг</div>
+          Нагрузочное и интеграционное тестирование
+        </div>
+      </div>
+
+      <div class="stage-card todo">
+        <div class="stage-head">
+          <div class="stage-title">4. Внедрение</div>
+          <span class="stage-status">Не сделано</span>
+        </div>
+        <div class="stage-block">
+          <div class="block-label">Что получим</div>
+          Отчёты из AppSec, устранение уязвимостей, сборка через А-Платформу
+        </div>
+        <div class="stage-block debt">
+          <div class="block-label">Техдолг</div>
+          Полное соответствие банковским требованиям к процессу выпуска
+        </div>
+      </div>
+
+      <div class="stage-card todo">
+        <div class="stage-head">
+          <div class="stage-title">5. Техдолг</div>
+          <span class="stage-status">Не сделано</span>
+        </div>
+        <div class="stage-block">
+          <div class="block-label">Текущий уровень</div>
+          MVP-сервис: <strong>≈ 50%</strong> соответствия требованиям банковской разработки
+        </div>
+        <div class="stage-block debt">
+          <div class="block-label">Цель</div>
+          Довести до <strong>100%</strong> с учётом допустимых отклонений
+        </div>
+      </div>
+    </div>
+
+    <div class="insight">
+      <strong>Мы в финальной стадии разработки.</strong> Ключевые сценарии реализованы, идёт стабилизация на реальных файлах.<br>
+    </div>
+  </section>
+
+    <!-- Slide 10: Summary -->
+  <section class="slide">
+    <div class="slide-num">09 / 09</div>
     <h1>Итоги</h1>
-    <p class="subtitle">Что получил бизнес</p>
+    <p class="subtitle">Что получит бизнес</p>
 
     <div class="kpi-grid">
       <div class="kpi">
-        <div class="num">↓ 11×</div>
-        <div class="lbl">Срок разработки<br>(80 → 7 дней)</div>
+        <div class="num">↓ ≈ 6×</div>
+        <div class="lbl">Срок разработки<br>(80 → 14 дней)</div>
       </div>
       <div class="kpi">
-        <div class="num">↓ 30×</div>
-        <div class="lbl">Время тестирования<br>(30 → 1 день)</div>
+        <div class="num">↓ 15×</div>
+        <div class="lbl">Время тестирования<br>(30 → 2 дня)</div>
       </div>
       <div class="kpi">
         <div class="num">↑ 8×</div>
@@ -822,15 +956,6 @@
       ИИ берёт на себя <strong>рутину</strong>: пишет рядовой код, проверяет десятки сценариев, документирует.
     </div>
 
-    <h3><span class="icon">▸</span> Окупаемость</h3>
-    <p style="font-size: 19px; line-height: 1.6">
-      Стоимость настройки инструмента — <strong>разовая</strong>. Эффект — <strong>на каждой следующей задаче</strong>.<br>
-      По Финмодели сэкономлено <strong>≈ 73 рабочих дня разработчика</strong> — это бюджет следующего крупного этапа.
-    </p>
-
-    <blockquote style="margin-top: 24px">
-      ⚠️ <strong>Важно:</strong> сервис находится в <strong>финальной стадии</strong> разработки. Все ключевые сценарии реализованы, идёт стабилизация на реальных файлах.
-    </blockquote>
   </section>
 
 </div>

@@ -61,6 +61,12 @@
 
 #### R1. JWT Visary в Vite-bundle (frontend)
 
+> ℹ️ **AppSec audit v1 (2026-06-04, [doc 121](./121-security-fixes-appsec-v1.md))**: связанные
+> хардкоженные dev-credentials БД (`visary_pwd` в `appsettings.json:12`, `docker-compose.yml:50,82`)
+> вынесены в `.env` с **deny-by-default** (`${VAR:?error}`); 35 `unsafe-formatstring` во frontend
+> закрыты `devLog`-wrapper'ом с `import.meta.env.DEV`-guard — снижает information disclosure в
+> prod-bundle (бонусом к R1 — token-в-bundle остаётся открытым вопросом).
+
 `.env` содержит `VITE_VISARY_API_TOKEN`. **Vite встраивает `VITE_*` переменные в
 production bundle на этапе `npm run build`** — токен становится доступен любому,
 кто откроет DevTools или скачает bundle.
@@ -84,6 +90,13 @@ DevTools содержит **полные request headers**, включая `Auth
   публичный, но всё равно).
 
 #### R3. `/api/visary/*` proxy controllers (backend) — SSRF surface
+
+> ℹ️ **AppSec audit v1 (2026-06-04, [doc 121](./121-security-fixes-appsec-v1.md))**: 6 SSRF-предупреждений
+> сканера во **frontend** (`importsService.ts`, `sitesSync.ts`, `visaryApi.ts`) закрыты структурно через
+> литерал-prefix helper `src/services/apiUrl.ts` — сканер видит фиксированный prefix вместо динамической
+> конкатенации. Это **не закрывает backend-сторону этой риск-зоны** — реальный SSRF живёт именно в
+> описанной ниже backend-прокси, которая собирает исходящий URL к Visary из path'а с UI. По решению
+> заказчика — отдельная партия аудита **при необходимости**.
 
 [55-visary-proxy-controllers.md](./55-visary-proxy-controllers.md): registry-паттерн
 с 8 справочниками + 11 explicit actions. **Любой неконтролируемый user-input в URL

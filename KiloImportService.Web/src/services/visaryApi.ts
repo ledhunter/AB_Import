@@ -6,6 +6,9 @@
  * - На 401 кидает `VisaryAuthError` — UI показывает сообщение «Токен истёк, обнови .env.local».
  */
 
+import { apiUrl } from './apiUrl';
+import { devError, devGroupCollapsed, devGroupEnd, devInfo, devWarn } from './devLog';
+
 /**
  * Ленивое чтение токена — позволяет тестам импортировать модуль вне Vite.
  */
@@ -51,6 +54,17 @@ function maskToken(token: string): string {
   return `${token.slice(0, 12)}...${token.slice(-8)} (len=${token.length})`;
 }
 
+function buildUrl(path: string, queryParams?: Record<string, string | number>): string {
+  const base = apiUrl.visary(path);
+  if (!queryParams) return base;
+  const params = new URLSearchParams();
+  Object.entries(queryParams).forEach(([key, value]) => {
+    params.append(key, String(value));
+  });
+  const qs = params.toString();
+  return qs ? `${base}?${qs}` : base;
+}
+
 /**
  * Базовый POST-запрос к Visary API.
  * @param path — путь относительно `/api/visary` (например, `/listview/constructionproject`)
@@ -64,6 +78,7 @@ export async function visaryPost<TResponse>(
 ): Promise<TResponse> {
   const token = getToken();
   if (!token) {
+    // Намеренно не через devError: разработческая ошибка конфига — её нужно видеть и в prod-preview.
     console.error('[VisaryAPI] ❌ VITE_VISARY_API_TOKEN не задан');
     throw new VisaryApiError(
       'VITE_VISARY_API_TOKEN не задан. Создай .env.local на основе .env.example.',
@@ -71,24 +86,15 @@ export async function visaryPost<TResponse>(
     );
   }
 
-  let url = `/api/visary${path}`;
-  
-  // Добавляем query parameters если есть
-  if (options.queryParams) {
-    const params = new URLSearchParams();
-    Object.entries(options.queryParams).forEach(([key, value]) => {
-      params.append(key, String(value));
-    });
-    url += `?${params.toString()}`;
-  }
-  
+  const url = buildUrl(path, options.queryParams);
+
   const requestId = Math.random().toString(36).slice(2, 8);
   const startedAt = performance.now();
 
-  console.groupCollapsed(`[VisaryAPI] → POST ${url}  #${requestId}`);
-  console.info('  token:', maskToken(token));
-  console.info('  request body:', body);
-  console.groupEnd();
+  devGroupCollapsed(`[VisaryAPI] → POST ${url}  #${requestId}`);
+  devInfo('  token:', maskToken(token));
+  devInfo('  request body:', body);
+  devGroupEnd();
 
   let response: Response;
   try {
@@ -103,11 +109,11 @@ export async function visaryPost<TResponse>(
     });
   } catch (err) {
     if (err instanceof Error && err.name === 'AbortError') {
-      console.warn(`[VisaryAPI] ⊘ #${requestId} aborted`);
+      devWarn(`[VisaryAPI] ⊘ #${requestId} aborted`);
       throw err;
     }
     const ms = Math.round(performance.now() - startedAt);
-    console.error(`[VisaryAPI] ✗ NETWORK ERROR ${url} #${requestId} (${ms}ms)`, err);
+    devError(`[VisaryAPI] ✗ NETWORK ERROR ${url} #${requestId} (${ms}ms)`, err);
     throw new VisaryApiError(
       `Сетевая ошибка при запросе ${url}: ${err instanceof Error ? err.message : String(err)}`,
       0,
@@ -118,7 +124,7 @@ export async function visaryPost<TResponse>(
 
   if (response.status === 401 || response.status === 403) {
     const errBody = await safeReadBody(response);
-    console.error(
+    devError(
       `[VisaryAPI] ✗ ${response.status} ${response.statusText} ${url} #${requestId} (${ms}ms)`,
       errBody,
     );
@@ -127,7 +133,7 @@ export async function visaryPost<TResponse>(
 
   if (!response.ok) {
     const errBody = await safeReadBody(response);
-    console.error(
+    devError(
       `[VisaryAPI] ✗ ${response.status} ${response.statusText} ${url} #${requestId} (${ms}ms)`,
       errBody,
     );
@@ -139,11 +145,11 @@ export async function visaryPost<TResponse>(
   }
 
   const data = (await response.json()) as TResponse;
-  console.groupCollapsed(
+  devGroupCollapsed(
     `[VisaryAPI] ← ${response.status} ${url} #${requestId} (${ms}ms)`,
   );
-  console.info('  response:', data);
-  console.groupEnd();
+  devInfo('  response:', data);
+  devGroupEnd();
   return data;
 }
 
@@ -165,20 +171,12 @@ export async function visaryGet<TResponse>(
     );
   }
 
-  let url = `/api/visary${path}`;
-  
-  if (options.queryParams) {
-    const params = new URLSearchParams();
-    Object.entries(options.queryParams).forEach(([key, value]) => {
-      params.append(key, String(value));
-    });
-    url += `?${params.toString()}`;
-  }
-  
+  const url = buildUrl(path, options.queryParams);
+
   const requestId = Math.random().toString(36).slice(2, 8);
   const startedAt = performance.now();
 
-  console.info(`[VisaryAPI] → GET ${url}  #${requestId}`);
+  devInfo(`[VisaryAPI] → GET ${url}  #${requestId}`);
 
   let response: Response;
   try {
@@ -191,11 +189,11 @@ export async function visaryGet<TResponse>(
     });
   } catch (err) {
     if (err instanceof Error && err.name === 'AbortError') {
-      console.warn(`[VisaryAPI] ⊘ #${requestId} aborted`);
+      devWarn(`[VisaryAPI] ⊘ #${requestId} aborted`);
       throw err;
     }
     const ms = Math.round(performance.now() - startedAt);
-    console.error(`[VisaryAPI] ✗ NETWORK ERROR ${url} #${requestId} (${ms}ms)`, err);
+    devError(`[VisaryAPI] ✗ NETWORK ERROR ${url} #${requestId} (${ms}ms)`, err);
     throw new VisaryApiError(
       `Сетевая ошибка при запросе ${url}: ${err instanceof Error ? err.message : String(err)}`,
       0,
@@ -206,7 +204,7 @@ export async function visaryGet<TResponse>(
 
   if (response.status === 401 || response.status === 403) {
     const errBody = await safeReadBody(response);
-    console.error(
+    devError(
       `[VisaryAPI] ✗ ${response.status} ${response.statusText} ${url} #${requestId} (${ms}ms)`,
       errBody,
     );
@@ -215,7 +213,7 @@ export async function visaryGet<TResponse>(
 
   if (!response.ok) {
     const errBody = await safeReadBody(response);
-    console.error(
+    devError(
       `[VisaryAPI] ✗ ${response.status} ${response.statusText} ${url} #${requestId} (${ms}ms)`,
       errBody,
     );
@@ -227,7 +225,7 @@ export async function visaryGet<TResponse>(
   }
 
   const data = (await response.json()) as TResponse;
-  console.info(`[VisaryAPI] ← ${response.status} ${url} #${requestId} (${ms}ms)`);
+  devInfo(`[VisaryAPI] ← ${response.status} ${url} #${requestId} (${ms}ms)`);
   return data;
 }
 
@@ -251,23 +249,15 @@ export async function visaryPatch<TResponse>(
     );
   }
 
-  let url = `/api/visary${path}`;
-  
-  if (options.queryParams) {
-    const params = new URLSearchParams();
-    Object.entries(options.queryParams).forEach(([key, value]) => {
-      params.append(key, String(value));
-    });
-    url += `?${params.toString()}`;
-  }
-  
+  const url = buildUrl(path, options.queryParams);
+
   const requestId = Math.random().toString(36).slice(2, 8);
   const startedAt = performance.now();
 
-  console.groupCollapsed(`[VisaryAPI] → PATCH ${url}  #${requestId}`);
-  console.info('  token:', maskToken(token));
-  console.info('  request body:', body);
-  console.groupEnd();
+  devGroupCollapsed(`[VisaryAPI] → PATCH ${url}  #${requestId}`);
+  devInfo('  token:', maskToken(token));
+  devInfo('  request body:', body);
+  devGroupEnd();
 
   let response: Response;
   try {
@@ -282,11 +272,11 @@ export async function visaryPatch<TResponse>(
     });
   } catch (err) {
     if (err instanceof Error && err.name === 'AbortError') {
-      console.warn(`[VisaryAPI] ⊘ #${requestId} aborted`);
+      devWarn(`[VisaryAPI] ⊘ #${requestId} aborted`);
       throw err;
     }
     const ms = Math.round(performance.now() - startedAt);
-    console.error(`[VisaryAPI] ✗ NETWORK ERROR ${url} #${requestId} (${ms}ms)`, err);
+    devError(`[VisaryAPI] ✗ NETWORK ERROR ${url} #${requestId} (${ms}ms)`, err);
     throw new VisaryApiError(
       `Сетевая ошибка при запросе ${url}: ${err instanceof Error ? err.message : String(err)}`,
       0,
@@ -297,7 +287,7 @@ export async function visaryPatch<TResponse>(
 
   if (response.status === 401 || response.status === 403) {
     const errBody = await safeReadBody(response);
-    console.error(
+    devError(
       `[VisaryAPI] ✗ ${response.status} ${response.statusText} ${url} #${requestId} (${ms}ms)`,
       errBody,
     );
@@ -306,7 +296,7 @@ export async function visaryPatch<TResponse>(
 
   if (!response.ok) {
     const errBody = await safeReadBody(response);
-    console.error(
+    devError(
       `[VisaryAPI] ✗ ${response.status} ${response.statusText} ${url} #${requestId} (${ms}ms)`,
       errBody,
     );
@@ -318,11 +308,11 @@ export async function visaryPatch<TResponse>(
   }
 
   const data = (await response.json()) as TResponse;
-  console.groupCollapsed(
+  devGroupCollapsed(
     `[VisaryAPI] ← ${response.status} ${url} #${requestId} (${ms}ms)`,
   );
-  console.info('  response:', data);
-  console.groupEnd();
+  devInfo('  response:', data);
+  devGroupEnd();
   return data;
 }
 
