@@ -206,21 +206,23 @@ public interface IListViewClient
         int versionId, CancellationToken ct = default);
 
     /// <summary>
-    /// Точечный поиск записи справочника «Код фин. модели» (<c>fmcode</c>) по Title.
-    /// POST <c>/api/visary/listview/fmcode</c>. Используется FinModel-импортом для
-    /// резолва <c>Title → ID</c> при подстановке в <see cref="InputDataCreateRequest.Code"/>.
+    /// Точечный поиск записи справочника «Код фин. модели» (<c>fmcode</c>) по
+    /// строковому полю <c>Code</c> (например «010», «020», «030», «040»).
+    /// POST <c>/api/visary/listview/fmcode</c>. Используется FinModel-импортом
+    /// для резолва <c>Code → ID</c> при подстановке в <see cref="InputDataCreateRequest.Code"/>.
     /// <para/>
     /// ⚠️ Контракт <c>listview/fmcode</c> отличается от обычного `ListDictionaryAsync`:
     ///   • <c>Filter</c> — JSON-string (как у <c>fmmodel</c>);
     ///   • <c>Sorts</c> — конкретный JSON-string с сортировкой по <c>Code</c> (НЕ
     ///     <c>SortsNullSentinel="null"</c>);
     ///   • полный набор из 14 колонок (по HAR заказчика).
-    /// Возвращает <see cref="ListViewResponse{T}"/> с 0 или 1 записью (Title в Visary —
-    /// уникальный ключ). Для bulk-резолва — n точечных запросов (типичный случай:
-    /// 3–4 категории InputData). См. doc_project/112-finmodel-version-and-inputdata.md.
+    /// Возвращает <see cref="ListViewResponse{T}"/> с 0 или 1 записью (<c>Code</c>
+    /// в справочнике уникален). Title справочника начинается с самого Code'а
+    /// («010 Продажа квартиры (план)») — раньше искали по Title и не находили,
+    /// см. doc_project/112-finmodel-version-and-inputdata.md v1.6.
     /// </summary>
-    Task<ListViewResponse<FmCodeRaw>> FindFmCodeByTitleAsync(
-        string title, CancellationToken ct = default);
+    Task<ListViewResponse<FmCodeRaw>> FindFmCodeByCodeAsync(
+        string code, CancellationToken ct = default);
 
     // ─── Справочники (list для резолвинга «название → ID») ──────────────────
     // Используются мапперами импорта: тянем справочник один раз на сессию,
@@ -1134,30 +1136,32 @@ public sealed class ListViewClient : VisaryHttpBase<ListViewClient>, IListViewCl
             ct);
     }
 
-    public Task<ListViewResponse<FmCodeRaw>> FindFmCodeByTitleAsync(
-        string title, CancellationToken ct)
+    public Task<ListViewResponse<FmCodeRaw>> FindFmCodeByCodeAsync(
+        string code, CancellationToken ct)
     {
         // Контракт listview/fmcode по HAR заказчика:
         //   Filter — JSON-string (как у fmmodel), Sorts — JSON-string с сортировкой
         //   по Code, 14 колонок. SortsNullSentinel="null" сервер бьёт 400.
+        // Фильтр по полю Code: Title справочника начинается с самого Code'а,
+        // поэтому строгий `["Title","=",X]` не матчился (doc 112 v1.6).
         var body = new
         {
             Mnemonic = VisaryMnemonics.FmCode,
             PageSkip = 0,
             PageSize = 50,
             Columns = FmCodeColumns,
-            Filter = JsonSerializer.Serialize(new object[] { "Title", "=", title }),
+            Filter = JsonSerializer.Serialize(new object[] { "Code", "=", code }),
             SearchPhrase = (string?)null,
             Sorts = FmCodeSortsByCodeAsc,
             Hidden = false,
             Summaries = Array.Empty<object>(),
         };
-        _log.LogDebug("Visary → POST listview/{Mnemonic} title='{Title}'",
-            VisaryMnemonics.FmCode, title);
+        _log.LogDebug("Visary → POST listview/{Mnemonic} code='{Code}'",
+            VisaryMnemonics.FmCode, code);
         return PostListViewAsync<FmCodeRaw>(
             $"{BaseUrl}/api/visary/listview/{VisaryMnemonics.FmCode}",
             body,
-            $"{VisaryMnemonics.FmCode} title='{title}'",
+            $"{VisaryMnemonics.FmCode} code='{code}'",
             ct);
     }
 

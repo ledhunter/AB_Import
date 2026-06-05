@@ -24,15 +24,15 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_DB: import_service_db
-      POSTGRES_USER: import_service
-      POSTGRES_PASSWORD: import_service_pwd
+      POSTGRES_USER: ${IMPORT_SERVICE_DB_USER:?IMPORT_SERVICE_DB_USER не задан — скопируй .env.example → .env (см. doc_project/121)}
+      POSTGRES_PASSWORD: ${IMPORT_SERVICE_DB_PASSWORD:?IMPORT_SERVICE_DB_PASSWORD не задан — скопируй .env.example → .env}
       PGDATA: /var/lib/postgresql/data/pgdata
     ports:
       - "5433:5432"
     volumes:
       - pg-service-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U import_service -d import_service_db"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d import_service_db"]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -46,8 +46,8 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_DB: visary_webapi_db
-      POSTGRES_USER: visary
-      POSTGRES_PASSWORD: visary_pwd
+      POSTGRES_USER: ${VISARY_DB_USER:?VISARY_DB_USER не задан — скопируй .env.example → .env (см. doc_project/121)}
+      POSTGRES_PASSWORD: ${VISARY_DB_PASSWORD:?VISARY_DB_PASSWORD не задан — скопируй .env.example → .env}
       PGDATA: /var/lib/postgresql/data/pgdata
     ports:
       - "5434:5432"
@@ -59,7 +59,7 @@ services:
       #   03-seed-data.sql    — справочники (User, RoomKind, тестовый проект)
       - ./db/visary/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U visary -d visary_webapi_db"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d visary_webapi_db"]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -76,10 +76,10 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:5000
-      # Service DB (под управлением EF Core миграций)
-      ConnectionStrings__ServiceDb: "Host=postgres-service;Port=5432;Database=import_service_db;Username=import_service;Password=import_service_pwd"
+      # Service DB (под управлением EF Core миграций) — учётка из корневого .env (см. doc_project/121)
+      ConnectionStrings__ServiceDb: "Host=postgres-service;Port=5432;Database=import_service_db;Username=${IMPORT_SERVICE_DB_USER};Password=${IMPORT_SERVICE_DB_PASSWORD}"
       # Visary DB (целевая, DB-first — без миграций)
-      ConnectionStrings__VisaryDb: "Host=postgres-visary;Port=5432;Database=visary_webapi_db;Username=visary;Password=visary_pwd"
+      ConnectionStrings__VisaryDb: "Host=postgres-visary;Port=5432;Database=visary_webapi_db;Username=${VISARY_DB_USER};Password=${VISARY_DB_PASSWORD}"
       # Файлы импорта внутри контейнера
       ImportStorage__Path: /var/lib/import-files
       # CORS для UI

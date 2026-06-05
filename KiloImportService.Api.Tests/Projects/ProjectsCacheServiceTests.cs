@@ -349,8 +349,8 @@ public class ProjectsCacheServiceTests
             int versionId, CancellationToken ct)
             => throw new NotImplementedException();
 
-        public Task<ListViewResponse<FmCodeRaw>> FindFmCodeByTitleAsync(
-            string title, CancellationToken ct)
+        public Task<ListViewResponse<FmCodeRaw>> FindFmCodeByCodeAsync(
+            string code, CancellationToken ct)
             => throw new NotImplementedException();
 
         public Task<ListViewResponse<TownRaw>>                ListTownsAsync(string? titleFilter, CancellationToken ct) => throw new NotImplementedException();

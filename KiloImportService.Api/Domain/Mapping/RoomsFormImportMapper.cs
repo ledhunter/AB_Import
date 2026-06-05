@@ -450,20 +450,15 @@ public sealed class RoomsFormImportMapper : IImportMapper
             }
 
             // ── Поля поиска Room ────────────────────────────────────────────
-            // Из значения извлекаем только цифры: «п1» → «1», «12А» → «12».
-            // Если в файле остался текст вокруг числа, фиксируем в логе.
+            // Принимаем номер помещения как есть (включая текст и любые символы):
+            // «п1», «12А», «ПХ-15», «Кладовка-А» сохраняются без нормализации.
+            // См. doc 118 — заказчик использует не-числовые обозначения для нежилых.
             var roomNumberRaw = ReadString(row, RoomNumberAliases);
-            var roomNumber = ExtractDigitsOnly(roomNumberRaw);
+            var roomNumber = roomNumberRaw?.Trim() ?? string.Empty;
             if (string.IsNullOrWhiteSpace(roomNumber))
             {
                 rowErrors.Add(new RowError(string.Join(" / ", RoomNumberAliases), "required_missing",
                     "Не указан номер помещения."));
-            }
-            else if (!string.Equals(roomNumberRaw, roomNumber, StringComparison.Ordinal))
-            {
-                _log.LogDebug(
-                    "RoomsForm.Validate: row {Row} — номер помещения '{Raw}' нормализован в '{Numeric}' (удалены не-цифры).",
-                    row.SourceRowNumber, roomNumberRaw, roomNumber);
             }
 
             // ── Вид помещения: row.Cells["Тип/Название/Вид"] (приоритет) или sheet name (fallback)
@@ -1018,6 +1013,11 @@ public sealed class RoomsFormImportMapper : IImportMapper
                         var saNumberTrim = saNumber.Trim();
                         ShareAgreementRaw? saMatch = null;
                         bool matchedInRoom = false;
+                        // doc 119: ДДУ с таким же бизнес-ключом, но УЖЕ привязан к
+                        // другому помещению (Room.ID > 0 && != roomId). Не «угоняем»
+                        // его — создаём новый ДДУ для текущего помещения и логируем
+                        // что отверженный кандидат существовал.
+                        ShareAgreementRaw? saRejectedOwnedByOtherRoom = null;
 
                         try
                         {
@@ -1034,13 +1034,33 @@ public sealed class RoomsFormImportMapper : IImportMapper
                                 saList = byRoom.Data.ToList();
                                 saByRoomCache[roomId.Value] = saList;
                             }
-                            saMatch = saList
+                            // doc 120: симметричный safeguard. `onetomany/Room?associationId={roomId}`
+                            // по контракту должно возвращать только ДДУ, привязанные к roomId, но
+                            // в проде встречались случаи, когда Visary отдавал в этом списке ДДУ,
+                            // фактически принадлежащий другому помещению (Room.ID > 0 && != roomId).
+                            // Без фильтра по Room.ID он попадал в matched-in-room ветку и PATCH-ил
+                            // его на наш roomId — то самое «угоняние», от которого защищает doc 119
+                            // в strict/loose. Здесь — то же правило.
+                            var byRoomCandidates = saList
                                 .Where(a => string.Equals(
                                     (a.Number ?? string.Empty).Trim(), saNumberTrim,
                                     StringComparison.OrdinalIgnoreCase))
+                                .ToList();
+                            saMatch = byRoomCandidates
+                                .Where(a => a.Room is null
+                                            || a.Room.ID <= 0
+                                            || a.Room.ID == roomId.Value)
                                 .OrderByDescending(a => a.ID)
                                 .FirstOrDefault();
                             if (saMatch is not null) matchedInRoom = true;
+                            else
+                            {
+                                saRejectedOwnedByOtherRoom = byRoomCandidates
+                                    .Where(a => a.Room is not null
+                                                && a.Room.ID > 0
+                                                && a.Room.ID != roomId.Value)
+                                    .FirstOrDefault();
+                            }
                         }
                         catch (Exception roomFindEx)
                         {
@@ -1065,13 +1085,35 @@ public sealed class RoomsFormImportMapper : IImportMapper
                                     projectNumber:     projectNumberForSa,
                                     gct);
 
-                                saMatch = foundStrict.Data
+                                var strictCandidates = foundStrict.Data
                                     .Where(a => string.Equals(
                                         (a.Number ?? string.Empty).Trim(), saNumberTrim,
                                         StringComparison.OrdinalIgnoreCase))
                                     .Where(a => kindId is null || a.RoomKindRef?.ID == kindId)
                                     .OrderByDescending(a => a.ID)
+                                    .ToList();
+
+                                // doc 119: принимаем только orphan-ДДУ (Room null/<=0)
+                                // или уже привязанные к нашему roomId. Кандидата,
+                                // принадлежащего другому помещению, не «угоняем» —
+                                // запоминаем для лога и идём в CREATE-ветку.
+                                saMatch = strictCandidates
+                                    .Where(a => a.Room is null
+                                                || a.Room.ID <= 0
+                                                || a.Room.ID == roomId.Value)
                                     .FirstOrDefault();
+
+                                if (saMatch is null && saRejectedOwnedByOtherRoom is null)
+                                {
+                                    // doc 120: не перезаписываем «отвергнутого» из
+                                    // matched-in-room ветки — он сохраняет ID реального
+                                    // владельца ДДУ для журнала.
+                                    saRejectedOwnedByOtherRoom = strictCandidates
+                                        .Where(a => a.Room is not null
+                                                    && a.Room.ID > 0
+                                                    && a.Room.ID != roomId.Value)
+                                        .FirstOrDefault();
+                                }
 
                                 // Шаг Б — loose-поиск без Stage/Project (doc 76 v1.1).
                                 // Orphan-ДДУ (вручную или системно отвязанные от Room/Project/Stage)
@@ -1114,9 +1156,21 @@ public sealed class RoomsFormImportMapper : IImportMapper
                                     }
 
                                     saMatch = candidates
-                                        .Where(a => a.Room is null || a.Room.ID <= 0)
+                                        .Where(a => a.Room is null
+                                                    || a.Room.ID <= 0
+                                                    || a.Room.ID == roomId.Value)
                                         .OrderByDescending(a => a.ID)
                                         .FirstOrDefault();
+
+                                    // doc 119: запоминаем «не наш» для лога CREATE-ветки.
+                                    if (saMatch is null && saRejectedOwnedByOtherRoom is null)
+                                    {
+                                        saRejectedOwnedByOtherRoom = candidates
+                                            .Where(a => a.Room is not null
+                                                        && a.Room.ID > 0
+                                                        && a.Room.ID != roomId.Value)
+                                            .FirstOrDefault();
+                                    }
                                 }
                             }
                             catch (Exception findEx)
@@ -1124,6 +1178,46 @@ public sealed class RoomsFormImportMapper : IImportMapper
                                 _log.LogWarning(findEx,
                                     "RoomsForm.Apply: глобальный поиск ДДУ '{Number}' не удался: {Msg} — будет создан новый.",
                                     saNumber, findEx.Message);
+                            }
+                        }
+
+                        // doc 120: финальная защита от «угона». Источник правды о привязке
+                        // ДДУ — `GET /crud/shareagreement/{id}` (ShareAgreementFull.Room).
+                        // Listview-ответ (`shareagreement` / `shareagreementall`) в проде
+                        // встречался с `Room=null`/`{ID:0}` для ДДУ, который на самом деле
+                        // уже привязан к другому помещению. orphan-фильтр в strict/loose
+                        // в этом случае ошибочно принимал «orphan» — и мы PATCH-или его
+                        // на наш roomId. CRUD GET даёт авторитативный Room, проверяем.
+                        // matched-in-room не верифицируем: связь там уже подтверждена
+                        // запросом по associationId={roomId}.
+                        if (saMatch is not null && !matchedInRoom)
+                        {
+                            var saMatchToVerify = saMatch;
+                            try
+                            {
+                                var saFull = await _crud.GetShareAgreementByIdAsync(saMatchToVerify.ID, gct);
+                                if (saFull?.Room is not null
+                                    && saFull.Room.ID > 0
+                                    && saFull.Room.ID != roomId.Value)
+                                {
+                                    _log.LogWarning(
+                                        "RoomsForm.Apply: ДДУ id={SaId} number='{Num}' в listview шёл как orphan (Room null/0), " +
+                                        "CRUD GET показывает Room.ID={OtherRoom} — отвергаем reuse, создаём новый для roomId={NewRoom}.",
+                                        saMatch.ID, saNumber, saFull.Room.ID, roomId.Value);
+                                    saRejectedOwnedByOtherRoom ??= new ShareAgreementRaw
+                                    {
+                                        ID     = saFull.ID,
+                                        Number = saFull.Number,
+                                        Room   = saFull.Room,
+                                    };
+                                    saMatch = null;
+                                }
+                            }
+                            catch (Exception verifyEx)
+                            {
+                                _log.LogWarning(verifyEx,
+                                    "RoomsForm.Apply: CRUD-верификация ДДУ id={SaId} не удалась: {Msg} — продолжаем по listview-данным.",
+                                    saMatchToVerify.ID, verifyEx.Message);
                             }
                         }
 
@@ -1159,7 +1253,22 @@ public sealed class RoomsFormImportMapper : IImportMapper
                                 DeveloperPIN      = string.IsNullOrWhiteSpace(saExtraDeveloperPin) ? null : saExtraDeveloperPin,
                             }, gct);
                             saId = saCreated.ID;
-                            Log(sheetForRow, mr.SourceRowNumber, $"ДДУ создан (№{saNumber})");
+                            if (saRejectedOwnedByOtherRoom is not null)
+                            {
+                                // doc 119: явно проговариваем в журнале, что глобально
+                                // найден ДДУ с тем же номером, но он уже привязан к
+                                // другому помещению — мы его не трогаем, а создаём новый.
+                                _log.LogInformation(
+                                    "RoomsForm.Apply: ДДУ '{Number}' уже привязан к Room.ID={OtherRoom} (saId={OtherSa}) — создан новый saId={NewSa} для roomId={NewRoom}",
+                                    saNumber, saRejectedOwnedByOtherRoom.Room?.ID, saRejectedOwnedByOtherRoom.ID,
+                                    saCreated.ID, roomId.Value);
+                                Log(sheetForRow, mr.SourceRowNumber,
+                                    $"ДДУ создан (№{saNumber}); существующий ДДУ id={saRejectedOwnedByOtherRoom.ID} оставлен у Room.ID={saRejectedOwnedByOtherRoom.Room?.ID}");
+                            }
+                            else
+                            {
+                                Log(sheetForRow, mr.SourceRowNumber, $"ДДУ создан (№{saNumber})");
+                            }
                         }
                         else
                         {
@@ -1169,10 +1278,13 @@ public sealed class RoomsFormImportMapper : IImportMapper
                                 Log(sheetForRow, mr.SourceRowNumber, $"ДДУ найден в помещении (не создан, №{saNumber})");
                             else if (isOrphan)
                             {
+                                // doc 119: сюда теперь попадают только orphan'ы
+                                // (Room null/<=0) — после фильтра в strict/loose
+                                // ДДУ другого помещения как saMatch не приходит.
                                 _log.LogInformation(
-                                    "RoomsForm.Apply: найден орфанный/несоответствующий ДДУ id={SaId} number='{Num}' (Room={ExistingRoom}) — привязываем к roomId={NewRoom}",
+                                    "RoomsForm.Apply: orphan-ДДУ id={SaId} number='{Num}' (Room={ExistingRoom}) — привязываем к roomId={NewRoom}",
                                     saMatch.ID, saNumber, saMatch.Room?.ID, roomId.Value);
-                                Log(sheetForRow, mr.SourceRowNumber, $"ДДУ найден глобально (привязан к новому помещению, №{saNumber})");
+                                Log(sheetForRow, mr.SourceRowNumber, $"ДДУ найден глобально как orphan (привязан к помещению, №{saNumber})");
                             }
                             else
                                 Log(sheetForRow, mr.SourceRowNumber, $"ДДУ найден (не создан, №{saNumber})");
@@ -1870,14 +1982,6 @@ public sealed class RoomsFormImportMapper : IImportMapper
 
         error = $"'{s}' не является валидной датой (поддерживаются Excel-serial и форматы dd.MM.yyyy / yyyy-MM-dd / dd/MM/yyyy / MM/dd/yyyy, опционально с HH:mm:ss).";
         return null;
-    }
-
-    /// <summary>«п1» → «1»; «12А» → «12»; «кв. 7» → «7»; «—» → <c>""</c>.
-    /// Игнорирует все символы кроме цифр (включая точки/запятые).</summary>
-    private static string ExtractDigitsOnly(string? raw)
-    {
-        if (string.IsNullOrWhiteSpace(raw)) return string.Empty;
-        return new string(raw.Where(char.IsDigit).ToArray());
     }
 
     /// <summary>«Лит 1.1» → «1.1»; «корп 2» → «2»; «3.А» → «3»; «лит. 1» → «1»;

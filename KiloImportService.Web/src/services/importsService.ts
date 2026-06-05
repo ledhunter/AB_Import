@@ -16,7 +16,9 @@ import type {
   ApiImportTypesResponse,
   ApiUploadResult,
 } from '../types/api';
+import { apiUrl } from './apiUrl';
 import { getAccessToken } from './auth';
+import { devError, devGroupCollapsed, devGroupEnd, devInfo, devLog, devWarn } from './devLog';
 
 // ─────────────────── Errors ───────────────────
 
@@ -66,11 +68,11 @@ async function fetchJson<T>(
 ): Promise<T> {
   const id = nextRequestId();
   const method = init.method ?? 'GET';
-  console.groupCollapsed(`${LOG_TAG} → ${method} ${path}  #${id}`);
+  devGroupCollapsed(`${LOG_TAG} → ${method} ${path}  #${id}`);
   if (init.body && typeof init.body === 'string') {
-    console.log('request body:', init.body);
+    devLog('request body:', init.body);
   }
-  console.groupEnd();
+  devGroupEnd();
 
   const start =
     typeof performance !== 'undefined' && typeof performance.now === 'function'
@@ -82,11 +84,11 @@ async function fetchJson<T>(
     response = await fetch(path, await withAuth(init));
   } catch (err) {
     if (err instanceof DOMException && err.name === 'AbortError') {
-      console.info(`${LOG_TAG} ⊘ aborted ${method} ${path} #${id}`);
+      devInfo(`${LOG_TAG} ⊘ aborted ${method} ${path} #${id}`);
       throw err;
     }
     const message = err instanceof Error ? err.message : String(err);
-    console.error(`${LOG_TAG} ✗ NETWORK ${method} ${path} #${id} —`, message);
+    devError(`${LOG_TAG} ✗ NETWORK ${method} ${path} #${id} —`, message);
     throw new ImportsApiError(`Сетевая ошибка: ${message}`, null, null);
   }
 
@@ -98,7 +100,7 @@ async function fetchJson<T>(
 
   // 204 No Content → undefined
   if (response.status === 204) {
-    console.info(`${LOG_TAG} ← 204 ${method} ${path} #${id} (${elapsed}ms)`);
+    devInfo(`${LOG_TAG} ← 204 ${method} ${path} #${id} (${elapsed}ms)`);
     return undefined as T;
   }
 
@@ -111,7 +113,7 @@ async function fetchJson<T>(
   }
 
   if (!response.ok) {
-    console.error(
+    devError(
       `${LOG_TAG} ✗ ${response.status} ${method} ${path} #${id} (${elapsed}ms) —`,
       raw,
     );
@@ -131,7 +133,7 @@ async function fetchJson<T>(
     );
   }
 
-  console.info(`${LOG_TAG} ← ${response.status} ${method} ${path} #${id} (${elapsed}ms)`);
+  devInfo(`${LOG_TAG} ← ${response.status} ${method} ${path} #${id} (${elapsed}ms)`);
 
   if (!raw) return undefined as T;
   try {
@@ -173,7 +175,7 @@ export async function uploadImport(
   if (payload.siteId != null) form.set('siteId', String(payload.siteId));
   if (payload.secondaryFile) form.set('secondaryFile', payload.secondaryFile);
 
-  return fetchJson<ApiUploadResult>('/api/imports', {
+  return fetchJson<ApiUploadResult>(apiUrl.imports(''), {
     method: 'POST',
     body: form,
     signal: options.signal,
@@ -203,7 +205,7 @@ export function listImports(
   if (options.importTypeCode) params.set('importTypeCode', options.importTypeCode);
   if (options.projectId != null) params.set('projectId', String(options.projectId));
   const qs = params.toString();
-  const path = `/api/imports${qs ? `?${qs}` : ''}`;
+  const path = apiUrl.imports(qs ? `?${qs}` : '');
   return fetchJson<ApiImportSessionsListResponse>(path, {
     method: 'GET',
     signal: options.signal,
@@ -216,7 +218,7 @@ export function getImportSession(
   options: RequestOptions = {},
 ): Promise<ApiImportSession> {
   return fetchJson<ApiImportSession>(
-    `/api/imports/${encodeURIComponent(sessionId)}`,
+    apiUrl.imports(`/${encodeURIComponent(sessionId)}`),
     { method: 'GET', signal: options.signal },
   );
 }
@@ -246,7 +248,7 @@ export function getImportReport(
     if (sheet) params.append('excludeSheets', sheet);
   }
   const qs = params.toString();
-  const path = `/api/imports/${encodeURIComponent(sessionId)}/report${qs ? `?${qs}` : ''}`;
+  const path = apiUrl.imports(`/${encodeURIComponent(sessionId)}/report${qs ? `?${qs}` : ''}`);
   return fetchJson<ApiImportReport>(path, { method: 'GET', signal: options.signal });
 }
 
@@ -255,7 +257,7 @@ export function applyImport(
   sessionId: string,
   options: RequestOptions = {},
 ): Promise<{ sessionId: string; status: string }> {
-  return fetchJson(`/api/imports/${encodeURIComponent(sessionId)}/apply`, {
+  return fetchJson(apiUrl.imports(`/${encodeURIComponent(sessionId)}/apply`), {
     method: 'POST',
     signal: options.signal,
   });
@@ -266,7 +268,7 @@ export function cancelImport(
   sessionId: string,
   options: RequestOptions = {},
 ): Promise<{ sessionId: string; status: string }> {
-  return fetchJson(`/api/imports/${encodeURIComponent(sessionId)}/cancel`, {
+  return fetchJson(apiUrl.imports(`/${encodeURIComponent(sessionId)}/cancel`), {
     method: 'POST',
     signal: options.signal,
   });
@@ -287,8 +289,8 @@ export async function exportImportsPdf(
   }
 
   const id = nextRequestId();
-  const path = '/api/imports/export-pdf';
-  console.info(`${LOG_TAG} → POST ${path}  #${id}  sessions=${sessionIds.length}`);
+  const path = apiUrl.imports('/export-pdf');
+  devInfo(`${LOG_TAG} → POST ${path}  #${id}  sessions=${sessionIds.length}`);
   const start =
     typeof performance !== 'undefined' && typeof performance.now === 'function'
       ? performance.now()
@@ -325,7 +327,7 @@ export async function exportImportsPdf(
     } catch {
       /* ignore */
     }
-    console.error(`${LOG_TAG} ✗ ${response.status} POST ${path} #${id} (${elapsed}ms) —`, text);
+    devError(`${LOG_TAG} ✗ ${response.status} POST ${path} #${id} (${elapsed}ms) —`, text);
     throw new ImportsApiError(
       serverMessage || `Backend вернул ${response.status} ${response.statusText}`,
       response.status,
@@ -334,7 +336,7 @@ export async function exportImportsPdf(
   }
 
   const blob = await response.blob();
-  console.info(`${LOG_TAG} ← ${response.status} POST ${path} #${id} (${elapsed}ms)  bytes=${blob.size}`);
+  devInfo(`${LOG_TAG} ← ${response.status} POST ${path} #${id} (${elapsed}ms)  bytes=${blob.size}`);
   return blob;
 }
 
@@ -347,9 +349,9 @@ export async function getImportTypes(
       method: 'GET',
       signal: options.signal,
     });
-  } catch (err) {
+  } catch {
     // Fallback mock если backend недоступен
-    console.warn('[ImportsAPI] Backend недоступен, используем mock типов импорта');
+    devWarn('[ImportsAPI] Backend недоступен, используем mock типов импорта');
     return {
       items: [
         { id: 'rooms', label: 'Помещения', description: 'Импорт реестра помещений', isImplemented: true },

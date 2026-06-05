@@ -100,6 +100,13 @@ public class RoomsFormImportMapperApplyTests : IDisposable
         _mockCrud.Setup(c => c.CreateShareAgreementAsync(It.IsAny<ShareAgreementCreateRequest>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new ShareAgreementRaw { ID = CreatedSaId });
 
+        // doc 120: дефолт для CRUD-верификации ДДУ (источник правды о привязке Room).
+        // Тесты, которые проверяют «угон» через listview-обман, переопределяют этот
+        // setup и возвращают ShareAgreementFull с Room указывающим на чужое помещение.
+        _mockCrud.Setup(c => c.GetShareAgreementByIdAsync(
+                It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ShareAgreementFull { Room = null });
+
         // PM/Organization: пусто — devPin не задан в тестовых строках, эта ветка не сработает.
         _mockListView.Setup(c => c.GetProjectManagementsBySiteAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new ListViewResponse<ProjectManagementRaw>
@@ -929,6 +936,290 @@ public class RoomsFormImportMapperApplyTests : IDisposable
             OrphanSaIdZeroRoom,
             It.Is<ShareAgreementPatchRequest>(r =>
                 r.RoomID == CreatedRoomId && r.Room!.ID == CreatedRoomId),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ApplyAsync_ShareAgreementOwnedByOtherRoom_IsNotStolen_NewSaCreated()
+    {
+        // doc 119: ДДУ с тем же бизнес-ключом (Number+Kind+Cond+Stage+Project) уже
+        // существует в Visary и привязан к другому, реально существующему помещению
+        // (Room.ID > 0 && != нашему roomId). Мы НЕ перевязываем его — оставляем
+        // на месте и создаём НОВЫЙ ДДУ для текущего помещения. В журнале — метка
+        // «ДДУ создан … существующий ДДУ id=… оставлен у Room.ID=…».
+        const int OtherRoomId = 88888;
+        const int OwnedSaId   = 9999;
+        const int NewSaId     = 10000;
+
+        _mockListView.Setup(c => c.GetShareAgreementsByRoomAsync(
+                CreatedRoomId, It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ListViewResponse<ShareAgreementRaw> { Data = [], Total = 0 });
+
+        // Strict-find возвращает ДДУ с тем же бизнес-ключом, но Room.ID указывает
+        // на ДРУГОЕ существующее помещение (не orphan).
+        _mockListView.Setup(c => c.FindShareAgreementsAsync(
+                It.IsAny<string?>(), It.IsAny<int?>(), It.IsAny<string?>(),
+                It.Is<string?>(s => !string.IsNullOrWhiteSpace(s)),
+                It.Is<string?>(p => !string.IsNullOrWhiteSpace(p)),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ListViewResponse<ShareAgreementRaw>
+            {
+                Data =
+                [
+                    new ShareAgreementRaw
+                    {
+                        ID                = OwnedSaId,
+                        Number            = "ДДУ-1",
+                        ConditionalNumber = "1",
+                        RoomKindRef       = new VisaryRef { ID = RoomKindIdApartment },
+                        Room              = new VisaryRef { ID = OtherRoomId, Title = "Чужая Квартира" },
+                        StageNumber       = "1",
+                        ProjectNumber     = "PRJ-1",
+                    }
+                ],
+                Total = 1,
+            });
+
+        // Loose-find не должен ничего находить (или вернуть тот же не-orphan — всё равно отвергнем).
+        _mockListView.Setup(c => c.FindShareAgreementsAsync(
+                It.IsAny<string?>(), It.IsAny<int?>(), It.IsAny<string?>(),
+                null, null,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ListViewResponse<ShareAgreementRaw> { Data = [], Total = 0 });
+
+        _mockCrud.Setup(c => c.CreateShareAgreementAsync(
+                It.IsAny<ShareAgreementCreateRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ShareAgreementRaw { ID = NewSaId, Number = "ДДУ-1" });
+
+        var ctx = new ImportContext(Guid.NewGuid(), ProjectId, null, null);
+        var rows = new[] { MakeRow(10, "Квартира", "1", "1", 42.5) };
+
+        var result = await _mapper.ApplyAsync(ctx, _visaryDb, rows, default);
+
+        Assert.Equal(1, result.AppliedCount);
+        Assert.Empty(result.Errors);
+
+        // Главное: НЕ был сделан PATCH чужого ДДУ.
+        _mockCrud.Verify(c => c.PatchShareAgreementAsync(
+            OwnedSaId,
+            It.IsAny<ShareAgreementPatchRequest>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+
+        // А новый ДДУ — был создан для нашего roomId.
+        _mockCrud.Verify(c => c.CreateShareAgreementAsync(
+            It.Is<ShareAgreementCreateRequest>(r =>
+                r.RoomID == CreatedRoomId && r.Room!.ID == CreatedRoomId),
+            It.IsAny<CancellationToken>()), Times.Once);
+
+        var log = Assert.Single(result.RowActions!);
+        Assert.Contains(log.Actions, a => a.Contains("ДДУ создан") && a.Contains("оставлен"));
+        Assert.DoesNotContain(log.Actions, a => a.Contains("привязан к новому помещению"));
+
+        // В snapshot — ID нового ДДУ, не чужого.
+        using var diag = _sp.CreateScope();
+        var db = diag.ServiceProvider.GetRequiredService<ImportServiceDbContext>();
+        var saved = db.RoomApplySnapshots.AsNoTracking().Single(s => s.VisarySiteId == SiteId);
+        Assert.Equal(NewSaId, saved.VisaryShareAgreementId);
+    }
+
+    [Fact]
+    public async Task ApplyAsync_ByRoomListReturnsForeignSa_IsNotStolen_NewSaCreated()
+    {
+        // doc 120: дыра №1. `listview/shareagreement/onetomany/Room?associationId={roomId}`
+        // должен возвращать только ДДУ, привязанные к roomId — но в проде встречалось,
+        // что Visary отдавал в этом списке ДДУ с Room.ID указывающим на ДРУГОЕ помещение.
+        // Без safeguard-фильтра в matched-in-room ветке такой ДДУ попадал в PATCH-путь
+        // (см. строки 1037-1043 в RoomsFormImportMapper до фикса) и его привязка
+        // перетиралась на наш roomId — тот самый «угон», от которого защищает doc 119
+        // в strict/loose. Теперь matched-in-room фильтрует так же: Room null/<=0/==roomId.
+        const int OtherRoomId = 88888;
+        const int ForeignSaId = 9999;
+        const int NewSaId     = 10000;
+
+        _mockListView.Setup(c => c.GetShareAgreementsByRoomAsync(
+                CreatedRoomId, It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ListViewResponse<ShareAgreementRaw>
+            {
+                Data =
+                [
+                    new ShareAgreementRaw
+                    {
+                        ID     = ForeignSaId,
+                        Number = "ДДУ-1",
+                        Room   = new VisaryRef { ID = OtherRoomId, Title = "Чужая Квартира" },
+                    }
+                ],
+                Total = 1,
+            });
+        _mockListView.Setup(c => c.FindShareAgreementsAsync(
+                It.IsAny<string?>(), It.IsAny<int?>(), It.IsAny<string?>(),
+                It.IsAny<string?>(), It.IsAny<string?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ListViewResponse<ShareAgreementRaw> { Data = [], Total = 0 });
+        _mockCrud.Setup(c => c.CreateShareAgreementAsync(
+                It.IsAny<ShareAgreementCreateRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ShareAgreementRaw { ID = NewSaId, Number = "ДДУ-1" });
+
+        var ctx = new ImportContext(Guid.NewGuid(), ProjectId, null, null);
+        var rows = new[] { MakeRow(10, "Квартира", "1", "1", 42.5) };
+
+        var result = await _mapper.ApplyAsync(ctx, _visaryDb, rows, default);
+
+        Assert.Equal(1, result.AppliedCount);
+        // Чужой ДДУ НЕ PATCH-нут.
+        _mockCrud.Verify(c => c.PatchShareAgreementAsync(
+            ForeignSaId, It.IsAny<ShareAgreementPatchRequest>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+        // Новый ДДУ создан для нашего roomId.
+        _mockCrud.Verify(c => c.CreateShareAgreementAsync(
+            It.Is<ShareAgreementCreateRequest>(r =>
+                r.RoomID == CreatedRoomId && r.Room!.ID == CreatedRoomId),
+            It.IsAny<CancellationToken>()), Times.Once);
+
+        var log = Assert.Single(result.RowActions!);
+        Assert.Contains(log.Actions, a => a.Contains("ДДУ создан") && a.Contains("оставлен"));
+    }
+
+    [Fact]
+    public async Task ApplyAsync_ListviewShowsOrphanButCrudShowsForeignRoom_IsNotStolen_NewSaCreated()
+    {
+        // doc 120: дыра №2. Visary listview (`shareagreement`/`shareagreementall`) в проде
+        // встречался с `Room=null`/`{ID:0}` для ДДУ, который на самом деле уже привязан к
+        // ДРУГОМУ помещению. Strict/loose видят это как «orphan» и в старом коде делали
+        // PATCH с переподвязкой — угоняли ДДУ. Источник правды о привязке — CRUD GET
+        // `/crud/shareagreement/{id}` (поле Room). Если CRUD GET показывает Room.ID
+        // указывающий на чужое помещение, reuse отвергается, создаётся новый ДДУ.
+        const int LyingOrphanSaId = 7777;
+        const int ActualOtherRoomId = 55555;
+        const int NewSaId         = 10001;
+
+        _mockListView.Setup(c => c.GetShareAgreementsByRoomAsync(
+                CreatedRoomId, It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ListViewResponse<ShareAgreementRaw> { Data = [], Total = 0 });
+
+        // Listview сообщает Room=null — выглядит как orphan, проходит фильтр strict/loose.
+        _mockListView.Setup(c => c.FindShareAgreementsAsync(
+                It.IsAny<string?>(), It.IsAny<int?>(), It.IsAny<string?>(),
+                It.IsAny<string?>(), It.IsAny<string?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ListViewResponse<ShareAgreementRaw>
+            {
+                Data =
+                [
+                    new ShareAgreementRaw
+                    {
+                        ID                = LyingOrphanSaId,
+                        Number            = "ДДУ-1",
+                        ConditionalNumber = "1",
+                        RoomKindRef       = new VisaryRef { ID = RoomKindIdApartment },
+                        Room              = null, // ← врёт: listview не вернул связь
+                        StageNumber       = "1",
+                        ProjectNumber     = "PRJ-1",
+                    }
+                ],
+                Total = 1,
+            });
+
+        // CRUD GET — источник правды: на самом деле этот ДДУ уже привязан к ActualOtherRoomId.
+        _mockCrud.Setup(c => c.GetShareAgreementByIdAsync(
+                LyingOrphanSaId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ShareAgreementFull
+            {
+                ID     = LyingOrphanSaId,
+                Number = "ДДУ-1",
+                Room   = new VisaryRef { ID = ActualOtherRoomId, Title = "Чужая Квартира" },
+            });
+
+        _mockCrud.Setup(c => c.CreateShareAgreementAsync(
+                It.IsAny<ShareAgreementCreateRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ShareAgreementRaw { ID = NewSaId, Number = "ДДУ-1" });
+
+        var ctx = new ImportContext(Guid.NewGuid(), ProjectId, null, null);
+        var rows = new[] { MakeRow(10, "Квартира", "1", "1", 42.5) };
+
+        var result = await _mapper.ApplyAsync(ctx, _visaryDb, rows, default);
+
+        Assert.Equal(1, result.AppliedCount);
+        // PATCH чужого ДДУ — не выполнен.
+        _mockCrud.Verify(c => c.PatchShareAgreementAsync(
+            LyingOrphanSaId, It.IsAny<ShareAgreementPatchRequest>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+        // Создан новый ДДУ для нашего roomId.
+        _mockCrud.Verify(c => c.CreateShareAgreementAsync(
+            It.Is<ShareAgreementCreateRequest>(r =>
+                r.RoomID == CreatedRoomId && r.Room!.ID == CreatedRoomId),
+            It.IsAny<CancellationToken>()), Times.Once);
+        // CRUD GET был вызван — верификация состоялась.
+        _mockCrud.Verify(c => c.GetShareAgreementByIdAsync(
+            LyingOrphanSaId, It.IsAny<CancellationToken>()), Times.Once);
+
+        var log = Assert.Single(result.RowActions!);
+        Assert.Contains(log.Actions, a => a.Contains("ДДУ создан") && a.Contains("оставлен"));
+
+        // В snapshot пишется ID нового ДДУ, не «lying orphan».
+        using var diag = _sp.CreateScope();
+        var db = diag.ServiceProvider.GetRequiredService<ImportServiceDbContext>();
+        var saved = db.RoomApplySnapshots.AsNoTracking().Single(s => s.VisarySiteId == SiteId);
+        Assert.Equal(NewSaId, saved.VisaryShareAgreementId);
+    }
+
+    [Fact]
+    public async Task ApplyAsync_TrueOrphan_ListviewAndCrudAgreeRoomIsNull_OrphanReused()
+    {
+        // doc 120 регрессия: настоящий orphan (Room=null И в listview, И в CRUD) должен
+        // переиспользоваться — doc 76 v1.1 не отменяется фиксом doc 120. CRUD-проверка
+        // ловит только случай, когда listview соврал; настоящий orphan проходит как раньше.
+        const int OrphanSaId = 6666;
+
+        _mockListView.Setup(c => c.GetShareAgreementsByRoomAsync(
+                CreatedRoomId, It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ListViewResponse<ShareAgreementRaw> { Data = [], Total = 0 });
+
+        _mockListView.Setup(c => c.FindShareAgreementsAsync(
+                It.IsAny<string?>(), It.IsAny<int?>(), It.IsAny<string?>(),
+                It.IsAny<string?>(), It.IsAny<string?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ListViewResponse<ShareAgreementRaw>
+            {
+                Data =
+                [
+                    new ShareAgreementRaw
+                    {
+                        ID                = OrphanSaId,
+                        Number            = "ДДУ-1",
+                        ConditionalNumber = "1",
+                        RoomKindRef       = new VisaryRef { ID = RoomKindIdApartment },
+                        Room              = null,
+                        StageNumber       = "1",
+                        ProjectNumber     = "PRJ-1",
+                    }
+                ],
+                Total = 1,
+            });
+
+        // CRUD GET тоже говорит Room=null — настоящий orphan.
+        _mockCrud.Setup(c => c.GetShareAgreementByIdAsync(
+                OrphanSaId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ShareAgreementFull
+            {
+                ID     = OrphanSaId,
+                Number = "ДДУ-1",
+                Room   = null,
+            });
+
+        var ctx = new ImportContext(Guid.NewGuid(), ProjectId, null, null);
+        var rows = new[] { MakeRow(10, "Квартира", "1", "1", 42.5) };
+
+        var result = await _mapper.ApplyAsync(ctx, _visaryDb, rows, default);
+
+        Assert.Equal(1, result.AppliedCount);
+        // CREATE НЕ должен быть вызван — orphan переиспользован.
+        _mockCrud.Verify(c => c.CreateShareAgreementAsync(
+            It.IsAny<ShareAgreementCreateRequest>(), It.IsAny<CancellationToken>()), Times.Never);
+        // PATCH orphan-ДДУ с привязкой к нашему roomId.
+        _mockCrud.Verify(c => c.PatchShareAgreementAsync(
+            OrphanSaId,
+            It.Is<ShareAgreementPatchRequest>(r => r.RoomID == CreatedRoomId && r.Room!.ID == CreatedRoomId),
             It.IsAny<CancellationToken>()), Times.Once);
     }
 

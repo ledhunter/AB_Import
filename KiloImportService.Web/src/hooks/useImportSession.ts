@@ -15,6 +15,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { devError, devInfo, devWarn } from '../services/devLog';
 import {
   applyImport,
   cancelImport,
@@ -162,11 +163,11 @@ export function useImportSession(): UseImportSessionState {
         return; // переключились на новую сессию, отчёт уже неактуален
       }
       setReport(toUiReport(apiReport, currentSession));
-      console.info(`${LOG_TAG} report loaded: skip=${skip} rows=${apiReport.rows.length} errors=${apiReport.errors.length} excludeSheets=[${excludeSheets.join(',')}]`);
+      devInfo(`${LOG_TAG} report loaded: skip=${skip} rows=${apiReport.rows.length} errors=${apiReport.errors.length} excludeSheets=[${excludeSheets.join(',')}]`);
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
       const message = err instanceof Error ? err.message : String(err);
-      console.warn(`${LOG_TAG} loadReport failed:`, message);
+      devWarn(`${LOG_TAG} loadReport failed:`, message);
       setError(message);
     }
   }, []);
@@ -206,7 +207,7 @@ export function useImportSession(): UseImportSessionState {
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
       const message = err instanceof Error ? err.message : String(err);
-      console.warn(`${LOG_TAG} pullSession failed:`, message);
+      devWarn(`${LOG_TAG} pullSession failed:`, message);
     }
   }, [loadReport]);
 
@@ -228,7 +229,7 @@ export function useImportSession(): UseImportSessionState {
       try {
         const upload = await uploadImport(payload);
         sessionId = upload.sessionId;
-        console.info(`${LOG_TAG} upload OK: sessionId=${sessionId}, status=${upload.status}`);
+        devInfo(`${LOG_TAG} upload OK: sessionId=${sessionId}, status=${upload.status}`);
       } catch (err) {
         const message =
           err instanceof ImportsApiError
@@ -236,7 +237,7 @@ export function useImportSession(): UseImportSessionState {
             : err instanceof Error
               ? err.message
               : String(err);
-        console.error(`${LOG_TAG} upload failed:`, message);
+        devError(`${LOG_TAG} upload failed:`, message);
         setError(message);
         setPhase('error');
         return;
@@ -280,11 +281,11 @@ export function useImportSession(): UseImportSessionState {
           },
           onStageStarted: (e) => {
             if (e.sessionId !== sessionIdRef.current) return;
-            console.info(`${LOG_TAG} stage started: ${e.stage}`);
+            devInfo(`${LOG_TAG} stage started: ${e.stage}`);
           },
           onStageCompleted: (e) => {
             if (e.sessionId !== sessionIdRef.current) return;
-            console.info(`${LOG_TAG} stage completed: ${e.stage}`);
+            devInfo(`${LOG_TAG} stage completed: ${e.stage}`);
             // Очищаем live-прогресс при завершении стадии — следующая стадия
             // запустится с чистым счётчиком. sheetProgress НЕ сбрасываем —
             // он должен показать финальную картину по листам.
@@ -330,7 +331,7 @@ export function useImportSession(): UseImportSessionState {
         await hub.joinSession(sessionId);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        console.warn(`${LOG_TAG} hub failed (продолжим polling):`, message);
+        devWarn(`${LOG_TAG} hub failed (продолжим polling):`, message);
         // Не считаем фатальной ошибкой — pullSession ниже даст состояние.
       }
 
@@ -354,7 +355,7 @@ export function useImportSession(): UseImportSessionState {
       }, 500);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      console.error(`${LOG_TAG} apply failed:`, message);
+      devError(`${LOG_TAG} apply failed:`, message);
       setError(message);
       setPhase('error');
     }
@@ -368,7 +369,7 @@ export function useImportSession(): UseImportSessionState {
       await pullSession(sessionId);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      console.error(`${LOG_TAG} cancel failed:`, message);
+      devError(`${LOG_TAG} cancel failed:`, message);
       setError(message);
     }
   }, [pullSession]);

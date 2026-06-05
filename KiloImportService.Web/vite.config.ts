@@ -20,17 +20,25 @@ export default defineConfig(({ mode }) => {
   const logging =
     (tag: string, target: string): ProxyOptions['configure'] =>
     (proxy) => {
+      // Константные format-строки (закрывает unsafe-formatstring, см. doc_project/121).
       proxy.on('proxyReq', (_proxyReq, req) => {
-        console.log(`[Vite proxy → ${tag}] → ${req.method} ${target}${req.url}`);
+        console.log('[Vite proxy → %s] → %s %s%s', tag, req.method, target, req.url);
       });
       proxy.on('proxyRes', (proxyRes, req) => {
         console.log(
-          `[Vite proxy → ${tag}] ← ${proxyRes.statusCode} ${req.method} ${req.url}`,
+          '[Vite proxy → %s] ← %s %s %s',
+          tag,
+          proxyRes.statusCode,
+          req.method,
+          req.url,
         );
       });
       proxy.on('error', (err, req) => {
         console.error(
-          `[Vite proxy → ${tag}] ✗ ERROR ${req.method} ${req.url} —`,
+          '[Vite proxy → %s] ✗ ERROR %s %s — %s',
+          tag,
+          req.method,
+          req.url,
           err.message,
         );
       });

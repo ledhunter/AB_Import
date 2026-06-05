@@ -145,23 +145,27 @@ internal sealed record FinModelPlanInputDataPoint(
 
 1. **`Percent` всегда `0`.** Контракт заказчика. Поле обязательное в payload-е.
 
-2. **Нулевые периоды отправляются как есть.** «План = 0» — валидное значение
-   (заказчик подтвердил: «не пропускать, записывать нулевые периоды»). Защита
-   только от **дублей** (pre-check по (period, codeId)), не от нулей.
+2. **Явный 0 отправляется, пустая ячейка — пропускается** (с v1.5).
+   «План = 0» — валидное значение, и если хотя бы одна из трёх ячеек
+   (Summ/Amount/Cost) квартала содержит число (включая 0), точка идёт в Visary.
+   Если **все три** ячейки полностью пустые — квартал пропускается (см. v1.5).
+   Защита от дублей в рамках одной версии не нужна — каждая версия заведомо
+   пустая (см. v1.3).
 
 3. **`Code` резолвится через `listview/inputdatacode`, без хардкода ID.**
    Заказчик прислал ID:20 только для квартир — но ID-стек может различаться между
    стендами. Резолв за сессию (один listview) + словарь `Title → ID` case-insensitive.
 
-4. **Title-якоря к Summ-строкам зашиты как контракт между файлом и кодом:**
-   - «Продажа квартиры (план)»
-   - «Продажа нежилого помещения (план)»
-   - «Продажа машиноместа (план)»
+4. **FmCode-коды зашиты как контракт между файлом и справочником `fmcode`** (с v1.6):
+   - `010` — Продажа квартиры (план)
+   - `020` — Продажа нежилые (ком) ПСН (план)
+   - `030` — Продажа иные нежилые (кладовки) (план)
+   - `040` — Продажа м/м (план)
 
-   Если заказчик переименовал справочник на стенде — все 3 категории попадут
-   в `missingCodeTitles` → row-error `inputdata_code_not_found` (видно какие Title
-   ожидались). Сменить — в константах [FinModelImportMapper](../KiloImportService.Api/Domain/Mapping/FinModelImportMapper.cs):
-   `InputDataCodeApartment` / `InputDataCodeNonResidential` / `InputDataCodeParking`.
+   Если заказчик удалил/переименовал Code в справочнике — категория попадёт
+   в `missingFmCodes` → row-error `inputdata_code_not_found` со списком кодов.
+   Сменить — в константах [FinModelImportMapper](../KiloImportService.Api/Domain/Mapping/FinModelImportMapper.cs):
+   `FmCodeApartment` / `FmCodeNonResidential` / `FmCodeStoreroom` / `FmCodeParking`.
 
 5. **Материализация в парсере, не в маппере.** `XLWorkbook` закрывается в using
    парсера — после возврата чтение `sheet.Cell(…)` невозможно. Поэтому парсер
@@ -215,12 +219,16 @@ internal sealed record FinModelPlanData(
 ```
 
 ```csharp
-// НЕПРАВИЛЬНО — пропускать нулевые периоды.
+// НЕПРАВИЛЬНО — пропускать нулевые периоды на стороне маппера.
 foreach (var point in planData.InputDataPoints)
 {
-    if (point.Summ == 0 && point.Amount == 0) continue;  // 💥 заказчик: «записывать»
+    if (point.Summ == 0 && point.Amount == 0) continue;  // 💥 явный 0 — валидный план
     await CreateInputDataAsync(...);
 }
+// Правильно — фильтрация ПУСТЫХ vs ЯВНЫХ 0 происходит в парсере
+// `ReadGeneralScheduleDataFromBytes` через `TryReadPlanCellNumber` (см. v1.5).
+// В `InputDataPoints` приходят только заполненные кварталы; точку с явным 0
+// маппер обязан отправить.
 ```
 
 ```csharp
@@ -266,7 +274,7 @@ var existing = await _listViewClient.FindFmModelsAsync(
 | ListView | `Visary.Api.Client/ListView/ListViewClient.cs` | `GetFmModelVersionsByModelAsync`, `GetInputDataByVersionAsync`, `ListInputDataCodesAsync` |
 | Парсер | `KiloImportService.Api/Domain/Mapping/FinModelImportMapper.cs` | `ReadPlanData`, `FinModelPlanData`, `FinModelPlanInputDataPoint`, `FinModelPlanCategory` |
 | Маппер | `KiloImportService.Api/Domain/Mapping/FinModelImportMapper.cs` | `EnsureFmModelVersionAndInputDataAsync` (вызов из конца `EnsureFmModelAsync`) |
-| Константы | `KiloImportService.Api/Domain/Mapping/FinModelImportMapper.cs` | `FmModelVersionTitlePrefix`, `BuildNextVersionTitle`, `InputDataCodeApartment`/`…NonResidential`/`…Storeroom`/`…Parking` |
+| Константы | `KiloImportService.Api/Domain/Mapping/FinModelImportMapper.cs` | `FmModelVersionTitlePrefix`, `BuildNextVersionTitle`, `FmCodeApartment`/`…NonResidential`/`…Storeroom`/`…Parking` (строковые коды «010»/«020»/«030»/«040»), `FallbackTitle*` |
 | Тесты (парсер) | `KiloImportService.Api.Tests/Mapping/FinModelInputDataTests.cs` | `ReadPlanData_Reference_FindsThreeCategories_AndAllPeriods` |
 | Тесты (Apply) | `KiloImportService.Api.Tests/Mapping/FinModelInputDataTests.cs` | happy / version-reuse / inputdata-dedup / codes-unavailable / partial-codes (5 тестов) |
 
@@ -282,12 +290,198 @@ var existing = await _listViewClient.FindFmModelsAsync(
 - [ ] Точка `(period, codeId)` уже есть в версии → skip без error/warning
 - [ ] Title из файла нет в справочнике → row-error `inputdata_code_not_found` со списком, остальные категории идут
 - [ ] Каждая созданная inputdata линкуется POST `listview/inputdata/onetomany/FMModelVersion`
-- [ ] `Percent=0` всегда; нулевые `Summ/Amount/Cost` тоже отправляются
+- [ ] `Percent=0` всегда; явный 0 в любой из ячеек квартала → точка эмитится, полностью пустой квартал → skip (v1.5)
 - [ ] Все тесты `FinModel*` (110+ старых + 6 новых) — зелёные
 
 ---
 
 ## 📅 История изменений
+
+- **v1.6.1 (2026-06-02)** — variant-поля `FmCodeRaw.Group/Method/Type/Validity/Unit`
+  переведены с `VisaryRef?` на `JsonElement?` (см. [doc 56](./56-visary-dto-deserialization-pitfalls.md)).
+
+  **Инцидент**: после переключения на `FindFmCodeByCodeAsync` (v1.6) Visary стал
+  возвращать ненулевой response, и десериализация упала на первом же запросе:
+  `The JSON value could not be converted to Visary.Api.Dto.VisaryRef. Path:
+  $.Data[0].Type | LineNumber: 0 | BytePositionInLine: 240` → row-error
+  `inputdata_codes_unavailable`. То есть в живом справочнике поле `Type` (и,
+  потенциально, остальные референсы) приходит **не** как `{ID, Title}` объект,
+  а как другой тип (число/строка/объект иной формы).
+
+  Импортеру эти поля не нужны — мы используем только `ID/Code/Title`. Перевод
+  на `JsonElement?` сохраняет контракт `Columns` (Visary 400 без полного набора
+  колонок в запросе), но десериализация терпима к любому JSON-типу в каждом
+  таком поле. Тот же приём применялся для `Status/RoomCategory/MainSource` —
+  см. doc 56.
+
+  Урок: при первом контакте с новой listview-сущностью проверять не только
+  Filter/Scope/Columns (как в doc 110 v1.2), но и **типы** возвращаемых
+  variant-полей. HAR хранит только метаданные body, не payload — для тестового
+  сэмпла стенда нужен прямой curl/Postman.
+
+- **v1.6 (2026-06-02)** — резолв справочника `fmcode` переехал с поля **Title**
+  на поле **Code** (строковый: «010»/«020»/«030»/«040»).
+
+  **Инцидент** — справочник fmcode заказчика: Title начинается с самого Code'а
+  (например `«010 Продажа квартиры (план)»`, `«020 Продажа нежилые (ком) ПСН (план)»`),
+  а наш `listview/fmcode` шёл с фильтром `["Title","=","Продажа квартиры (план)"]` —
+  ни один Title строго не совпадал → row-error
+  `inputdata_code_not_found` со списком всех 4 категорий, ни одна inputdata
+  не создалась.
+
+  **Контракт** ([ListViewClient.cs](../Visary.Api.Client/ListView/ListViewClient.cs)):
+  ```json
+  Filter = ["Code", "=", "010"]
+  ```
+
+  **Сигнатура** (старая `FindFmCodeByTitleAsync(title)` удалена):
+  ```csharp
+  Task<ListViewResponse<FmCodeRaw>> FindFmCodeByCodeAsync(string code, CancellationToken ct);
+  ```
+
+  **Константы маппера** ([FinModelImportMapper.cs](../KiloImportService.Api/Domain/Mapping/FinModelImportMapper.cs)):
+  ```csharp
+  internal const string FmCodeApartment      = "010";  // Продажа квартиры (план)
+  internal const string FmCodeNonResidential = "020";  // Продажа нежилые (ком) ПСН (план)
+  internal const string FmCodeStoreroom      = "030";  // Продажа иные нежилые (кладовки) (план)
+  internal const string FmCodeParking        = "040";  // Продажа м/м (план)
+  ```
+
+  Записи парсера и payload-а: поле `CodeTitle` в `FinModelPlanCategory`/
+  `FinModelPlanInputDataPoint` переименовано в `FmCode` (строковый код). Метод
+  парсера `ResolveInputDataCodeTitle` → `ResolveFmCode`, возвращает код,
+  а не Title.
+
+  ### ⚠️ Важно
+
+  - **Title в payload идёт ИЗ ОТВЕТА Visary.** `FindFmCodeByCodeAsync` возвращает
+    `FmCodeRaw.Title` — каноничное «010 Продажа квартиры (план)». Этот Title
+    подставляется в `Code.Title` payload-а `POST /crud/inputdata`, чтобы Visary UI
+    отображал осмысленное имя. Хардкод старого формата Title-ов («Продажа
+    квартиры (план)») остался ТОЛЬКО как `FallbackTitle*` константа — на случай,
+    если Visary вернёт запись без Title (защита от nullable-поля).
+  - **Поиск Code'а строгий (`=`).** Code в справочнике — короткая строка
+    с ведущим нулём, уникальный ключ. `LIKE`/`contains` не нужны.
+  - **Старая константа `InputDataCode*` полностью удалена.** Это была Title-строка
+    для поиска; теперь поиск по Code, а Title больше не используется на запрос
+    (только в fallback). Любой код, ссылающийся на старые имена, должен быть обновлён.
+
+  ### ❌ Типичная ошибка (была до v1.6)
+
+  ```csharp
+  // НЕПРАВИЛЬНО — фильтр по Title в справочнике, где Title начинается с Code-префикса.
+  Filter = JsonSerializer.Serialize(new object[] { "Title", "=", "Продажа квартиры (план)" })
+  // 💥 Visary хранит Title как «010 Продажа квартиры (план)» — `=` не матчит.
+  ```
+
+  ```csharp
+  // НЕПРАВИЛЬНО — ослабить контракт до `Title contains X`.
+  Filter = new object[] { "Title", "contains", "Продажа квартиры" }
+  // 💥 «Продажа квартиры (план)» И «Продажа квартиры (факт)» оба матчатся → 2 строки;
+  //    `FirstOrDefault(c => c.ID > 0)` возьмёт ЛЮБУЮ — может попасть факт-код,
+  //    inputdata будет создан с неправильным `Group=Доходы (факт)`.
+  // Правильно — точный фильтр по уникальному Code'у: ["Code","=","010"].
+  ```
+
+  ### 📍 Тесты
+
+  - `FinModelInputDataTests` — все моки `FindFmCodeByTitleAsync(title)` заменены
+    на `FindFmCodeByCodeAsync(code)`, поля `CodeTitle` → `FmCode`. Мок-ответы
+    возвращают каноничные Title с префиксом-кодом («010 Продажа квартиры (план)»),
+    чтобы подтверждать перенос Title из ответа в payload.
+  - `ProjectsCacheServiceTests` — стаб интерфейса обновлён.
+  - 133/133 зелёные.
+
+- **v1.5 (2026-06-02)** — пустые кварталы листа «Общий график» **не переносятся**
+  в `inputdata`. Явный `0` (включая `0` в любой одной из трёх ячеек Summ/Amount/Cost)
+  по-прежнему отправляется — это валидный план «ноль».
+
+  **Запрос заказчика** — файл `2025.12.08 UB0DZG__НСИ_ЖК Репино-Парк`: некоторые
+  квартилы у нежилых/кладовых/машиномест оставлены полностью пустыми (ячейки
+  без значения). Раньше парсер читал их как `0` → impл-точки уходили в Visary
+  как `(Summ=0, Amount=0, Cost=0)`. Заказчик попросил: «пусто = не переносить»,
+  «0 = переносить» — то есть различать незаполненный план от запланированного нуля.
+
+  **Реализация** ([FinModelImportMapper.cs](../KiloImportService.Api/Domain/Mapping/FinModelImportMapper.cs)):
+
+  ```csharp
+  internal static (bool HasValue, double Value) TryReadPlanCellNumber(
+      IXLWorksheet sheet, int row, int col)
+  {
+      var cell = sheet.Cell(row, col);
+      // ClosedXML 0.104: IsEmpty() → true когда у ячейки тип Blank
+      // (нет значения и нет формулы). TryGetValue<double> для Blank-ячейки
+      // отдаёт (true, 0) — именно из-за этой подмены раньше пустые кварталы
+      // эмитились с нулями.
+      if (cell.IsEmpty()) return (false, 0d);
+      if (cell.TryGetValue<double>(out var d) && !double.IsNaN(d) && !double.IsInfinity(d))
+          return (true, d);
+      var text = cell.GetString().Trim();
+      if (string.IsNullOrWhiteSpace(text)) return (false, 0d);
+      text = text.Replace(',', '.');
+      return double.TryParse(text, NumberStyles.Any, CultureInfo.InvariantCulture, out var v)
+          ? (true, v) : (false, 0d);
+  }
+  ```
+
+  В цикле материализации:
+
+  ```csharp
+  foreach (var col in tableColumns)
+  {
+      allColumns.TryAdd(col.ColumnIndex, col);   // ⚠️ ДО фильтра — см. ниже
+
+      var (hasSumm,   summ)   = TryReadPlanCellNumber(sheet, summRow,   col.ColumnIndex);
+      var (hasAmount, amount) = TryReadPlanCellNumber(sheet, amountRow, col.ColumnIndex);
+      var (hasCost,   cost)   = TryReadPlanCellNumber(sheet, costRow,   col.ColumnIndex);
+      if (!hasSumm && !hasAmount && !hasCost) continue;  // skip пустого квартала
+
+      points.Add(new FinModelPlanInputDataPoint(col.FmPeriod, codeTitle, summ, amount, cost));
+  }
+  ```
+
+  ### ⚠️ Важно
+
+  - **`allColumns.TryAdd` до фильтра.** `PeriodStart`/`PeriodEnd` — это границы
+    диапазона **планирования** (из шапки «Год»/«Квартал»), а НЕ диапазона
+    реально заполненных данных. Если первый квартал пуст у всех категорий —
+    `PeriodStart` всё равно остаётся первым кварталом шапки. Это важно для
+    идемпотентности `FindFmModelsAsync` (v1.4) — pre-check матчит файл по
+    краевым периодам шапки, а не по «куда уехали данные».
+  - **«Частично заполнен» = квартал есть.** Если у квартала хотя бы одна
+    из трёх ячеек содержит число (включая 0), точка эмитится; пустые ячейки
+    подставляются как `0`. Например, у Q4 заполнен только Summ=5_000_000 —
+    точка идёт в Visary как `(Summ=5_000_000, Amount=0, Cost=0)`.
+  - **Нечисловой мусор (`#DIV/0!`, `н/д`, `—`) = пустая ячейка.** Сохраняет
+    прежнее поведение `ReadPlanCellNumber` — мусор не считается заполненным
+    значением.
+
+  ### ❌ Типичная ошибка (была до v1.5)
+
+  ```csharp
+  // Один метод чтения — «всё в 0».
+  Summ:   ReadPlanCellNumber(sheet, summRow,   col.ColumnIndex),
+  Amount: ReadPlanCellNumber(sheet, amountRow, col.ColumnIndex),
+  Cost:   ReadPlanCellNumber(sheet, costRow,   col.ColumnIndex)
+  // 💥 пустая ячейка == 0 == явный 0 — заказчик не различает,
+  //    лишние нулевые квартилы идут в Visary как inputdata-точки
+  ```
+
+  ### 📍 Тесты
+
+  - `ReadGeneralScheduleData_Reference_FindsThreeCategories_AndAllPeriods` —
+    обновлён: ожидание 12 точек → 8 (Нежилые пустые → 0, Машиноместа с явными
+    0 → 4). Категории сохраняются (`categories.Count == 3`) — парсер
+    распознаёт таблицу по якорям, даже если данные пусты.
+  - `ReadGeneralScheduleData_EmptyQuartersSkipped_ExplicitZeroEmitted` (новый) —
+    Q1 заполнен, Q2 явные нули → эмитится, Q3 пусто → skip, Q4 только Summ →
+    эмитится с Amount=Cost=0.
+  - `ApplyAsync_PlanFile_CreatesVersionAndInputData_AndLinksThem`,
+    `ApplyAsync_ExistingVersion_CreatesSecondVersion_WithSequencedTitle`,
+    `ApplyAsync_RepeatedImport_AlwaysCreatesNewVersion_NoDedupAtPointLevel` —
+    обновлено ожидание `CreateInputDataAsync` `Times.Exactly(12)` → `(8)`.
+  - `ApplyAsync_CodeNotInDictionary_SkipsCategoryAndReportsMissing` —
+    обновлено ожидание `(8)` → `(4)` (квартиры; нежилые пустые, м/м без кода).
 
 - **v1.4 (2026-05-26)** — `fmmodel` pre-check теперь фильтрует по
   **(`Title`, `ABConstructionSiteID`, `PeriodStart`, `PeriodEnd`)**.

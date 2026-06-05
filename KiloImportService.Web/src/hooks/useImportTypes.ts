@@ -8,6 +8,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { devInfo, devWarn } from '../services/devLog';
 import { getImportTypes } from '../services/importsService';
 import type { ApiImportTypeInfo } from '../types/api';
 
@@ -34,20 +35,20 @@ export function useImportTypes(): UseImportTypesState {
     inFlightRef.current = ctrl;
     setStatus('loading');
     setError(null);
-    console.info(`${LOG_TAG} fetching…`);
+    devInfo(`${LOG_TAG} fetching…`);
     getImportTypes({ signal: ctrl.signal })
       .then((res) => {
         if (ctrl.signal.aborted) return;
         setData(res.items ?? []);
         setStatus('success');
-        console.info(`${LOG_TAG} ✓ loaded ${res.items?.length ?? 0} types`);
+        devInfo(`${LOG_TAG} ✓ loaded ${res.items?.length ?? 0} types`);
       })
       .catch((err) => {
         if (err instanceof DOMException && err.name === 'AbortError') return;
         const message = err instanceof Error ? err.message : String(err);
         setError(message);
         setStatus('error');
-        console.warn(`${LOG_TAG} ✗ failed:`, message);
+        devWarn(`${LOG_TAG} ✗ failed:`, message);
       });
   }, []);
 

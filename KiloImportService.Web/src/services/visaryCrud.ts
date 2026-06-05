@@ -6,6 +6,7 @@
  * - PATCH /api/visary/crud/{entity}/{id}?forceUpdate=true - обновить сущность
  */
 
+import { devInfo } from './devLog';
 import { visaryGet, visaryPatch } from './visaryApi';
 
 export interface ConstructionSiteEntity {
@@ -36,11 +37,11 @@ export async function getConstructionSite(
   signal?: AbortSignal,
 ): Promise<ConstructionSiteEntity> {
   const path = `/crud/constructionsite/${siteId}`;
-  console.info(`[VisaryCRUD] → GET ${path}`);
-  
+  devInfo(`[VisaryCRUD] → GET ${path}`);
+
   const entity = await visaryGet<ConstructionSiteEntity>(path, { signal });
-  
-  console.info(`[VisaryCRUD] ← GET ${path} | RowVersion=${entity.RowVersion}`);
+
+  devInfo(`[VisaryCRUD] ← GET ${path} | RowVersion=${entity.RowVersion}`);
   return entity;
 }
 
@@ -54,14 +55,14 @@ export async function updateConstructionSite(
   signal?: AbortSignal,
 ): Promise<ConstructionSiteEntity> {
   const path = `/crud/constructionsite/${siteId}`;
-  console.info(`[VisaryCRUD] → PATCH ${path}?forceUpdate=true`, payload);
-  
+  devInfo(`[VisaryCRUD] → PATCH ${path}?forceUpdate=true`, payload);
+
   const entity = await visaryPatch<ConstructionSiteEntity>(path, payload, {
     signal,
     queryParams: { forceUpdate: 'true' },
   });
-  
-  console.info(`[VisaryCRUD] ← PATCH ${path} | успешно обновлено`);
+
+  devInfo(`[VisaryCRUD] ← PATCH ${path} | успешно обновлено`);
   return entity;
 }
 
