@@ -235,6 +235,27 @@ public class RoomsFormImportMapperTests
         Assert.Equal("Нежилое помещение",      ResolveTitle("Нежилое помещение",     dict));
     }
 
+    /// <summary>
+    /// Алиас короткой формы: «ПСН» — отраслевая аббревиатура («помещение
+    /// свободного назначения»), которую plural-trim не приведёт к Title.
+    /// Резолвится через <c>SheetNameAliases</c> в «Нежилое помещение».
+    /// Case-insensitive. Если канонического Title нет в живом справочнике —
+    /// алиас не срабатывает (откат к plural-trim → null).
+    /// </summary>
+    [Fact]
+    public void ResolveKindBySheetName_AliasPsn()
+    {
+        var dict = MakeKindDict("Квартира", "Нежилое помещение", "Кладовая");
+
+        Assert.Equal("Нежилое помещение", ResolveTitle("ПСН", dict));
+        Assert.Equal("Нежилое помещение", ResolveTitle("псн", dict));
+        Assert.Equal("Нежилое помещение", ResolveTitle("  ПСН  ", dict));
+
+        // Если в живом справочнике нет «Нежилое помещение» — алиас не помогает.
+        var dictWithoutNonRes = MakeKindDict("Квартира", "Кладовая");
+        Assert.Null(ResolveTitle("ПСН", dictWithoutNonRes));
+    }
+
     [Fact]
     public void ResolveKindBySheetName_UnknownReturnsNull()
     {

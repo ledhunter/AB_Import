@@ -21,13 +21,23 @@
 
 **Итого v1**: 6 High + 3 Medium + 46 Low = 55 находок.
 
-### AppSec v2 (`appsec_v2.txt`, 2026-06-04, дополнение)
+### AppSec uuid-CVE supplement (`appsec_v2.txt`, 2026-06-04)
 
 | Категория | Critically | SLA, дней | Кол-во | Файлы |
 |-----------|------------|-----------|--------|-------|
 | CVE-2026-41907 (`uuid@8.3.2`) | Medium | 9 | 1 | транзитивная: `@alfalab/core-components → action-button → @alfalab/hooks → uuid@8.3.2` |
 
-**Итого v2**: 1 Medium.
+**Итого**: 1 Medium.
+
+### AppSec v2 повторный скан (`appsec_v2.xlsx`, 2026-06-05) — 6 SSRF переоткрыты
+
+После раскатки фиксов v1 заказчик прогнал сканер заново. Из 55 находок v1 закрылось 49 — но **6 SSRF остались**. Строки изменились (рефакторинг под `apiUrl`), но правило `javascript-ssrf-rule-node_ssrf` по-прежнему срабатывает на тех же 4 файлах.
+
+| Категория | Critically | SLA, дней | Кол-во | Файлы (новые строки v2) |
+|-----------|------------|-----------|--------|-------------------------|
+| `javascript-ssrf-rule-node_ssrf` | (поле пусто, sla=0 — продолжение High v1) | срочно | 6 | `importsService.ts:84, 301`, `sitesSync.ts:24`, `visaryApi.ts:101, 183, 264` |
+
+**Итого v2-rescan**: 6 находок одной категории.
 
 ---
 
@@ -67,7 +77,159 @@ CWE-134 (format-string) — это уязвимость C-style `printf("%s", us
 
 ---
 
-## 📦 Этап 5: Override `uuid` (v2, Medium ×1)
+## 🔍 Анализ: почему v1 `apiUrl`-helper не закрыл SSRF-правило
+
+Сканер пишет: «передаёт пользовательские управляемые URL напрямую в HTTP-клиент». Реальной угрозы нет (relative-path, same-origin, числовые ID — см. п. 2 истинности находок), но `apiUrl.imports(sub)` тоже не помог по правилу. Разбор почему — чтобы зафиксировать паттерн на будущее:
+
+**Что видит сканер**:
+```ts
+const path = apiUrl.imports(`/sessions/${id}`);   // ① функция-обёртка возвращает string
+response = await fetch(path, init);               // ② здесь fetch получает variable, не literal
+```
+Data-flow до `fetch` пересекает функциональную границу `apiUrl.imports` → `joinPath` → `prefix + sub`. Сканер не разворачивает межфункциональную конкатенацию обратно к литералу `'/api/imports'` и видит просто `fetch(variableUrl)` — паттерн флага.
+
+**Доказательство — точки, которые сканер НЕ помечает**:
+| Файл:строка | Код | Почему не флагается |
+|-------------|-----|---------------------|
+| `projectsBackendApi.ts:40` | `fetch(SYNC_PATH, ...)` | `SYNC_PATH` — top-level `const = '/api/projects/sync'`, статически распознан как литерал |
+| `projectsBackendApi.ts:72` | `fetch(url.pathname + url.search, ...)` | `url` — объект `new URL(...)`, известный санитайзер origin'а |
+
+**Вывод**: правило хочет в точке `fetch(...)` либо литерал, либо доказуемый санитайзер. `apiUrl` — только построитель строки, не санитайзер. Закрыть → завести **whitelist-санитайзер на месте вызова `fetch`**.
+
+> ⚠️ Это касается **только конкретного сканера** заказчика. Для нас существенно — паттерн (whitelist на `fetch`-сайте) согласуется с собственной рекомендацией сканера: «введите белый список разрешённых ресурсов».
+
+---
+
+## 🌐 Этап 6: `safeFetch` wrapper с whitelist-guard (6 SSRF v2-rescan)
+
+### Цель
+Закрыть `javascript-ssrf-rule-node_ssrf` на 6 точках через явный whitelist API-корней, проверяемый ПЕРЕД вызовом `fetch`. Это и есть «whitelist разрешённых ресурсов» из формулировки сканера.
+
+### 6.1. Новый файл `KiloImportService.Web/src/services/safeFetch.ts`
+```ts
+// Whitelist API-корней frontend'а: все запросы идут same-origin
+// через Vite-proxy (dev) или backend (prod). Кросс-origin запрещён.
+const ALLOWED_PREFIXES = [
+  '/api/imports',
+  '/api/visary',
+  '/api/sites',
+  '/api/projects',
+  '/hubs',
+] as const;
+
+/**
+ * `fetch` с гард-проверкой URL по whitelist. Замена `fetch(url, init)`
+ * во всех местах, где URL динамически конструируется (`apiUrl.*`).
+ *
+ * Закрывает `javascript-ssrf-rule-node_ssrf` (см. doc 121, AppSec v2 rescan):
+ * сканер видит literal-массив prefix'ов + `.some(p => url.startsWith(p))`
+ * — паттерн whitelist-санитайзера прямо перед `fetch(url, init)`.
+ */
+export function safeFetch(url: string, init?: RequestInit): Promise<Response> {
+  if (typeof url !== 'string' || url.length === 0) {
+    throw new TypeError('safeFetch: url must be a non-empty string');
+  }
+  // Same-origin only: абсолютный путь, начинающийся с '/'
+  if (!url.startsWith('/')) {
+    throw new Error(`safeFetch: only same-origin absolute paths allowed: ${url}`);
+  }
+  // Запрещаем protocol-relative URL (`//evil.com/...`)
+  if (url.startsWith('//')) {
+    throw new Error('safeFetch: protocol-relative URL not allowed');
+  }
+  // Запрещаем path traversal
+  if (url.includes('/../') || url.includes('/./')) {
+    throw new Error(`safeFetch: path traversal not allowed: ${url}`);
+  }
+  const allowed = ALLOWED_PREFIXES.some(
+    p => url === p || url.startsWith(p + '/') || url.startsWith(p + '?'),
+  );
+  if (!allowed) {
+    throw new Error(`safeFetch: URL prefix not in whitelist: ${url}`);
+  }
+  return fetch(url, init);
+}
+```
+
+### 6.2. Замены (6 точек из v2-audit + 2 проактивно)
+
+| Файл | Строка v2 | Было | Станет |
+|------|-----------|------|--------|
+| `services/importsService.ts` | 84 | `await fetch(path, await withAuth(init))` | `await safeFetch(path, await withAuth(init))` |
+| `services/importsService.ts` | 301 | `await fetch(path, await withAuth({...}))` | `await safeFetch(path, await withAuth({...}))` |
+| `services/sitesSync.ts` | 24 | `await fetch(url, { method: 'POST' })` | `await safeFetch(url, { method: 'POST' })` |
+| `services/visaryApi.ts` | 101 | `await fetch(url, {...POST})` | `await safeFetch(url, {...POST})` |
+| `services/visaryApi.ts` | 183 | `await fetch(url, {...GET})` | `await safeFetch(url, {...GET})` |
+| `services/visaryApi.ts` | 264 | `await fetch(url, {...PATCH})` | `await safeFetch(url, {...PATCH})` |
+| `services/projectsBackendApi.ts` | 40, 72 | `fetch(SYNC_PATH, ...)` / `fetch(url.pathname + url.search, ...)` | `safeFetch(...)` (проактивно, чтобы не переоткрыли при следующем скане) |
+
+### 6.3. НЕ трогаем
+- `components/ImportSession/SessionGeneratedFiles.tsx:38` — `fetch(file.downloadUrl, ...)`. Это **легитимный кросс-origin** сценарий (скачивание сгенерированного backend файла, URL приходит из server-response). Whitelist его бы сломал. Если сканер потом флагнет — отдельная задача (whitelist доменов или server-issued signed URL).
+- `services/listView/createListViewService.ts` — там `async function fetch(...)` это **наш собственный метод сервиса**, не глобальный `fetch`. Сканер их и не путает.
+
+### 6.4. Точки риска
+- **Регрессия тестов**: 59 unit-тестов используют `vi.spyOn(global, 'fetch')` / манчер `vi.fn()`. `safeFetch` внутри вызывает `fetch`, и spy продолжает триггериться. Но если в тесте URL не из whitelist (например, моки сетевых ошибок на абстрактном `'/test/path'`) — тест упадёт с `URL prefix not in whitelist`. Решение: мок-URLs привести в соответствие whitelist'у, либо параметризовать allowed-prefixes для тестов через env.
+- **`buildUrl` в `visaryApi.ts`** — возвращает строку с query-параметрами (`?` + encoded). Whitelist разрешает `prefix + '?'`. Проверить, что нет случаев, когда `buildUrl` возвращает URL без префикса (не должно, но грепнуть).
+- **Эскалация при нарушении whitelist** — `throw` рано, до сетевого запроса. Это **строже**, чем было: раньше "битый" URL уходил на сервер и получал 404. Теперь будет `Error` в UI с понятным сообщением. Acceptable — нет известных случаев.
+
+### 6.5. Зависимости от других этапов
+- **Аддитивно**, ничего не ломает в этапах 1-5. `apiUrl` остаётся: `safeFetch(apiUrl.imports('/x'), init)` — `apiUrl` строит URL, `safeFetch` верифицирует whitelist на месте `fetch`.
+- НЕ требует пересборки Docker-образов (правки только в `Web/src/services`).
+- НЕ затрагивает backend, `.env`, package-lock.
+
+### 6.6. Тесты
+- `npx vitest run` — все существующие должны пройти; добавить минимум 4 теста на `safeFetch`:
+  1. allowed prefix → проксирует на `fetch`;
+  2. unknown prefix → `throws`;
+  3. `//evil.com/api/imports` → `throws` (protocol-relative);
+  4. `/api/imports/../secret` → `throws` (traversal).
+- `npx tsc -b --noEmit` — нет новых ошибок (2 pre-existing в FileUpload.tsx — не наши).
+- Ручной smoke (см. doc 31): полный цикл Rooms-импорта в браузере; проверить, что в DevTools → Network запросы идут на `/api/imports/*` и `/api/visary/*` без ошибок.
+- После раскатки попросить заказчика прогнать **третий скан** — должен показать 0 SSRF (`safeFetch` использует literal-массив + `.some(startsWith)` — паттерн whitelist'а сканер распознаёт).
+
+### 6.8. ESLint-guard против регрессии (защита от возврата анти-паттерна)
+
+Без автоматической проверки следующий PR может «нечаянно» вернуть `fetch(url, init)` — и SSRF-правило заказчика снова загорится. Поэтому добавлено правило в `KiloImportService.Web/eslint.config.js`:
+
+```js
+const noBareFetchSyntaxRule = [
+  'error',
+  {
+    selector: "CallExpression[callee.type='Identifier'][callee.name='fetch']",
+    message: "Запрещён прямой fetch(): импортируй safeFetch из 'services/safeFetch' (см. doc_project/121, AppSec v2-rescan).",
+  },
+  {
+    selector: "MemberExpression[property.name='fetch'][object.name='window']",
+    message: "Запрещён window.fetch: используй safeFetch из 'services/safeFetch'.",
+  },
+  {
+    selector: "MemberExpression[property.name='fetch'][object.name='globalThis']",
+    message: "Запрещён globalThis.fetch: используй safeFetch из 'services/safeFetch'.",
+  },
+];
+```
+
+Правило ловит **три формы обхода**:
+- `fetch(url, init)` — прямой вызов глобала
+- `window.fetch(url, init)` — через `window`
+- `globalThis.fetch(url, init)` — через `globalThis`
+
+**Единственное исключение** — `services/safeFetch.ts:line N` со встроенным `// eslint-disable-next-line no-restricted-syntax`. Файл-level override НЕ ставим: исключение должно быть точечным — любой *новый* `fetch(...)` внутри `safeFetch.ts` тоже сломает lint.
+
+Проверено фикстурой `__lint-probe.ts` — все 3 формы ловятся, 3 error на 3 строки.
+
+**Действие в CI**: `npm run lint` уже есть в `package.json`. Если CI ещё не падает на lint-error'ах — добавить шаг (отдельная задача).
+
+### 6.7. План отступления
+Если сканер всё равно флагает `fetch(url, init)` **внутри** `safeFetch.ts` (то есть data-flow не признаёт whitelist-санитайзер), эскалации:
+1. **Inline-литералы в каждой точке**: `fetch(\`/api/imports${rest}\`, init)` — отказ от `apiUrl.imports` ради literal-prefix на сайте `fetch`. 6 точек × 2-3 строки правки. Минус: возвращаем рассогласование префиксов между файлами; `apiUrl` отдаёт unified-конструкцию.
+2. **`// nosem: javascript-ssrf-rule-node_ssrf`** или эквивалентная директива сканера заказчика на единственной строке `fetch(url, init)` внутри `safeFetch`. Это даёт 1 явно-задокументированный suppress вместо 6 неявных.
+
+Решение по эскалации — после факта первого скана с фиксом v6.
+
+---
+
+## 📦 Этап 5: Override `uuid` (uuid-CVE, Medium ×1)
 
 ### Цель
 Закрыть CVE-2026-41907 (`uuid@8.3.2` → ≥ 14.0.0).
@@ -118,6 +280,17 @@ CWE-134 (format-string) — это уязвимость C-style `printf("%s", us
 ┌──────────────────────────────────────────────────────────────────┐
 │  Этап 4: документация + регистрация                               │
 └──────────────────────────────────────────────────────────────────┘
+
+   ▼ повторный скан заказчика (`appsec_v2.xlsx`, 2026-06-05)
+     → 6 SSRF переоткрыты — `apiUrl` помощник не закрыл правило
+
+┌──────────────────────────────────────────────────────────────────┐
+│  Этап 6: safeFetch wrapper с whitelist-guard                      │
+│  ─ src/services/safeFetch.ts (новый)                             │
+│  ─ замена fetch(url, init) → safeFetch(url, init) в 4 файлах     │
+│  закрывает 6 SSRF v2-rescan структурно (literal whitelist)        │
+└──────────────────────────────────────────────────────────────────┘
+                ▼ vitest + tsc + ручной smoke + третий скан
 ```
 
 **Ключевая взаимосвязь**: фиксы #2 (SSRF) и #3 (unsafe-formatstring) **естественным образом** объединяются — оба требуют точечной правки одних и тех же `fetch`-вызовов и `console.log`-логов в `src/services/*` и `src/hooks/*`. Делать их отдельно = пройти по файлам дважды, увеличить риск регрессий.
@@ -300,7 +473,97 @@ export const devGroupEnd       = () => { if (DEV) console.groupEnd(); };
 
 ---
 
-## 🎯 Чек-лист выполнения (статус — 2026-06-04)
+## 🚫 Анти-паттерны (не делай так)
+
+Эти конструкции выглядят «безобидно», но именно они приводят к переоткрытию SSRF-правила сканером и к реальным SSRF в проде, если на backend появится прокси. Все они блокируются ESLint-правилом из § 6.8 — но осознанные:
+
+### ❌ 1. Прямой `fetch(template-literal с переменной)`
+```ts
+// ВРЕДНО: сканер видит data-flow от переменной к fetch без санитайзера.
+const id = sessionId;
+const r = await fetch(`/api/imports/sessions/${id}`, { signal });
+```
+**Почему вредно**: literal-prefix на сайте `fetch` есть, но переменная `${id}` ломает паттерн «hardcoded URL». В реальном SSRF-векторе если `id` подменить на `../../../external/host`, мы пошлём запрос мимо backend (для нас — false positive из-за same-origin, но pattern остаётся).
+```ts
+// ПРАВИЛЬНО:
+const r = await safeFetch(apiUrl.imports(`/sessions/${id}`), { signal });
+```
+
+### ❌ 2. URL-builder без санитайзера на месте `fetch`
+```ts
+// ВРЕДНО: scanner data-flow не разворачивает межфункциональную конкатенацию,
+// видит `fetch(<variable>)` и флагает. Реальная защита — нулевая.
+const path = apiUrl.imports(`/sessions/${id}`);
+const r = await fetch(path, init);
+```
+**Почему вредно**: именно этот паттерн был у нас в v1 и провалил v2-rescan. `apiUrl` — только построитель строки, не санитайзер.
+```ts
+// ПРАВИЛЬНО:
+const r = await safeFetch(apiUrl.imports(`/sessions/${id}`), init);
+```
+
+### ❌ 3. URL с env/host из конфига
+```ts
+// ВРЕДНО: env-конкатенация — паттерн SSRF par excellence.
+const host = import.meta.env.VITE_BACKEND_HOST;
+const r = await fetch(`${host}/api/imports`, init);
+```
+**Почему вредно**: `host` контролируется конфигом, который в dev читается из `.env.local` — пользователю инстанса можно подменить и переадресовать запросы. Кроме того, кросс-origin = leak Bearer-токена в чужой origin.
+```ts
+// ПРАВИЛЬНО (если правда нужно ходить на чужой backend — отдельная задача):
+//   - либо завести `crossOriginFetch` с whitelist доменов,
+//   - либо переписать через server-side proxy и safeFetch на /api/...
+```
+
+### ❌ 4. `window.fetch` / `globalThis.fetch` для обхода
+```ts
+// ВРЕДНО: попытка обойти правило ESLint.
+const r = await globalThis.fetch('/api/secret', init);
+```
+**Почему вредно**: ровно для этого ESLint-правило ловит `MemberExpression` с `property.name='fetch'`.
+
+### ❌ 5. Снять `// eslint-disable-next-line` без обсуждения
+```ts
+// ВРЕДНО: единственная разрешённая `fetch` живёт в safeFetch.ts ПОСЛЕ guard'а.
+// Размножение `// eslint-disable` рядом с `fetch(...)` в других файлах = отказ от защиты.
+```
+**Почему вредно**: comment-suppress в новом месте требует review (PR-комментарий ревьювера: «обоснуй»). Если правда нужно (например, отдельный whitelist для скачивания cross-origin-файлов) — заведи **новый wrapper** (`externalFetch`) с собственным guard'ом, а не лей `eslint-disable` поточечно.
+
+### ❌ 6. Хардкод секретов в `appsettings.json` / `docker-compose.yml`
+```yaml
+# ВРЕДНО (как было до этапа 2):
+POSTGRES_PASSWORD: visary_pwd
+```
+**Почему вредно**: пароль попадает в git, в репликации на dev-машины коллег, в логи git-хостинга. Сканер AppSec именно это и нашёл (Medium ×3).
+```yaml
+# ПРАВИЛЬНО (deny-by-default, без fallback):
+POSTGRES_PASSWORD: ${VISARY_DB_PASSWORD:?VISARY_DB_PASSWORD не задан — скопируй .env.example → .env}
+```
+
+### ❌ 7. `console.log(...)` в production-bundle
+```ts
+// ВРЕДНО: information disclosure (request body, токены, путь backend) в prod-консоли.
+console.log('[VisaryAPI] →', url, body);
+```
+```ts
+// ПРАВИЛЬНО:
+import { devLog } from './devLog';   // DEV-guard через import.meta.env.DEV
+devLog('[VisaryAPI] →', url, body);
+```
+
+### ❌ 8. `package.json: "^X.Y.Z"` без `package-lock.json` в git
+Сам по себе `^`-range безопасен **при условии**, что `package-lock.json` коммитится и CI использует `npm ci`. Если ни того, ни другого — версии «плывут» между средами, и уязвимая транзитива может проскочить.
+
+### ✅ Правило большого пальца
+> Любой сетевой запрос из frontend → `safeFetch(apiUrl.<root>(path), init)`.
+>
+> Любая переменная окружения с секретом → `.env` (gitignored), в коде — `${VAR:?...}` (deny-by-default).
+>
+> Любая console-точка не для критической ошибки конфига → `devLog`/`devInfo`/`devWarn`/`devError` (DEV-only).
+
+---
+
+## 🎯 Чек-лист выполнения (статус — 2026-06-05)
 
 - [x] **Этап 1: pin npm-deps**
   - [x] `package.json` — все 21 версия зафиксированы точными значениями (`^X.Y.Z` → `X.Y.Z`)
@@ -322,7 +585,19 @@ export const devGroupEnd       = () => { if (DEV) console.groupEnd(); };
   - [x] `vite.config.ts:33` — константные format-strings `'... %s ...'` (DEV-guard в Node-времени неприменим)
   - [x] `npx tsc -b --noEmit` — никаких новых ошибок (2 pre-existing в FileUpload.tsx — не наши)
   - [x] `npx vitest run` — **59/59 passed**
-- [x] **Этап 5: override `uuid` (v2)**
+- [x] **Этап 6: `safeFetch` whitelist-guard (v2-rescan, 6 SSRF)** — 2026-06-05
+  - [x] `src/services/safeFetch.ts` — литерал-whitelist `ALLOWED_PREFIXES` + 4 guard'а перед `fetch` (тип, protocol-relative, traversal, whitelist)
+  - [x] `importsService.ts:84, 301` — `fetch` → `safeFetch`
+  - [x] `sitesSync.ts:24` — `fetch` → `safeFetch`
+  - [x] `visaryApi.ts:101, 183, 264` — `fetch` → `safeFetch` (POST/GET/PATCH)
+  - [x] `projectsBackendApi.ts:40, 72` — проактивно переведены на `safeFetch` + `console.info` → `devInfo`
+  - [x] `SessionGeneratedFiles.tsx:38` — проактивно: `downloadUrl` приходит из backend как `/api/imports/.../budget-xlsx`, в whitelist попадает
+  - [x] юнит-тесты `safeFetch.test.ts` — **13 кейсов** (whitelist ok/sub-path/import-types/похожий-prefix/произвольный путь + 6 invariant + 2 delegation)
+  - [x] `npx tsc -b --noEmit` — нет новых ошибок (2 pre-existing в `FileUpload.tsx` остались)
+  - [x] `npx vitest run` — **72/72 passed** (было 59, +13 новых)
+  - [x] **ESLint-guard** против регрессии (см. § 6.8): `no-restricted-syntax` запрещает прямой `fetch()`, `window.fetch`, `globalThis.fetch` в любом `.ts`/`.tsx`. Единственный разрешённый вызов — внутри `safeFetch.ts` через line-level `// eslint-disable-next-line`.
+  - [ ] передать заказчику для третьего скана; при сохранении flag'а на `fetch(url, init)` внутри `safeFetch` — план отступления 6.7
+- [x] **Этап 5: override `uuid` (uuid-CVE)**
   - [x] `package.json` — добавлен блок `"overrides": { "uuid": "^14.0.0" }`
   - [x] `npm install` — `npm ls uuid` показывает `uuid@14.0.0` (через `@alfalab/hooks`)
   - [x] `npm audit --omit=dev` — **0 vulnerabilities** (CVE-2026-41907 закрыт)
@@ -363,8 +638,9 @@ cp .env.example .env
 | Слой | Файлы | Что меняется |
 |------|-------|--------------|
 | Конфигурация | `appsettings.json`, `docker-compose.yml`, `.env.example` | Чистка хардкоженных паролей, расширение `.env` |
-| Зависимости | `KiloImportService.Web/package.json`, `package-lock.json` | Pin'инг 11 версий |
-| Сетевой слой | `src/services/{apiUrl,devLog,importsService,importsHub,sitesSync,visaryApi,visaryCrud}.ts` | apiUrl helper + devLog wrapper |
-| Hooks | `src/hooks/{useBackendProjects,useImportSession,useImportTypes,useListView}.ts` | devLog wrapper |
+| Зависимости | `KiloImportService.Web/package.json`, `package-lock.json` | Pin'инг 11 версий + `overrides.uuid` |
+| Сетевой слой v1 | `src/services/{apiUrl,devLog,importsService,importsHub,sitesSync,visaryApi,visaryCrud}.ts` | `apiUrl` helper + `devLog` wrapper |
+| Сетевой слой v2 (план) | `src/services/{safeFetch,importsService,sitesSync,visaryApi,projectsBackendApi}.ts` + `__tests__/safeFetch.spec.ts` | `safeFetch` whitelist-guard перед каждым `fetch` |
+| Hooks | `src/hooks/{useBackendProjects,useImportSession,useImportTypes,useListView}.ts` | `devLog` wrapper |
 | Vite | `vite.config.ts` | Статическая строка вместо конкатенации |
 | Документация | `doc_project/{121,93,README,26,27}.md`, `MEMORY.md` | Записи о фиксах |

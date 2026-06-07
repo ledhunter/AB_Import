@@ -11,7 +11,17 @@ const envDir = path.resolve(process.cwd(), '..');
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, envDir, '');
-  const visaryTarget = env.VITE_VISARY_API_URL || 'https://isup-alfa-test.k8s.npc.ba';
+  // VITE_VISARY_API_URL — маппинг от SSOT-переменной VISARY_BASE_URL в корневом .env
+  // (см. docker-compose.yml + doc_project/122-environment-config.md).
+  // Deny-by-default: при пустом значении бросаем понятную ошибку, чтобы хост
+  // test-стенда не уехал случайно в preprod/prod.
+  const visaryTarget = env.VITE_VISARY_API_URL;
+  if (!visaryTarget) {
+    throw new Error(
+      'VITE_VISARY_API_URL пуст. Скопируй .env.example → .env и задай VISARY_BASE_URL ' +
+        '(маппинг → VITE_VISARY_API_URL см. в docker-compose.yml). См. doc_project/122.',
+    );
+  }
   const backendTarget = env.VITE_BACKEND_URL || 'http://localhost:5000';
 
   // Логирование одного proxy-канала: req/res/error в формате `[Vite proxy → tag]`.

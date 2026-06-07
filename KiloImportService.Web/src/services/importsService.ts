@@ -19,6 +19,7 @@ import type {
 import { apiUrl } from './apiUrl';
 import { getAccessToken } from './auth';
 import { devError, devGroupCollapsed, devGroupEnd, devInfo, devLog, devWarn } from './devLog';
+import { safeFetch } from './safeFetch';
 
 // ─────────────────── Errors ───────────────────
 
@@ -81,7 +82,7 @@ async function fetchJson<T>(
 
   let response: Response;
   try {
-    response = await fetch(path, await withAuth(init));
+    response = await safeFetch(path, await withAuth(init));
   } catch (err) {
     if (err instanceof DOMException && err.name === 'AbortError') {
       devInfo(`${LOG_TAG} ⊘ aborted ${method} ${path} #${id}`);
@@ -298,7 +299,7 @@ export async function exportImportsPdf(
 
   let response: Response;
   try {
-    response = await fetch(path, await withAuth({
+    response = await safeFetch(path, await withAuth({
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ sessionIds }),

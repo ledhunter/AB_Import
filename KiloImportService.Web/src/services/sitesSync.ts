@@ -7,6 +7,7 @@
 
 import { apiUrl } from './apiUrl';
 import { devError, devInfo } from './devLog';
+import { safeFetch } from './safeFetch';
 import { VisaryApiError } from './visaryApi';
 
 export interface SiteSyncResult {
@@ -21,7 +22,7 @@ export async function syncSite(siteId: number, projectId: number): Promise<SiteS
   devInfo(`[SitesSync] → POST ${url} #${requestId}`);
 
   const start = performance.now();
-  const response = await fetch(url, {
+  const response = await safeFetch(url, {
     method: 'POST',
   });
 
