@@ -575,14 +575,26 @@ public sealed class RoomsFormImportMapper : IImportMapper
             // в payload (`WhenWritingNull`-семантика DTO).
             bool? isWithdrawn = TryParseBoolYesNo(ReadString(row, IsWithdrawnAliases));
 
+            // Поля ДДУ (Стоимость / Сумма на эскроу / Дата) НЕ должны блокировать
+            // создание/поиск Помещения: если в строке нет ДДУ или значение
+            // некорректно — просто не пишем поле в Visary, строка применяется как
+            // обычно. Иначе пользователь видит `'-' не является валидным числом` и
+            // не получает Помещение, хотя ДДУ к нему не относится.
+            // Ошибку парсера логируем в Debug — для диагностики, если потребуется.
             double? saCost = TryParseNullableDouble(ReadString(row, SaCostAliases), out var saCostErr);
-            if (saCostErr != null) rowErrors.Add(new RowError(string.Join(" / ", SaCostAliases), "invalid_number", saCostErr));
+            if (saCostErr != null) _log.LogDebug(
+                "RoomsForm.Validate: лист '{Sheet}' стр.{Row} — Стоимость ДДУ '{Err}' (поле пропущено, строка не блокируется).",
+                row.Sheet, row.SourceRowNumber, saCostErr);
 
             double? saDeposited = TryParseNullableDouble(ReadString(row, SaDepositedAmountAliases), out var saDepErr);
-            if (saDepErr != null) rowErrors.Add(new RowError(string.Join(" / ", SaDepositedAmountAliases), "invalid_number", saDepErr));
+            if (saDepErr != null) _log.LogDebug(
+                "RoomsForm.Validate: лист '{Sheet}' стр.{Row} — Сумма на эскроу '{Err}' (поле пропущено, строка не блокируется).",
+                row.Sheet, row.SourceRowNumber, saDepErr);
 
             string? saDate = TryParseExcelDate(ReadString(row, SaDateAliases), out var saDateErr);
-            if (saDateErr != null) rowErrors.Add(new RowError(string.Join(" / ", SaDateAliases), "invalid_date", saDateErr));
+            if (saDateErr != null) _log.LogDebug(
+                "RoomsForm.Validate: лист '{Sheet}' стр.{Row} — Дата ДДУ '{Err}' (поле пропущено, строка не блокируется).",
+                row.Sheet, row.SourceRowNumber, saDateErr);
 
             var saDepositorFullName = ReadString(row, SaDepositorFullNameAliases);
             if (ExcelErrorMarkers.Contains(saDepositorFullName.Trim())) saDepositorFullName = string.Empty;
@@ -1334,8 +1346,9 @@ public sealed class RoomsFormImportMapper : IImportMapper
                         {
                             IsWithdrawn = isWithdrawnVal,
                         }, gct);
-                        Log(sheetForRow, mr.SourceRowNumber,
-                            $"Помещение: IsWithdrawn={isWithdrawnVal} применён через follow-up PATCH после привязки ДДУ");
+                        // В журнал не пишем: признак «вывода из продажи» — поле
+                        // самого Помещения; пользователь видит его в Visary
+                        // напрямую, отдельной строки лога не требуется (см. doc 125).
                     }
 
                     // ── (d) Snapshot для batch-upsert ────────────────────────
@@ -1748,11 +1761,28 @@ public sealed class RoomsFormImportMapper : IImportMapper
     // ──────────────────────────── Helpers ──────────────────────────────────
 
     /// <summary>
+    /// Алиасы коротких/отраслевых имён листов на канонические Title справочника
+    /// RoomKind. Используются ДО plural-trim, чтобы аббревиатуры, которые
+    /// эвристика «мн.→ед.ч.» не превратит в Title, всё равно резолвились.
+    /// Расширять по запросу заказчика. Ключи/значения сравниваются
+    /// case-insensitive (см. конструктор словаря).
+    /// </summary>
+    private static readonly Dictionary<string, string> SheetNameAliases =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            // «ПСН» (помещение свободного назначения) — заказчик использует как
+            // имя листа для нежилых помещений.
+            ["ПСН"] = "Нежилое помещение",
+        };
+
+    /// <summary>
     /// Резолвит имя листа («Квартиры», «Машиноместа», «Кладовые»,
     /// «Коммерческие помещения», «Нежилое помещение», …) в Title/ID из
     /// справочника RoomKind. Стратегии (по порядку):
     ///   1) точное совпадение `kindByTitle[sheetName]`;
-    ///   2) plural-trim КАЖДОГО слова независимо: имя листа разбивается
+    ///   2) явный алиас из <see cref="SheetNameAliases"/> (например, «ПСН» →
+    ///      «Нежилое помещение»);
+    ///   3) plural-trim КАЖДОГО слова независимо: имя листа разбивается
     ///      по пробелам, для каждого слова собираются ед.ч.-кандидаты,
     ///      перебирается декартово произведение, склеенный кандидат
     ///      ищется в справочнике.
@@ -1770,7 +1800,14 @@ public sealed class RoomsFormImportMapper : IImportMapper
         if (kindByTitle.TryGetValue(name, out var id1))
             return (id1, FindMatchingTitle(name, kindByTitle));
 
-        // 2. Plural-trim per-word + декартово произведение.
+        // 2. Алиас короткой/отраслевой формы (например, «ПСН» → «Нежилое помещение»).
+        //    Если канонический Title отсутствует в живом справочнике Visary —
+        //    провал в plural-trim, как для неизвестного имени.
+        if (SheetNameAliases.TryGetValue(name, out var aliasTitle)
+            && kindByTitle.TryGetValue(aliasTitle, out var idA))
+            return (idA, FindMatchingTitle(aliasTitle, kindByTitle));
+
+        // 3. Plural-trim per-word + декартово произведение.
         //    Однословное имя — обычная plural-эвристика.
         //    Многословное (например, «Коммерческие помещения») — каждое слово
         //    приводится к ед.ч. независимо: «Коммерческие»→«Коммерческое»,
@@ -2093,6 +2130,12 @@ public sealed class RoomsFormImportMapper : IImportMapper
     {
         error = null;
         if (string.IsNullOrWhiteSpace(s)) return null;
+        // Общепринятые «пустые» маркеры из Excel (заказчик ставит `-` / `—` / `–`
+        // в численных колонках, чтобы обозначить «нет значения»). Возвращаем null
+        // без ошибки — иначе валидной строке прилетал бы `invalid_number`,
+        // например блокировал создание Помещения из-за пустой суммы ДДУ.
+        var trimmed = s.Trim();
+        if (trimmed == "-" || trimmed == "—" || trimmed == "–") return null;
         if (TryParseDouble(s, out var v)) return v;
         error = $"'{s}' не является валидным числом.";
         return null;

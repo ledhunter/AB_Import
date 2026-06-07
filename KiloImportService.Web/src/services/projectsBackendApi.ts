@@ -8,6 +8,8 @@
  * См. doc_project/18-projects-cache.md.
  */
 
+import { devInfo } from './devLog';
+import { safeFetch } from './safeFetch';
 import type { ProjectItem } from '../types/listView';
 
 export interface BackendProjectDto {
@@ -36,8 +38,8 @@ const SYNC_PATH = '/api/projects/sync';
  */
 export async function syncProjects(signal?: AbortSignal): Promise<ProjectsSyncResponse> {
   const startedAt = performance.now();
-  console.info('[projectsBackendApi] → POST /api/projects/sync');
-  const response = await fetch(SYNC_PATH, {
+  devInfo('[projectsBackendApi] → POST /api/projects/sync');
+  const response = await safeFetch(SYNC_PATH, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     signal,
@@ -47,7 +49,7 @@ export async function syncProjects(signal?: AbortSignal): Promise<ProjectsSyncRe
     throw new Error(`Backend sync вернул ${response.status}: ${body}`);
   }
   const data = (await response.json()) as ProjectsSyncResponse;
-  console.info(
+  devInfo(
     `[projectsBackendApi] ← 200 sync (${Math.round(performance.now() - startedAt)}ms): total=${data.total} upserted=${data.upserted}`,
   );
   return data;
@@ -68,14 +70,14 @@ export async function searchProjects(
   url.searchParams.set('limit', String(limit));
 
   const startedAt = performance.now();
-  console.info(`[projectsBackendApi] → GET ${url.pathname}${url.search}`);
-  const response = await fetch(url.pathname + url.search, { signal });
+  devInfo(`[projectsBackendApi] → GET ${url.pathname}${url.search}`);
+  const response = await safeFetch(url.pathname + url.search, { signal });
   if (!response.ok) {
     const body = await safeBody(response);
     throw new Error(`Backend search вернул ${response.status}: ${body}`);
   }
   const data = (await response.json()) as ProjectsSearchResponse;
-  console.info(
+  devInfo(
     `[projectsBackendApi] ← 200 search q='${query}' (${Math.round(
       performance.now() - startedAt,
     )}ms): items=${data.items.length} fromFallback=${data.fromFallback}`,

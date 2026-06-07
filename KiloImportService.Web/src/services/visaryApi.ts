@@ -8,6 +8,7 @@
 
 import { apiUrl } from './apiUrl';
 import { devError, devGroupCollapsed, devGroupEnd, devInfo, devWarn } from './devLog';
+import { safeFetch } from './safeFetch';
 
 /**
  * Ленивое чтение токена — позволяет тестам импортировать модуль вне Vite.
@@ -98,7 +99,7 @@ export async function visaryPost<TResponse>(
 
   let response: Response;
   try {
-    response = await fetch(url, {
+    response = await safeFetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -180,7 +181,7 @@ export async function visaryGet<TResponse>(
 
   let response: Response;
   try {
-    response = await fetch(url, {
+    response = await safeFetch(url, {
       method: 'GET',
       headers: {
         Authorization: `Bearer ${token}`,
@@ -261,7 +262,7 @@ export async function visaryPatch<TResponse>(
 
   let response: Response;
   try {
-    response = await fetch(url, {
+    response = await safeFetch(url, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',

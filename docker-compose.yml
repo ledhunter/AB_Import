@@ -74,20 +74,29 @@ services:
     container_name: kilo-import-backend
     restart: unless-stopped
     environment:
-      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
       ASPNETCORE_URLS: http://+:5000
-      # Service DB (под управлением EF Core миграций) — учётка из корневого .env (см. doc_project/121)
-      ConnectionStrings__ServiceDb: "Host=postgres-service;Port=5432;Database=import_service_db;Username=${IMPORT_SERVICE_DB_USER};Password=${IMPORT_SERVICE_DB_PASSWORD}"
-      # Visary DB (целевая, DB-first — без миграций)
-      ConnectionStrings__VisaryDb: "Host=postgres-visary;Port=5432;Database=visary_webapi_db;Username=${VISARY_DB_USER};Password=${VISARY_DB_PASSWORD}"
-      # Файлы импорта внутри контейнера
+      # Connection strings: для dev строятся из частей IMPORT_SERVICE_DB_*/VISARY_DB_*
+      # (docker-compose postgres-контейнеры). Для prod с managed-PostgreSQL — задать
+      # ConnectionStrings__ServiceDb / ConnectionStrings__VisaryDb целиком в .env,
+      # и они перекроют построенные. См. doc_project/122-environment-config.md.
+      ConnectionStrings__ServiceDb: ${ConnectionStrings__ServiceDb:-Host=postgres-service;Port=5432;Database=import_service_db;Username=${IMPORT_SERVICE_DB_USER};Password=${IMPORT_SERVICE_DB_PASSWORD}}
+      ConnectionStrings__VisaryDb: ${ConnectionStrings__VisaryDb:-Host=postgres-visary;Port=5432;Database=visary_webapi_db;Username=${VISARY_DB_USER};Password=${VISARY_DB_PASSWORD}}
       ImportStorage__Path: /var/lib/import-files
-      # CORS для UI
-      Cors__AllowedOrigins__0: "http://localhost:5173"
-      # Visary HTTP API (для кэша проектов и fallback-поиска).
-      # Значения берутся из корневого .env (gitignored). См. doc_project/18-projects-cache.md.
-      Visary__BaseUrl: ${Visary__BaseUrl:-https://isup-alfa-test.k8s.npc.ba}
+      # CORS: публичный URL UI per-среда (см. .env: UI_PUBLIC_URL)
+      Cors__AllowedOrigins__0: ${UI_PUBLIC_URL:?UI_PUBLIC_URL не задан — скопируй .env.example → .env (см. doc_project/122)}
+      # Visary API (per-среда). SSOT — VISARY_BASE_URL в .env.
+      # Deny-by-default: без значения сервис не стартует, чтобы хост test-стенда
+      # не уехал случайно в prod.
+      Visary__BaseUrl: ${VISARY_BASE_URL:?VISARY_BASE_URL не задан — скопируй .env.example → .env (см. doc_project/122)}
       Visary__BearerToken: ${Visary__BearerToken:-}
+      Visary__Auth__TokenEndpoint: ${Visary__Auth__TokenEndpoint:-}
+      Visary__Auth__ClientId: ${Visary__Auth__ClientId:-visary-ui}
+      VISARY_AUTH_REFRESH_TOKEN: ${VISARY_AUTH_REFRESH_TOKEN:-}
+      # JWT-валидация ВХОДЯЩИХ запросов (опц., см. doc 111). Пусто = выключено.
+      Auth__Authority: ${Auth__Authority:-}
+      Auth__Audience: ${Auth__Audience:-kilo-import-api}
+      Auth__RequireHttpsMetadata: ${Auth__RequireHttpsMetadata:-true}
     ports:
       - "5000:5000"
     volumes:
@@ -114,9 +123,11 @@ services:
     container_name: kilo-import-frontend
     restart: unless-stopped
     environment:
-      # Прокси берёт переменную при старте Vite (см. vite.config.ts)
+      # Vite proxy при dev-сборке; в prod-bundle Vite не работает — запросы
+      # идут на same-origin /api/visary/* через nginx/backend.
       VITE_BACKEND_URL: http://backend:5000
-      VITE_VISARY_API_URL: ${VITE_VISARY_API_URL:-https://isup-alfa-test.k8s.npc.ba}
+      # Маппинг SSOT VISARY_BASE_URL → VITE_VISARY_API_URL. Один источник для backend+frontend.
+      VITE_VISARY_API_URL: ${VISARY_BASE_URL:?VISARY_BASE_URL не задан — скопируй .env.example → .env (см. doc_project/122)}
       VITE_VISARY_API_TOKEN: ${VITE_VISARY_API_TOKEN:-}
     ports:
       - "5173:5173"

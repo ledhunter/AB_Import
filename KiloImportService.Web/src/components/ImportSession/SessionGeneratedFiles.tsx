@@ -3,6 +3,7 @@ import { Button } from '@alfalab/core-components/button';
 import { Typography } from '@alfalab/core-components/typography';
 import { downloadBlob } from '../../utils/downloadBlob';
 import { ImportsApiError } from '../../services/importsService';
+import { safeFetch } from '../../services/safeFetch';
 import type { UiGeneratedFile } from '../../types/session';
 
 interface Props {
@@ -35,7 +36,7 @@ export const SessionGeneratedFiles = ({ files }: Props) => {
     setBusyKey(file.kind);
     setError(null);
     try {
-      const response = await fetch(file.downloadUrl, { method: 'GET' });
+      const response = await safeFetch(file.downloadUrl, { method: 'GET' });
       if (!response.ok) {
         throw await buildApiError(response);
       }
