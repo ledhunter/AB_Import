@@ -350,19 +350,35 @@ public class ImportsController : ControllerBase
             // File-level ошибки (Sheet == null) и ошибки на видимых листах — оставляем.
             errorsQ = errorsQ.Where(e => e.Sheet == null || !exclude.Contains(e.Sheet));
         }
-        var errors = await errorsQ
+        var errorsRaw = await errorsQ
             .OrderBy(e => e.Sheet).ThenBy(e => e.SourceRowNumber)
             .Select(e => new { e.SourceRowNumber, e.Sheet, e.ColumnName, e.ErrorCode, e.Message })
             .ToListAsync(ct);
+        // Severity-маппинг кодов ошибок — некоторые «skipped/уже существует» сценарии
+        // это не ошибки, а предупреждения для пользователя (см. doc 127).
+        // Severity вычисляется на лету в endpoint'е (zero-migration), фронт красит
+        // «warning»/«info» отдельным цветом.
+        var errors = errorsRaw
+            .Select(e => new
+            {
+                e.SourceRowNumber, e.Sheet, e.ColumnName, e.ErrorCode, e.Message,
+                severity = ResolveErrorSeverity(e.ErrorCode),
+            })
+            .ToList();
 
         // sheetTotals считаем ПО ВСЕМ строкам сессии (без учёта excludeSheets) — клиенту
         // нужна полная карта листов, чтобы рисовать заголовки и счётчики свёрнутых.
-        var sheetTotals = await _db.StagedRows.AsNoTracking()
+        // + fileLabel — синтетический лейбл «к какому файлу относится лист». Фронт
+        // группирует листы одного файла под одним заголовком (см. doc 128).
+        var sheetTotalsRaw = await _db.StagedRows.AsNoTracking()
             .Where(r => r.ImportSessionId == id)
             .GroupBy(r => r.Sheet)
             .Select(g => new { sheet = g.Key, total = g.Count() })
             .OrderBy(x => x.sheet)
             .ToListAsync(ct);
+        var sheetTotals = sheetTotalsRaw
+            .Select(x => new { x.sheet, x.total, fileLabel = ResolveFileLabel(x.sheet) })
+            .ToList();
 
         // actionTotals — счётчики по action-меткам (created/updated/skipped) ПО ВСЕЙ
         // сессии, не по текущей странице. Маппер кладёт человекочитаемые метки в
@@ -427,6 +443,49 @@ public class ImportsController : ControllerBase
             },
             errors
         });
+    }
+
+    /// <summary>
+    /// Резолв «файла-происхождения» по имени листа. Imports — primary, План — secondary,
+    /// синтетические листы FinModel-мапера привязаны к одному из этих файлов
+    /// (см. doc 128). Фронт группирует листы одного файла под одним заголовком
+    /// с визуальным разделителем между файлами.
+    /// </summary>
+    private static string? ResolveFileLabel(string? sheet)
+    {
+        if (string.IsNullOrEmpty(sheet)) return null;
+        // FinModel synthetic-листы из FinModelImportMapper.SyntheticSheet*.
+        // «Финмодель» / «Outputs — Факт» — из основного файла «Параметры».
+        // «План — Общий график» — из файла «План» (secondary).
+        if (sheet.Equals("Финмодель",          StringComparison.OrdinalIgnoreCase)) return "Параметры";
+        if (sheet.StartsWith("Outputs — ",    StringComparison.OrdinalIgnoreCase)) return "Параметры";
+        if (sheet.StartsWith("План — ",        StringComparison.OrdinalIgnoreCase)) return "План";
+        // FinModel parsed: Inputs + Inputs (budget) + Inputs (schedule) — основной файл.
+        if (sheet.StartsWith("Inputs",         StringComparison.OrdinalIgnoreCase)) return "Параметры";
+        // Прочие импорты (Rooms, ShareAgreements, ...) — одного файла, лейбл не нужен.
+        return null;
+    }
+
+    /// <summary>
+    /// Резолв уровня важности ошибки по её коду. Severity вычисляется на лету в
+    /// endpoint'е reports — БД хранит только <c>ErrorCode</c>+<c>Message</c>,
+    /// классификация — это представление, не данные (zero-migration). Фронт
+    /// красит блок «Ошибки уровня файла» соответствующим цветом (warning =
+    /// оранжевый, info = синий, error по умолчанию = красный). См. doc 127.
+    /// </summary>
+    private static string ResolveErrorSeverity(string? errorCode)
+    {
+        if (string.IsNullOrEmpty(errorCode)) return "error";
+        return errorCode switch
+        {
+            // «Уже существует, пропущено» — пользовательский импорт-flow прошёл,
+            // дубликат не создан. Это ожидаемая ситуация при повторном импорте.
+            "fmmodel_skipped_already_exists"  => "warning",
+            "budget_upload_skipped_wbs_exists" => "warning",
+            // «Файла нет / шаг неприменим» — информативное сообщение, не проблема.
+            "fmmodel_skipped_no_plan_file"     => "info",
+            _ => "error",
+        };
     }
 
     /// <summary>Применить валидные строки в visary_db.</summary>

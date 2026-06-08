@@ -402,6 +402,11 @@ html, body, #root {
   border: 1px solid #bce3c6;
 }
 
+.messages--info {
+  background: #e8f1fc;
+  border: 1px solid #b9d4f4;
+}
+
 .message-row {
   display: flex;
   gap: 12px;
@@ -443,6 +448,17 @@ html, body, #root {
 }
 
 /* === Заголовок группы листа в таблице отчёта импорта === */
+.report-file-header > td {
+  background: #1e3a8a;
+  color: #ffffff;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  border-top: 2px solid #0f1e4a;
+  border-bottom: 1px solid #0f1e4a;
+}
+
 .sheet-header-row > td {
   background: #f3f4f6;
   border-top: 1px solid #d8d8d8;

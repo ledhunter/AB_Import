@@ -211,7 +211,8 @@ public sealed class ImportPipeline
         _log.LogInformation("Session {SessionId}: calling mapper.ValidateAsync", sessionId);
         var ctx = new ImportContext(
             sessionId, session.VisaryProjectId, session.VisarySiteId, session.UserId,
-            SecondaryFileRelativePath: session.FileSnapshot?.SecondaryRelativePath);
+            SecondaryFileRelativePath: session.FileSnapshot?.SecondaryRelativePath,
+            PrimaryFileRelativePath: session.FileSnapshot?.RelativePath);
         var validation = await mapper.ValidateAsync(ctx, parseResult.Rows, _visaryDb, ct);
         _log.LogInformation("Session {SessionId}: mapper.ValidateAsync returned rows={RowsCount} errors={ErrorsCount}", 
             sessionId, validation.Rows.Count, validation.FileLevelErrors.Count);
@@ -393,7 +394,8 @@ public sealed class ImportPipeline
         var mappedRows = staged.Select(r => new MappedRow(r.SourceRowNumber, r.Sheet ?? string.Empty, true, r.MappedValues!, [])).ToList();
         var ctx = new ImportContext(
             sessionId, session.VisaryProjectId, session.VisarySiteId, session.UserId,
-            SecondaryFileRelativePath: session.FileSnapshot?.SecondaryRelativePath);
+            SecondaryFileRelativePath: session.FileSnapshot?.SecondaryRelativePath,
+            PrimaryFileRelativePath: session.FileSnapshot?.RelativePath);
         var applyResult = await mapper.ApplyAsync(ctx, _visaryDb, mappedRows, ct);
 
         // Обновляем статусы StagedRow + переносим per-row actions из маппера.
@@ -412,7 +414,38 @@ public sealed class ImportPipeline
                 r.Actions = System.Text.Json.JsonSerializer.SerializeToDocument(log.Actions);
             }
         }
-        await _serviceDb.SaveChangesAsync(ct);
+        // Synthetic StagedRow'ы — «виртуальные» строки для out-of-band операций
+        // мапера (FinModel создаёт fmmodel/fmmodelversion/inputdata/etc прямо
+        // в Visary CRUD, минуя парсер). Инсертим как обычные StagedRow с
+        // указанными Sheet/SourceRowNumber и статусом — фронт отобразит их
+        // в построчном отчёте под отдельным «синтетическим листом» (например,
+        // «Финмодель», «Outputs — Факт», «План — Общий график»). См. doc 128.
+        if (applyResult.SyntheticRows is { Count: > 0 } synthetic)
+        {
+            foreach (var s in synthetic)
+            {
+                _serviceDb.StagedRows.Add(new StagedRow
+                {
+                    ImportSessionId = sessionId,
+                    Sheet = s.Sheet,
+                    SourceRowNumber = s.SourceRowNumber,
+                    RawValues = System.Text.Json.JsonSerializer.SerializeToDocument(
+                        new Dictionary<string, object?>
+                        {
+                            ["sheet"] = s.Sheet,
+                            ["synthetic"] = true,
+                        }),
+                    MappedValues = string.IsNullOrWhiteSpace(s.MappedValuesJson)
+                        ? System.Text.Json.JsonDocument.Parse("{}")
+                        : System.Text.Json.JsonDocument.Parse(s.MappedValuesJson),
+                    Status = s.Status,
+                    Actions = s.Actions.Count > 0
+                        ? System.Text.Json.JsonSerializer.SerializeToDocument(s.Actions)
+                        : null,
+                });
+            }
+            await _serviceDb.SaveChangesAsync(ct);
+        }
         foreach (var err in applyResult.Errors)
         {
             // RowError может нести Sheet+SourceRowNumber для row-level Apply-ошибок

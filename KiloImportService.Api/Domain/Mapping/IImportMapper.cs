@@ -53,12 +53,19 @@ public interface IImportMapper
 /// чтения краевых квартальных значений и создания <c>fmmodel</c> в Visary
 /// (см. doc 110). Для остальных импортов остаётся <c>null</c>.
 /// </param>
+/// <param name="PrimaryFileRelativePath">
+/// Относительный путь основного файла импорта в <c>IFileStorage</c>. Заполняется
+/// пайплайном из <c>session.FileSnapshot.RelativePath</c>. FinModel-маппер использует
+/// его, чтобы открыть лист <c>Outputs</c> и подтянуть Fact-блок («Доходы поэтапно» →
+/// «Этап 1») в существующую версию Финмодели поверх плановых InputData (см. doc 126).
+/// </param>
 public record ImportContext(
     Guid SessionId,
     int? VisaryProjectId,
     int? VisarySiteId,
     string? UserId,
-    string? SecondaryFileRelativePath = null
+    string? SecondaryFileRelativePath = null,
+    string? PrimaryFileRelativePath = null
 );
 
 /// <summary>Результат валидации одной строки.</summary>
@@ -99,7 +106,47 @@ public record ValidationResult(IReadOnlyList<MappedRow> Rows, IReadOnlyList<RowE
 public record ApplyResult(
     int AppliedCount,
     IReadOnlyList<RowError> Errors,
-    IReadOnlyList<RowActionLog>? RowActions = null);
+    IReadOnlyList<RowActionLog>? RowActions = null,
+    IReadOnlyList<SyntheticStagedRow>? SyntheticRows = null);
+
+/// <summary>
+/// «Виртуальная» строка отчёта — для операций, которые мапер выполняет ВНЕ цикла
+/// по обычным <see cref="MappedRow"/> (например, FinModel создаёт fmmodel, fmmodelversion,
+/// inputdata по плану и факту, организации, deal pre-check, бюджет, ГФ — всё это
+/// идёт прямо в Visary CRUD API, минуя парсер/staged_rows). Чтобы пользователь видел
+/// эти операции в отчёте как обычные строки, мапер возвращает их в <c>SyntheticRows</c>,
+/// а Pipeline инсертит каждую как <see cref="StagedRow"/> с указанными <see cref="Sheet"/>/<see cref="SourceRowNumber"/>.
+/// См. doc 128.
+/// </summary>
+/// <param name="Sheet">
+/// Имя «синтетического листа» (например, «Финмодель», «План — Общий график»,
+/// «Outputs — Факт», «Бюджет ИСР»). Группировка в отчёте идёт по нему же.
+/// Не должен пересекаться с реальными именами листов из ParsedRow.
+/// </param>
+/// <param name="SourceRowNumber">
+/// Порядковый номер строки в пределах синтетического листа (1..N). Должен быть
+/// уникален в этой группе — иначе сломается unique-index (SessionId, Sheet, SourceRowNumber).
+/// </param>
+/// <param name="Status">
+/// Логический статус операции: <c>Applied</c> (успех), <c>Failed</c> (упало),
+/// <c>Invalid</c> (валидация бизнес-правил не прошла).
+/// </param>
+/// <param name="Actions">
+/// Action-логи (как в <see cref="RowActionLog"/>): одна-две лаконичные человекочитаемые
+/// метки — «Финмодель создана id=48», «InputData [2026Q1, Квартиры (план)] создана».
+/// Бизнес-язык — никакого PATCH/POST/имён DTO (см. doc 125).
+/// </param>
+/// <param name="MappedValuesJson">
+/// Опциональный JSON с распарсенными значениями для UI («что было передано в Visary»):
+/// например, для inputdata — <c>{"FmPeriod":"2026Q1","Code":"010","Summ":...,"Amount":...,"Cost":...}</c>.
+/// <c>null</c> → пустой <c>{}</c>.
+/// </param>
+public record SyntheticStagedRow(
+    string Sheet,
+    int SourceRowNumber,
+    StagedRowStatus Status,
+    IReadOnlyList<string> Actions,
+    string? MappedValuesJson = null);
 
 /// <summary>
 /// Журнал реальных действий, выполненных по одной строке файла в Apply-фазе.
