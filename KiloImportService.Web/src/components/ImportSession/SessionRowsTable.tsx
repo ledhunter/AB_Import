@@ -196,6 +196,25 @@ export const SessionRowsTable = ({ report, onPageChange }: Props) => {
     return visible;
   }, [filtered]);
 
+  /**
+   * Карта `sheet → fileLabel` из `sheetTotals` (backend заполняет для FinModel —
+   * см. doc 128). Используется для рисования файла-разделителя над группами листов
+   * одного файла («📄 Параметры», «📄 План»). Для импортов одного файла все
+   * fileLabel = null/undefined — в этом случае file-разделители не рисуются.
+   */
+  const fileLabelBySheet = useMemo(() => {
+    const m = new Map<string, string | null>();
+    for (const st of report.sheetTotals) {
+      m.set(st.sheet ?? '', st.fileLabel ?? null);
+    }
+    return m;
+  }, [report.sheetTotals]);
+
+  const hasFileLabels = useMemo(
+    () => Array.from(fileLabelBySheet.values()).some((v) => v != null && v !== ''),
+    [fileLabelBySheet],
+  );
+
   // Показывать ли заголовки листов: если есть хотя бы один непустой sheet
   // или строки разнесены по нескольким группам.
   const showSheetHeaders =
@@ -243,19 +262,43 @@ export const SessionRowsTable = ({ report, onPageChange }: Props) => {
 
   return (
     <div className="report-table">
-      {report.fileLevelErrors.length > 0 && (
-        <div className="messages messages--error" style={{ marginBottom: 16 }}>
-          <Typography.Text view="primary-medium" weight="bold" tag="div" style={{ marginBottom: 4 }}>
-            Ошибки уровня файла:
-          </Typography.Text>
-          {report.fileLevelErrors.map((e, i) => (
-            <div className="message-row" key={i}>
-              <span className="message-field">{e.errorCode}</span>
-              <span>{e.message}</span>
-            </div>
-          ))}
-        </div>
-      )}
+      {report.fileLevelErrors.length > 0 && (() => {
+        // Группируем по severity, чтобы рисовать тремя блоками с разной заливкой.
+        // Backend выдаёт severity на лету (ImportsController.ResolveErrorSeverity,
+        // см. doc 127): "warning" — оранжевый (например, «Финмодель уже существует
+        // в Visary»), "info" — синий, всё остальное — красный (default).
+        const buckets: Array<{
+          key: string; severity: 'error' | 'warning' | 'info'; title: string;
+          className: string; items: typeof report.fileLevelErrors;
+        }> = [
+          { key: 'error',   severity: 'error',   title: 'Ошибки уровня файла:',
+            className: 'messages messages--error',
+            items: report.fileLevelErrors.filter(e => (e.severity ?? 'error') === 'error') },
+          { key: 'warning', severity: 'warning', title: 'Предупреждения:',
+            className: 'messages messages--warning',
+            items: report.fileLevelErrors.filter(e => e.severity === 'warning') },
+          { key: 'info',    severity: 'info',    title: 'Информация:',
+            className: 'messages messages--info',
+            items: report.fileLevelErrors.filter(e => e.severity === 'info') },
+        ];
+        return (
+          <>
+            {buckets.filter(b => b.items.length > 0).map((b) => (
+              <div key={b.key} className={b.className} style={{ marginBottom: 16 }}>
+                <Typography.Text view="primary-medium" weight="bold" tag="div" style={{ marginBottom: 4 }}>
+                  {b.title}
+                </Typography.Text>
+                {b.items.map((e, i) => (
+                  <div className="message-row" key={i}>
+                    <span className="message-field">{e.errorCode}</span>
+                    <span>{e.message}</span>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </>
+        );
+      })()}
 
       <div className="filter-tags">
         <FilterButton active={filter === 'all'} count={counts.all} onClick={() => setFilter('all')}>
@@ -349,8 +392,28 @@ export const SessionRowsTable = ({ report, onPageChange }: Props) => {
               {groups.map((group, gi) => {
                 const sheetKey = group.sheet ?? '';
                 const total = totalsBySheet.get(sheetKey) ?? group.rows.length;
+                // Файл-разделитель: рисуем только если в импорте есть fileLabel'ы
+                // (FinModel) и текущая группа открывает новый файл — т.е. fileLabel
+                // отличается от предыдущей группы. Для других импортов всё null,
+                // эта строка не рисуется (back-compat).
+                const fileLabel = fileLabelBySheet.get(sheetKey) ?? null;
+                const prevFileLabel = gi > 0
+                  ? (fileLabelBySheet.get(groups[gi - 1].sheet ?? '') ?? null)
+                  : null;
+                const showFileHeader =
+                  hasFileLabels && fileLabel != null && fileLabel !== prevFileLabel;
                 return (
                   <tbody key={group.sheet ?? `__nosheet__${gi}`}>
+                    {showFileHeader && (
+                      <tr className="report-file-header">
+                        <td colSpan={3}>
+                          <span role="img" aria-label="file" style={{ marginRight: 6 }}>
+                            📄
+                          </span>
+                          Файл: {fileLabel}
+                        </td>
+                      </tr>
+                    )}
                     {showSheetHeaders && (
                       <SheetHeaderRow
                         sheet={group.sheet}

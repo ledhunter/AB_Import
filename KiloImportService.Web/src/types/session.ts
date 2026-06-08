@@ -92,12 +92,23 @@ export interface UiSession {
   generatedFiles: UiGeneratedFile[];
 }
 
+export type UiErrorSeverity = 'error' | 'warning' | 'info';
+
 export interface UiRowError {
   rowNumber: number;        // 0 — file-level
   sheet: string | null;     // имя листа (для многолистовых импортов; null для file-level)
   columnName: string | null;
   errorCode: string;
   message: string;
+  /**
+   * Уровень важности — backend выставляет на лету в endpoint'е /report по карте
+   * кодов ошибок (см. ImportsController.ResolveErrorSeverity, doc 127):
+   *   • "error"   — стандартная ошибка (default), красная заливка
+   *   • "warning" — «уже существует / пропущено» (оранжевый): импорт прошёл, дубликат не создан
+   *   • "info"    — информативное сообщение (синий): шаг неприменим
+   * Старые ответы без поля интерпретируем как "error" (back-compat).
+   */
+  severity?: UiErrorSeverity;
 }
 
 export interface UiReportRow {

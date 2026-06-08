@@ -100,6 +100,12 @@ export interface ApiImportError {
   columnName: string | null;
   errorCode: string;
   message: string;
+  /**
+   * "error" | "warning" | "info" — выставляет backend через
+   * `ImportsController.ResolveErrorSeverity`. Поле опционально для back-compat
+   * со старыми ответами (по умолчанию = "error"). См. doc 127.
+   */
+  severity?: 'error' | 'warning' | 'info';
 }
 
 /**
@@ -110,6 +116,13 @@ export interface ApiImportError {
 export interface ApiSheetTotal {
   sheet: string | null;
   total: number;
+  /**
+   * «Имя файла»-лейбл, к которому относится лист. Заполняется backend'ом для
+   * FinModel-импорта (см. doc 128): `"Параметры"` для Inputs/Outputs/Финмодель,
+   * `"План"` для синтетического листа из second-файла. Для других импортов = null,
+   * фронт не рисует file-разделитель.
+   */
+  fileLabel?: string | null;
 }
 
 /** Ответ `GET /api/imports/{id}/report` — отчёт сессии (плоский). */
