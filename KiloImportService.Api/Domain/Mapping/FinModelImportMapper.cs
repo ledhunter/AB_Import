@@ -503,6 +503,13 @@ public sealed class FinModelImportMapper : IImportMapper
         return (mappedRows, fileErrors);
     }
 
+    // Синтетические имена «листов» для строк-операций FinModel-мапера (out-of-band
+    // относительно парсера) — см. doc 128. Имена не должны пересекаться с реальными
+    // (Inputs / Inputs (budget) / Inputs (schedule)), иначе сломается unique-index.
+    private const string SyntheticSheetFmModel       = "Финмодель";
+    private const string SyntheticSheetPlanInputData = "План — Общий график";
+    private const string SyntheticSheetFactInputData = "Outputs — Факт";
+
     public async Task<ApplyResult> ApplyAsync(
         ImportContext context,
         VisaryDbContext visaryDb,
@@ -510,6 +517,7 @@ public sealed class FinModelImportMapper : IImportMapper
         CancellationToken ct)
     {
         var errors = new List<RowError>();
+        var synthetic = new SyntheticRowEmitter();
 
         if (context.VisarySiteId is null)
         {
@@ -528,7 +536,8 @@ public sealed class FinModelImportMapper : IImportMapper
         {
             await EnsureFmModelAsync(
                 projectIdForFmModel, siteIdForFmModel,
-                context.SecondaryFileRelativePath, errors, ct);
+                context.SecondaryFileRelativePath, context.PrimaryFileRelativePath,
+                errors, synthetic, ct);
         }
 
         var validRows = rows.Where(r => r.IsValid).ToList();
@@ -646,7 +655,33 @@ public sealed class FinModelImportMapper : IImportMapper
 
         // EnsureFmModelAsync вызван в начале ApplyAsync (до validRows-проверки) —
         // он ортогонален mapped-строкам и работает только по второму файлу.
-        return new ApplyResult(applied, errors, rowActions.Count > 0 ? rowActions : null);
+        return new ApplyResult(
+            applied, errors,
+            rowActions.Count > 0 ? rowActions : null,
+            synthetic.Rows.Count > 0 ? synthetic.Rows : null);
+    }
+
+    /// <summary>
+    /// Накапливает <see cref="SyntheticStagedRow"/> по «листам» (синтетическим именам),
+    /// автоматически нумерует строки в пределах листа (1..N). Pipeline инсертит их
+    /// как обычные StagedRow с указанными Sheet/SourceRowNumber. См. doc 128.
+    /// </summary>
+    internal sealed class SyntheticRowEmitter
+    {
+        private readonly Dictionary<string, int> _nextRowBySheet = new(StringComparer.Ordinal);
+        private readonly List<SyntheticStagedRow> _rows = new();
+
+        public IReadOnlyList<SyntheticStagedRow> Rows => _rows;
+
+        /// <summary>Добавить строку. <paramref name="actions"/> — компактные бизнес-метки.</summary>
+        public void Emit(
+            string sheet, StagedRowStatus status,
+            IReadOnlyList<string> actions, string? mappedValuesJson = null)
+        {
+            var next = _nextRowBySheet.TryGetValue(sheet, out var n) ? n + 1 : 1;
+            _nextRowBySheet[sheet] = next;
+            _rows.Add(new SyntheticStagedRow(sheet, next, status, actions, mappedValuesJson));
+        }
     }
 
     /// <summary>
@@ -669,7 +704,9 @@ public sealed class FinModelImportMapper : IImportMapper
         int projectId,
         int siteId,
         string? secondaryFilePath,
+        string? primaryFilePath,
         List<RowError> errors,
+        SyntheticRowEmitter synthetic,
         CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(secondaryFilePath))
@@ -678,6 +715,8 @@ public sealed class FinModelImportMapper : IImportMapper
                 "Файл с планами по фин. модели не загружен — Финмодель в Visary не создавалась. " +
                 "Чтобы создать запись `fmmodel`, прикрепите второй файл с листом «План» " +
                 "(строки «Год» и «Квартал»)."));
+            synthetic.Emit(SyntheticSheetFmModel, StagedRowStatus.Invalid,
+                ["Финмодель: пропущено — файл с планами не прикреплён"]);
             return;
         }
 
@@ -695,6 +734,8 @@ public sealed class FinModelImportMapper : IImportMapper
         {
             errors.Add(new RowError(null, "fmmodel_plan_parse_error",
                 $"Не удалось прочитать лист «Общий график» из второго файла: {ex.Message}"));
+            synthetic.Emit(SyntheticSheetFmModel, StagedRowStatus.Failed,
+                [$"Финмодель: ошибка чтения файла плана — {ex.Message}"]);
             return;
         }
         catch (Exception ex)
@@ -702,6 +743,8 @@ public sealed class FinModelImportMapper : IImportMapper
             _log.LogError(ex, "FinModelImportMapper: failed to open/parse secondary general-schedule file (siteId={SiteId})", siteId);
             errors.Add(new RowError(null, "fmmodel_plan_parse_error",
                 $"Не удалось прочитать второй файл (Общий график): {ex.Message}"));
+            synthetic.Emit(SyntheticSheetFmModel, StagedRowStatus.Failed,
+                [$"Финмодель: ошибка чтения файла плана — {ex.Message}"]);
             return;
         }
 
@@ -727,6 +770,8 @@ public sealed class FinModelImportMapper : IImportMapper
                     $"Финмодель для проекта и объекта уже существует в Visary " +
                     $"(id={first.ID}, период {first.PeriodStart}..{first.PeriodEnd}). Создание fmmodel пропущено, " +
                     "версия и входные данные при необходимости будут досозданы."));
+                synthetic.Emit(SyntheticSheetFmModel, StagedRowStatus.Applied,
+                    [$"Финмодель: уже существует (id={first.ID}, период {first.PeriodStart}..{first.PeriodEnd}) — пропуск"]);
             }
         }
         catch (Exception ex)
@@ -737,6 +782,8 @@ public sealed class FinModelImportMapper : IImportMapper
             errors.Add(new RowError(null, "fmmodel_precheck_failed",
                 $"Не удалось проверить наличие Финмодели в Visary: {ex.Message}. " +
                 "Создание пропущено, чтобы не породить дубликат."));
+            synthetic.Emit(SyntheticSheetFmModel, StagedRowStatus.Failed,
+                [$"Финмодель: проверка наличия не удалась — {ex.Message}"]);
             return;
         }
 
@@ -779,6 +826,8 @@ public sealed class FinModelImportMapper : IImportMapper
                 _log.LogInformation(
                     "FinModelImportMapper: fmmodel создан id={Id} period={Start}..{End} (projectId={ProjectId}, siteId={SiteId})",
                     created.ID, planData.PeriodStart, planData.PeriodEnd, projectId, siteId);
+                synthetic.Emit(SyntheticSheetFmModel, StagedRowStatus.Applied,
+                    [$"Финмодель: создана (id={created.ID}, период {planData.PeriodStart}..{planData.PeriodEnd})"]);
             }
             catch (Exception ex)
             {
@@ -788,14 +837,26 @@ public sealed class FinModelImportMapper : IImportMapper
                 errors.Add(new RowError(null, "fmmodel_create_failed",
                     $"Не удалось создать Финмодель в Visary " +
                     $"(период {planData.PeriodStart}..{planData.PeriodEnd}): {ex.Message}"));
+                synthetic.Emit(SyntheticSheetFmModel, StagedRowStatus.Failed,
+                    [$"Финмодель: ошибка создания — {ex.Message}"]);
                 return;
             }
         }
 
         // 5. Версия Финмодели + входные данные + связь. Любая ошибка — single row-error,
         //    шаги-параметры/бюджет/ГФ выше уже отработали, не валим Apply целиком.
-        await EnsureFmModelVersionAndInputDataAsync(
-            fmModelId, planData, errors, ct);
+        var versionId = await EnsureFmModelVersionAndInputDataAsync(
+            fmModelId, planData, errors, synthetic, ct);
+
+        // 6. Fact-блок «Доходы поэтапно» / «Этап 1» с листа Outputs основного файла
+        //    (см. doc 126). Дополняет ту же только что созданную версию записями
+        //    inputdata с Fact-кодами (011/021/031/041/211/221/231/051). Опционально:
+        //    если маркера «Факт» в файле нет (старый шаблон), маппер просто пропускает.
+        if (versionId is { } vId && !string.IsNullOrWhiteSpace(primaryFilePath))
+        {
+            await EnsureFmModelVersionFactInputDataAsync(
+                vId, primaryFilePath!, errors, synthetic, ct);
+        }
     }
 
     /// <summary>
@@ -812,10 +873,11 @@ public sealed class FinModelImportMapper : IImportMapper
     /// «Title не найден в справочнике» (0 строк в ответе) — row-error
     /// <c>inputdata_code_not_found</c> ПО ЗАВЕРШЕНИИ цикла, со списком всех missing.
     /// </summary>
-    private async Task EnsureFmModelVersionAndInputDataAsync(
+    private async Task<int?> EnsureFmModelVersionAndInputDataAsync(
         int fmModelId,
         FinModelPlanData planData,
         List<RowError> errors,
+        SyntheticRowEmitter synthetic,
         CancellationToken ct)
     {
         // 1) Резолв уникальных строковых Code'ов → (ID, Title) через точечные
@@ -860,7 +922,7 @@ public sealed class FinModelImportMapper : IImportMapper
                     "Не удалось получить справочник «Код фин. модели» из Visary " +
                     $"(listview/fmcode, code=«{fmCode}»): {ex.Message}. " +
                     "Версия Финмодели и входные данные не созданы."));
-                return;
+                return null;
             }
         }
 
@@ -886,6 +948,8 @@ public sealed class FinModelImportMapper : IImportMapper
             _log.LogInformation(
                 "FinModelImportMapper: fmmodelversion создан id={Id} title='{Title}' fmModelId={FmModelId}",
                 versionId, newVersionTitle, fmModelId);
+            synthetic.Emit(SyntheticSheetFmModel, StagedRowStatus.Applied,
+                [$"Версия Финмодели: создана «{newVersionTitle}» (id={versionId})"]);
         }
         catch (Exception ex)
         {
@@ -894,7 +958,9 @@ public sealed class FinModelImportMapper : IImportMapper
                 fmModelId);
             errors.Add(new RowError(null, "fmmodel_version_failed",
                 $"Не удалось создать версию Финмодели в Visary: {ex.Message}. Входные данные не загружены."));
-            return;
+            synthetic.Emit(SyntheticSheetFmModel, StagedRowStatus.Failed,
+                [$"Версия Финмодели: ошибка создания — {ex.Message}"]);
+            return null;
         }
 
         // 3) Новая версия — заведомо пустая, pre-check inputdata-by-version пропускаем.
@@ -938,6 +1004,14 @@ public sealed class FinModelImportMapper : IImportMapper
                         Percent = 0d,
                     }, ct);
                 inputDataId = created.ID;
+                synthetic.Emit(SyntheticSheetPlanInputData, StagedRowStatus.Applied,
+                    [$"План [{point.FmPeriod}, {codeRef.Title}]: создан (Amount={FormatNumber(point.Amount)}, Cost={FormatNumber(point.Cost)}, Сумма={FormatNumber(point.Summ)})"],
+                    System.Text.Json.JsonSerializer.Serialize(new
+                    {
+                        FmPeriod = point.FmPeriod,
+                        Code = codeRef.Title,
+                        point.Amount, point.Cost, point.Summ,
+                    }));
             }
             catch (Exception ex)
             {
@@ -945,6 +1019,8 @@ public sealed class FinModelImportMapper : IImportMapper
                 _log.LogError(ex,
                     "FinModelImportMapper: ошибка создания inputdata (versionId={VersionId}, period={Period}, fmCode='{Code}')",
                     versionId, point.FmPeriod, point.FmCode);
+                synthetic.Emit(SyntheticSheetPlanInputData, StagedRowStatus.Failed,
+                    [$"План [{point.FmPeriod}, {codeRef.Title}]: ошибка создания — {ex.Message}"]);
                 continue;
             }
 
@@ -981,6 +1057,189 @@ public sealed class FinModelImportMapper : IImportMapper
         _log.LogInformation(
             "FinModelImportMapper: inputdata загрузка завершена versionId={VersionId} created={Created} skipped={Skipped} failed={Failed}",
             versionId, createdCount, skippedCount, failedCount);
+
+        return versionId;
+    }
+
+    /// <summary>
+    /// Доливает в существующую <c>fmmodelversion</c> Fact-блок «Доходы поэтапно» /
+    /// «Этап 1» с листа Outputs основного файла «Параметры» (см. doc 126). Опциональный
+    /// шаг: маркера «Факт» в файле нет → парсер возвращает <c>null</c>, мы тихо выходим.
+    /// Идемпотентность не предусмотрена — Plan-каскад выше уже создал НОВУЮ версию,
+    /// внутри которой Fact-записей заведомо нет.
+    /// </summary>
+    private async Task EnsureFmModelVersionFactInputDataAsync(
+        int versionId,
+        string primaryFilePath,
+        List<RowError> errors,
+        SyntheticRowEmitter synthetic,
+        CancellationToken ct)
+    {
+        FinModelFactData? factData;
+        try
+        {
+            await using var stream = await _fileStorage.OpenReadAsync(primaryFilePath, ct);
+            factData = ReadOutputsFactData(stream);
+        }
+        catch (FinModelFactParseException ex)
+        {
+            _log.LogWarning(ex,
+                "FinModelImportMapper: Fact-блок Outputs не распарсился (versionId={VersionId})", versionId);
+            errors.Add(new RowError(null, "fact_block_parse_error",
+                $"Не удалось прочитать Fact-блок с листа «Outputs» основного файла: {ex.Message}. " +
+                "Версия Финмодели создана с плановыми данными, фактические значения не загружены."));
+            synthetic.Emit(SyntheticSheetFactInputData, StagedRowStatus.Failed,
+                [$"Факт: ошибка парсинга блока — {ex.Message}"]);
+            return;
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex,
+                "FinModelImportMapper: ошибка чтения основного файла для Fact-блока (versionId={VersionId}, path={Path})",
+                versionId, primaryFilePath);
+            synthetic.Emit(SyntheticSheetFactInputData, StagedRowStatus.Failed,
+                [$"Факт: ошибка чтения основного файла — {ex.Message}"]);
+            return;
+        }
+
+        if (factData is null)
+        {
+            _log.LogDebug(
+                "FinModelImportMapper: Fact-маркер на листе Outputs не найден (versionId={VersionId}) — Fact-каскад пропущен",
+                versionId);
+            synthetic.Emit(SyntheticSheetFactInputData, StagedRowStatus.Invalid,
+                ["Факт: маркер «Факт» на листе Outputs не найден — пропуск"]);
+            return;
+        }
+        if (factData.Points.Count == 0)
+        {
+            _log.LogDebug(
+                "FinModelImportMapper: Fact-блок есть, но точек после фильтрации не осталось (versionId={VersionId})",
+                versionId);
+            synthetic.Emit(SyntheticSheetFactInputData, StagedRowStatus.Applied,
+                [$"Факт ({factData.FmPeriod}): нет значимых данных (все типы помещений с нулями/прочерками) — пропуск"]);
+            return;
+        }
+
+        // Резолвим уникальные Fact-Code'ы через listview/fmcode (та же логика, что
+        // для Plan-кодов). Сетевая ошибка → одна row-error + skip всего Fact.
+        var fmCodeRefByCode = new Dictionary<string, (int Id, string Title)>(StringComparer.OrdinalIgnoreCase);
+        var missingFactCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var uniqueCodes = factData.Points
+            .Select(p => p.FmCode)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        foreach (var fmCode in uniqueCodes)
+        {
+            ct.ThrowIfCancellationRequested();
+            try
+            {
+                var resp = await _listViewClient.FindFmCodeByCodeAsync(fmCode, ct);
+                var found = resp.Data?.FirstOrDefault(c => c.ID > 0);
+                if (found is not null)
+                {
+                    var title = !string.IsNullOrWhiteSpace(found.Title)
+                        ? found.Title!
+                        : ResolveFallbackTitle(fmCode);
+                    fmCodeRefByCode[fmCode] = (found.ID, title);
+                }
+                else
+                {
+                    missingFactCodes.Add(fmCode);
+                }
+            }
+            catch (Exception ex)
+            {
+                _log.LogError(ex,
+                    "FinModelImportMapper: не удалось получить fact fmcode code='{Code}' (versionId={VersionId})",
+                    fmCode, versionId);
+                errors.Add(new RowError(null, "inputdata_fact_codes_unavailable",
+                    "Не удалось получить справочник «Код фин. модели» из Visary " +
+                    $"для Fact-блока (listview/fmcode, code=«{fmCode}»): {ex.Message}. " +
+                    "Фактические значения не загружены."));
+                return;
+            }
+        }
+
+        int createdCount = 0, failedCount = 0, skippedNoCodeCount = 0;
+        foreach (var point in factData.Points)
+        {
+            ct.ThrowIfCancellationRequested();
+            if (!fmCodeRefByCode.TryGetValue(point.FmCode, out var codeRef))
+            {
+                skippedNoCodeCount++;
+                continue;
+            }
+
+            int inputDataId;
+            try
+            {
+                var created = await _visaryClient.CreateInputDataAsync(
+                    new InputDataCreateRequest
+                    {
+                        FMModelVersionID = versionId,
+                        FMModelVersion = new VisaryRef { ID = versionId },
+                        FMPeriod = factData.FmPeriod,
+                        Code = new VisaryRef { ID = codeRef.Id, Title = codeRef.Title },
+                        // Контракт inputdata не допускает null'ов — пустые поля Fact-точки
+                        // нормализуем в 0 на payload-уровне (не в парсере: парсер должен
+                        // различать «прочерк» и «явный 0» для диагностики).
+                        Summ = point.Summ ?? 0d,
+                        Amount = point.Amount ?? 0d,
+                        Cost = point.Cost ?? 0d,
+                        Percent = 0d,
+                    }, ct);
+                inputDataId = created.ID;
+                synthetic.Emit(SyntheticSheetFactInputData, StagedRowStatus.Applied,
+                    [$"Факт [{factData.FmPeriod}, {codeRef.Title}]: создан (Amount={FormatNumber(point.Amount ?? 0)}, Cost={FormatNumber(point.Cost ?? 0)}, Сумма={FormatNumber(point.Summ ?? 0)})"],
+                    System.Text.Json.JsonSerializer.Serialize(new
+                    {
+                        FmPeriod = factData.FmPeriod,
+                        Code = codeRef.Title,
+                        point.Amount, point.Cost, point.Summ,
+                    }));
+            }
+            catch (Exception ex)
+            {
+                failedCount++;
+                _log.LogError(ex,
+                    "FinModelImportMapper: ошибка создания Fact-inputdata (versionId={VersionId}, period={Period}, fmCode='{Code}')",
+                    versionId, factData.FmPeriod, point.FmCode);
+                synthetic.Emit(SyntheticSheetFactInputData, StagedRowStatus.Failed,
+                    [$"Факт [{factData.FmPeriod}, {codeRef.Title}]: ошибка создания — {ex.Message}"]);
+                continue;
+            }
+            try
+            {
+                await _visaryClient.LinkInputDataToVersionAsync(versionId, inputDataId, ct);
+                createdCount++;
+            }
+            catch (Exception ex)
+            {
+                failedCount++;
+                _log.LogError(ex,
+                    "FinModelImportMapper: ошибка привязки Fact-inputdata к версии (versionId={VersionId}, inputDataId={Id})",
+                    versionId, inputDataId);
+            }
+        }
+
+        if (missingFactCodes.Count > 0)
+        {
+            errors.Add(new RowError(null, "inputdata_fact_code_not_found",
+                "В справочнике Visary «Код фин. модели» не найдены Fact-записи с Code: " +
+                string.Join(", ", missingFactCodes.Select(c => $"«{c}»")) +
+                ". Часть фактических значений не загружена."));
+        }
+        if (failedCount > 0)
+        {
+            errors.Add(new RowError(null, "inputdata_fact_create_failed",
+                $"Не удалось создать/привязать {failedCount} Fact-записей `inputdata` в Visary. " +
+                "См. лог приложения для деталей."));
+        }
+
+        _log.LogInformation(
+            "FinModelImportMapper: Fact inputdata загрузка завершена versionId={VersionId} period={Period} created={Created} skipped_no_code={SkippedNoCode} failed={Failed}",
+            versionId, factData.FmPeriod, createdCount, skippedNoCodeCount, failedCount);
     }
 
     /// <summary>Видимое имя Финмодели в Visary (требование заказчика).</summary>
@@ -1294,6 +1553,11 @@ public sealed class FinModelImportMapper : IImportMapper
     {
         if (aLower.Contains("кварт"))
             return FmCodeApartment;
+        // «апарт» — отдельный код 060 (Продажа апартаменты (план)), не путать с
+        // квартирами. Стоит ПОСЛЕ «кварт» по симметрии с порядком проверок;
+        // префиксы не пересекаются («апарт*» vs «кварт*»).
+        if (aLower.Contains("апарт"))
+            return FmCodeApartHotel;
         if (aLower.Contains("кладов") || aLower.Contains("иные нежил"))
             return FmCodeStoreroom;
         if (aLower.Contains("нежил"))
@@ -1310,12 +1574,44 @@ public sealed class FinModelImportMapper : IImportMapper
     /// </summary>
     private static string ResolveFallbackTitle(string fmCode) => fmCode switch
     {
-        FmCodeApartment      => FallbackTitleApartment,
-        FmCodeNonResidential => FallbackTitleNonResidential,
-        FmCodeStoreroom      => FallbackTitleStoreroom,
-        FmCodeParking        => FallbackTitleParking,
-        _                    => fmCode,
+        FmCodeApartment           => FallbackTitleApartment,
+        FmCodeNonResidential      => FallbackTitleNonResidential,
+        FmCodeStoreroom           => FallbackTitleStoreroom,
+        FmCodeParking             => FallbackTitleParking,
+        FmCodeApartHotel          => FallbackTitleApartHotel,
+        FmCodeApartmentFact       => FallbackTitleApartmentFact,
+        FmCodeNonResidentialFact  => FallbackTitleNonResidentialFact,
+        FmCodeStoreroomFact       => FallbackTitleStoreroomFact,
+        FmCodeParkingFact         => FallbackTitleParkingFact,
+        FmCodeApartHotelFact      => FallbackTitleApartHotelFact,
+        FmCodeKindergartenFact    => FallbackTitleKindergartenFact,
+        FmCodeSchoolFact          => FallbackTitleSchoolFact,
+        FmCodeClinicFact          => FallbackTitleClinicFact,
+        FmCodeSportFact           => FallbackTitleSportFact,
+        _                         => fmCode,
     };
+
+    /// <summary>
+    /// Резолв строкового Fact-кода справочника <c>fmcode</c> по тексту строки в C-колонке
+    /// блока «Доходы поэтапно» / «Этап 1» на листе Outputs (см. doc 126).
+    /// Возвращает Code (например «011» для квартир, «221» для ДОУ), а не Title.
+    /// ⚠️ Порядок проверок важен: «иные нежилые/кладовки» — ДО общего «нежил»;
+    /// «м/м»/«машином» — ДО общего соц.-сектора (короткие маркеры легко спутать).
+    /// «апарт» — отдельный Code 061, не путать с квартирами (префиксы не пересекаются).
+    /// </summary>
+    private static string? ResolveFactFmCode(string cLower)
+    {
+        if (cLower.Contains("кварт"))                              return FmCodeApartmentFact;
+        if (cLower.Contains("апарт"))                              return FmCodeApartHotelFact;
+        if (cLower.Contains("кладов") || cLower.Contains("иные нежил")) return FmCodeStoreroomFact;
+        if (cLower.Contains("псн") || cLower.Contains("нежил"))    return FmCodeNonResidentialFact;
+        if (cLower.Contains("м/м") || cLower.Contains("машином"))  return FmCodeParkingFact;
+        if (cLower.Contains("доу"))                                return FmCodeKindergartenFact;
+        if (cLower.Contains("сош"))                                return FmCodeSchoolFact;
+        if (cLower.Contains("поликлин"))                           return FmCodeClinicFact;
+        if (cLower.Contains("фок"))                                return FmCodeSportFact;
+        return null;
+    }
 
     /// <summary>Имя листа в шаблоне заказчика, на котором лежат таблицы Финмодели.</summary>
     private const string GeneralScheduleSheetName = "Общий график";
@@ -1390,6 +1686,24 @@ public sealed class FinModelImportMapper : IImportMapper
     internal const string FmCodeNonResidential = "020";
     internal const string FmCodeStoreroom      = "030";
     internal const string FmCodeParking        = "040";
+    internal const string FmCodeApartHotel     = "060";
+
+    // Fact-коды справочника fmcode для импорта блока «Доходы поэтапно» / «Этап 1»
+    // на листе Outputs основного файла «Параметры к переносу в АБ.xlsx» (см. doc 126).
+    // Парные с Plan-кодами (010/020/030/040) — суффикс «1» вместо «0» для жилья/ПСН/
+    // кладовых/м-м. Социальные объекты не имеют Plan-аналога: ДОУ/СОШ/Поликлиника/ФОК
+    // — отдельные ветки справочника, коды подтверждены заказчиком (2026-06-07).
+    // Title-ы резолвятся через тот же FindFmCodeByCodeAsync; fallback ниже —
+    // на случай пустого Title в ответе Visary.
+    internal const string FmCodeApartmentFact      = "011";
+    internal const string FmCodeNonResidentialFact = "021";
+    internal const string FmCodeStoreroomFact      = "031";
+    internal const string FmCodeParkingFact        = "041";
+    internal const string FmCodeApartHotelFact     = "061";
+    internal const string FmCodeKindergartenFact   = "221";
+    internal const string FmCodeSchoolFact         = "211";
+    internal const string FmCodeClinicFact         = "231";
+    internal const string FmCodeSportFact          = "051";
 
     // Fallback-Title (используется ТОЛЬКО при подстановке в `Code.Title` payload
     // POST /crud/inputdata, если Visary в ответе вернул пустой Title — например,
@@ -1400,6 +1714,20 @@ public sealed class FinModelImportMapper : IImportMapper
     private const string FallbackTitleNonResidential = "Продажа нежилые ( ком) ПСН (план)";
     private const string FallbackTitleStoreroom     = "Продажа иные нежилые (кладовки) (план)";
     private const string FallbackTitleParking       = "Продажа м/м (план)";
+    private const string FallbackTitleApartHotel    = "Продажа апартаменты (план)";
+
+    // Fact-fallback Title-ы. Аналогично Plan — используются ТОЛЬКО когда listview/fmcode
+    // вернул запись с пустым Title (раритетный случай неполного DTO). Каноничное
+    // написание берётся из ответа Visary (с префиксом-кодом и пометкой «(факт)»).
+    private const string FallbackTitleApartmentFact      = "Продажа квартиры (факт)";
+    private const string FallbackTitleNonResidentialFact = "Продажа нежилые (ком) ПСН (факт)";
+    private const string FallbackTitleStoreroomFact      = "Продажа иные нежилые (кладовки) (факт)";
+    private const string FallbackTitleParkingFact        = "Продажа м/м (факт)";
+    private const string FallbackTitleApartHotelFact     = "Продажа апартаменты (факт)";
+    private const string FallbackTitleKindergartenFact   = "Продажа ДОУ (факт)";
+    private const string FallbackTitleSchoolFact         = "Продажа СОШ (факт)";
+    private const string FallbackTitleClinicFact         = "Продажа Поликлиника (факт)";
+    private const string FallbackTitleSportFact          = "Продажа ФОК (факт)";
 
     internal sealed record FinModelPlanPeriods(string PeriodStart, string PeriodEnd);
 
@@ -1438,6 +1766,401 @@ public sealed class FinModelImportMapper : IImportMapper
     internal sealed class FinModelPlanParseException : Exception
     {
         public FinModelPlanParseException(string message) : base(message) { }
+    }
+
+    // ─────────────────────────  Fact-блок листа Outputs  ─────────────────────────
+    //
+    // Структура (см. doc_project/126-finmodel-fact-inputdata-from-outputs.md):
+    //   • Где-то на листе Outputs стоит маркер «Факт» (одна ячейка с этим словом).
+    //     Ниже неё в той же колонке — год (число), ещё ниже — номер квартала (1..4).
+    //     Совместно дают FmPeriod = "{Year}Q{N}".
+    //   • Ниже на листе — секция «Доходы поэтапно» → «Этап 1», в ней 3 подсекции:
+    //       «Площадь реализации, кв.м.»     → точка.Amount
+    //       «Цена реализации, тыс. руб./кв.м» → точка.Cost  (умножается на 1 000)
+    //       «Выручка от реализации, млн руб.» → точка.Summ  (умножается на 1 000 000)
+    //   • Строки внутри каждой подсекции — типы помещений (Квартиры/Апартаменты/ПСН/
+    //     Кладовые/Машиноместа/ДОУ/СОШ/Поликлиника/ФОК); название в C-колонке,
+    //     значение в столбце «Факт». Прочерк (-/—/–) → строка пропускается без ошибки.
+    //
+    // Маркер «Факт» опционален: его отсутствие — нормальный случай (Plan-only импорт),
+    // парсер возвращает null, мапер тихо пропускает Fact-каскад.
+
+    /// <summary>
+    /// Полная распарсенная Fact-картина листа Outputs: квартал + материализованные
+    /// точки по типам помещений. Каждая точка несёт одновременно Amount/Cost/Summ
+    /// (из 3 подсекций), но любая из тройки может быть <c>null</c> — если в файле
+    /// конкретное поле было прочерком или подсекция не нашлась.
+    /// </summary>
+    internal sealed record FinModelFactData(
+        string FmPeriod,
+        int FactColumn,
+        IReadOnlyList<FinModelFactInputDataPoint> Points);
+
+    /// <summary>
+    /// Одна Fact-точка для POST <c>/crud/inputdata</c>: тип помещения (резолвится
+    /// в Code справочника fmcode) и до трёх значений из колонки «Факт» (Amount/
+    /// Cost/Summ). При сборке payload пустые поля подменяются на 0 (контракт
+    /// Visary не допускает null'ы в числовых полях inputdata).
+    /// </summary>
+    internal sealed record FinModelFactInputDataPoint(
+        string FmCode,
+        string RoomTypeLabel,
+        double? Amount,
+        double? Cost,
+        double? Summ);
+
+    /// <summary>
+    /// Имя листа основного XLSX-файла, на котором лежит блок «Доходы поэтапно».
+    /// В шаблоне «Параметры к переносу в АБ.xlsx» лист называется ровно <c>Outputs</c>;
+    /// проверяем case-insensitive — Excel допускает любое написание.
+    /// </summary>
+    private const string OutputsSheetName = "Outputs";
+
+    private const string FactMarker         = "Факт";
+    private const string MultiStageMarker   = "Доходы поэтапно";
+    private const string Stage1Marker       = "Этап 1";
+    private const string Stage2Marker       = "Этап 2";
+    private const string FactSectionAmount  = "Площадь реализации";
+    private const string FactSectionCost    = "Цена реализации";
+    private const string FactSectionSumm    = "Выручка от реализации";
+    private const string FactTotalsMarker   = "Итого";
+
+    /// <summary>
+    /// Парсит Fact-блок листа Outputs основного файла «Параметры». Возвращает
+    /// <c>null</c>, если маркер «Факт» не найден — это нормальный случай (шаблон
+    /// без Fact-колонки), Apply тихо пропускает Fact-каскад. Любая частичная
+    /// поломка (год/квартал не парсятся, секции «Доходы поэтапно» нет) — тоже
+    /// <c>null</c> + LogDebug в caller'е через {Reason}-исключение.
+    /// </summary>
+    /// <exception cref="FinModelFactParseException">
+    /// Бросается, если маркер найден, но дальнейшая структура не валидна
+    /// (год/квартал/секции). Caller перехватывает и кладёт row-error/LogDebug.
+    /// </exception>
+    internal static FinModelFactData? ReadOutputsFactData(Stream xlsxStream)
+    {
+        byte[] bytes;
+        using (var src = new MemoryStream())
+        {
+            xlsxStream.CopyTo(src);
+            bytes = src.ToArray();
+        }
+        try
+        {
+            return ReadOutputsFactDataFromBytes(bytes);
+        }
+        catch (Exception ex) when (XlsxParser.IsExternalLinkError(ex))
+        {
+            // Шаблоны заказчика содержат external-link формулы — чистим zip и retry'им
+            // (см. doc 81). Cached <v>-значения остаются, числовые ячейки читаются.
+            var cleaned = XlsxParser.StripExternalLinks(bytes);
+            return ReadOutputsFactDataFromBytes(cleaned);
+        }
+    }
+
+    private static FinModelFactData? ReadOutputsFactDataFromBytes(byte[] bytes)
+    {
+        using var ms = new MemoryStream(bytes, writable: false);
+        using var wb = new XLWorkbook(ms);
+        var sheet = wb.Worksheets.FirstOrDefault(ws =>
+            string.Equals(ws.Name?.Trim(), OutputsSheetName, StringComparison.OrdinalIgnoreCase));
+        if (sheet is null)
+            return null; // Outputs нет — Fact-блока нет.
+
+        var sheetRange = sheet.RangeUsed();
+        var lastUsedRow = sheetRange?.LastRow().RowNumber() ?? 200;
+        var lastUsedColumn = sheetRange?.LastColumn().ColumnNumber() ?? 30;
+
+        // 1) Сканируем всю используемую область и ищем ячейку «Факт». Берём ПЕРВУЮ
+        //    встретившуюся (в порядке row-major). Совпадение строгое по нормализованному
+        //    тексту (Trim+lower), чтобы не подцепить «Справочно: остатки на эскроу (Факт)».
+        //
+        //    Два источника текста ячейки:
+        //    (a) cell.GetString() — «сырое» значение (для текстовых ячеек = их текст,
+        //        для числовых = текстовое представление числа без формата);
+        //    (b) cell.GetFormattedString() — значение, применённое к custom number
+        //        format. В шаблонах заказчика «Параметры к переносу в АБ.xlsx» строка
+        //        H12=0/I12..M12=1 имеет формат типа `[=0]"Факт";[<>0]"Прогноз"`, и
+        //        пользователь видит «Факт» в H12 — но без `GetFormattedString` он
+        //        приходит к нам как «0».
+        //
+        //    Чтобы не платить за вычисление формата на каждой ячейке огромного листа
+        //    (Outputs у заказчика ~1700×143 = 240k ячеек), сначала пробуем (a) и идём
+        //    дальше при пустом значении; (b) считаем только когда (a) ≠ «Факт».
+        int factRow = -1, factCol = -1;
+        for (int r = 1; r <= lastUsedRow && factRow < 0; r++)
+        {
+            for (int c = 1; c <= lastUsedColumn; c++)
+            {
+                var cell = sheet.Cell(r, c);
+                if (cell.IsEmpty()) continue;
+
+                var raw = cell.GetString().Trim();
+                if (string.Equals(raw, FactMarker, StringComparison.OrdinalIgnoreCase))
+                { factRow = r; factCol = c; break; }
+
+                // Custom number format может развернуть число в «Факт». Не считаем
+                // formatted для текстовых ячеек (уже проверили raw) и пустых.
+                if (cell.DataType == XLDataType.Number || cell.DataType == XLDataType.Boolean)
+                {
+                    var formatted = cell.GetFormattedString().Trim();
+                    if (string.Equals(formatted, FactMarker, StringComparison.OrdinalIgnoreCase))
+                    { factRow = r; factCol = c; break; }
+                }
+            }
+        }
+        if (factRow < 0)
+            return null; // маркера нет — Fact-импорт пропускается тихо.
+
+        // 2) Год и квартал — 2 ячейки сразу под маркером.
+        var yearText = sheet.Cell(factRow + 1, factCol).GetString().Trim();
+        var quarterText = sheet.Cell(factRow + 2, factCol).GetString().Trim();
+        if (!int.TryParse(yearText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var year)
+            || year < 1900 || year > 2100)
+        {
+            throw new FinModelFactParseException(
+                $"Под ячейкой «Факт» (R{factRow}C{factCol}) ожидался год, получено: «{yearText}».");
+        }
+        var quarter = ParseQuarter(quarterText);
+        if (quarter is null)
+        {
+            throw new FinModelFactParseException(
+                $"Под ячейкой «Факт» (R{factRow}C{factCol}) ожидался номер квартала 1..4, получено: «{quarterText}».");
+        }
+        var fmPeriod = $"{year}Q{quarter}";
+
+        // 3) Anchor «Доходы поэтапно» — обычно в C-колонке ниже Fact-ячейки.
+        //    Сканируем строки ниже Fact в той же или соседних колонках (1..min(factCol+4)),
+        //    чтобы найти маркер. Не нашли — нечего парсить.
+        int multiStageRow = FindRowByLabel(sheet, factRow + 3, lastUsedRow, lastUsedColumn, MultiStageMarker);
+        if (multiStageRow < 0)
+            return null; // нет блока «Доходы поэтапно» → Fact-блок не предусмотрен.
+
+        // 4) Под «Доходы поэтапно» — «Этап 1». Стопаемся на «Этап 2», если он встретился раньше.
+        int stage1Row = FindRowByLabel(sheet, multiStageRow + 1, lastUsedRow, lastUsedColumn, Stage1Marker);
+        if (stage1Row < 0)
+            return null;
+
+        // 5) Скан-окно подсекций — от Stage1Row до следующего «Этап 2» или конца листа.
+        int stageEndRow = FindRowByLabel(sheet, stage1Row + 1, lastUsedRow, lastUsedColumn, Stage2Marker);
+        if (stageEndRow < 0) stageEndRow = lastUsedRow;
+
+        // 6) Внутри окна — три подсекции в порядке «Площадь / Цена / Выручка».
+        int amountAnchor = FindRowByLabel(sheet, stage1Row + 1, stageEndRow, lastUsedColumn, FactSectionAmount);
+        int costAnchor   = FindRowByLabel(sheet, amountAnchor + 1, stageEndRow, lastUsedColumn, FactSectionCost);
+        int summAnchor   = FindRowByLabel(sheet, costAnchor + 1, stageEndRow, lastUsedColumn, FactSectionSumm);
+
+        // 7) Тип помещения → (Amount, Cost, Summ) — читаем три подсекции и сливаем
+        //    по ключу-Code. Каждая подсекция: rows (anchor+1 .. nextAnchor-1)
+        //    (или Итого/Этап2), C-колонка = label, factCol = значение. Прочерк = null.
+        var pointsByCode = new Dictionary<string, FactPointBuilder>(StringComparer.OrdinalIgnoreCase);
+
+        // Окно подсекции — [startRow, endRowExclusive). Для Summ конечная граница =
+        // stageEndRow + 1, чтобы включить последнюю занятую строку (lastUsedRow inclusive).
+        if (amountAnchor > 0)
+        {
+            int end = costAnchor > 0 ? costAnchor : (summAnchor > 0 ? summAnchor : stageEndRow + 1);
+            ReadFactSubsection(sheet, amountAnchor + 1, end, factCol, FactKind.Amount, pointsByCode);
+        }
+        if (costAnchor > 0)
+        {
+            int end = summAnchor > 0 ? summAnchor : stageEndRow + 1;
+            ReadFactSubsection(sheet, costAnchor + 1, end, factCol, FactKind.Cost, pointsByCode);
+        }
+        if (summAnchor > 0)
+        {
+            ReadFactSubsection(sheet, summAnchor + 1, stageEndRow + 1, factCol, FactKind.Summ, pointsByCode);
+        }
+
+        if (pointsByCode.Count == 0)
+            return new FinModelFactData(fmPeriod, factCol, []);
+
+        // Финальный фильтр: тип помещения с «всё нули/прочерки» — пропускаем.
+        // Заказчик не хочет создавать InputData с (Amount=0, Cost=0, Summ=0) для
+        // пустых категорий (Апартаменты/ПСН/Кладовые/ДОУ/СОШ/Поликлиника/ФОК
+        // в шаблоне «Параметры к переносу в АБ.xlsx» по умолчанию заполнены 0).
+        // Прочерки `-/—/–/−` дают null (см. TryReadFactCellNumber), явные нули
+        // → 0 — обе формы трактуются как «нет данных» на этом фильтре. Если
+        // хоть одно поле тройки ≠ 0 — точку создаём и пишем 0 на остальные.
+        // См. doc 126 v1.3.
+        var points = pointsByCode.Values
+            .Where(b => HasAnyNonZero(b.Amount) || HasAnyNonZero(b.Cost) || HasAnyNonZero(b.Summ))
+            .Select(b => new FinModelFactInputDataPoint(
+                b.FmCode, b.RoomTypeLabel,
+                Amount: b.Amount,
+                Cost:   b.Cost,
+                Summ:   b.Summ))
+            .ToList();
+        return new FinModelFactData(fmPeriod, factCol, points);
+    }
+
+    /// <summary>
+    /// «Содержательное значение» для Fact-точки: не <c>null</c> (прочерк/пустая ячейка)
+    /// и не <c>0</c> (заказчик в шаблоне заполняет неиспользуемые категории нулями).
+    /// Используется финальным фильтром в <see cref="ReadOutputsFactDataFromBytes"/>.
+    /// </summary>
+    private static bool HasAnyNonZero(double? v)
+        => v.HasValue && Math.Abs(v.Value) > 1e-9d;
+
+    private enum FactKind { Amount, Cost, Summ }
+
+    /// <summary>Промежуточный аккумулятор точки — три подсекции пишут в разные поля
+    /// одной и той же записи (по ключу-Code).</summary>
+    private sealed class FactPointBuilder
+    {
+        public string FmCode { get; }
+        public string RoomTypeLabel { get; set; }
+        public double? Amount { get; set; }
+        public double? Cost { get; set; }
+        public double? Summ { get; set; }
+        public FactPointBuilder(string fmCode, string label)
+        {
+            FmCode = fmCode;
+            RoomTypeLabel = label;
+        }
+    }
+
+    /// <summary>
+    /// Читает строки подсекции «Площадь/Цена/Выручка» в окне (startRow..endRow-1).
+    /// Тип помещения резолвится по ПЕРВОЙ строковой ячейке В ЛЮБОЙ колонке
+    /// слева от <paramref name="factCol"/>, которая матчится в <see cref="ResolveFactFmCode"/>
+    /// — без привязки к C-колонке, чтобы пережить варианты шаблона с типом в D/E
+    /// или со сдвигом блока. Прочерк (-/—/–) трактуется как «значение отсутствует»,
+    /// явный 0 — как «значение есть и равно 0» (финальный фильтр всё равно отсеет
+    /// тип, у которого все три = null|0; см. doc 126 v1.3).
+    /// Cost ×1 000 (тыс → руб), Summ ×1 000 000 (млн → руб) уже на этом этапе.
+    /// </summary>
+    private static void ReadFactSubsection(
+        IXLWorksheet sheet,
+        int startRow, int endRow,
+        int factCol, FactKind kind,
+        Dictionary<string, FactPointBuilder> acc)
+    {
+        // Сканируем колонки label'а от 1 до factCol-1 (тип помещения не может стоять
+        // ПРАВЕЕ Fact-колонки — она содержит числовое значение, а левее идут метки).
+        // Минимум 1 (на случай factCol=1, что маловероятно).
+        int labelColEnd = Math.Max(1, factCol - 1);
+
+        for (int r = startRow; r < endRow; r++)
+        {
+            // (1) Поиск типа помещения и stop-маркера «Итого» в любой колонке слева.
+            string? label = null;
+            string? fmCode = null;
+            bool stop = false;
+            for (int c = 1; c <= labelColEnd; c++)
+            {
+                var t = sheet.Cell(r, c).GetString().Trim();
+                if (t.Length == 0) continue;
+
+                // «Итого» — конец подсекции (заказчик ставит «Итого» строкой ниже
+                // последнего типа помещения). break вертикального цикла.
+                if (t.StartsWith(FactTotalsMarker, StringComparison.OrdinalIgnoreCase))
+                {
+                    stop = true;
+                    break;
+                }
+
+                var code = ResolveFactFmCode(t.ToLowerInvariant());
+                if (code is null) continue;
+
+                label = t;
+                fmCode = code;
+                break; // первый матч (обычно label в C-колонке = 3)
+            }
+            if (stop) break;
+            if (fmCode is null) continue;
+
+            // (2) Чтение значения из факт-колонки.
+            var (has, val) = TryReadFactCellNumber(sheet, r, factCol);
+            if (!has) continue;
+
+            if (!acc.TryGetValue(fmCode, out var builder))
+            {
+                builder = new FactPointBuilder(fmCode, label!);
+                acc[fmCode] = builder;
+            }
+            else if (string.IsNullOrEmpty(builder.RoomTypeLabel))
+            {
+                builder.RoomTypeLabel = label!;
+            }
+
+            switch (kind)
+            {
+                case FactKind.Amount: builder.Amount = val;                     break;
+                case FactKind.Cost:   builder.Cost   = val * 1_000d;            break;
+                case FactKind.Summ:   builder.Summ   = val * 1_000_000d;        break;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Универсальные «пустые» маркеры Excel для Fact-ячеек. Совпадает с
+    /// <c>TryParseNullableDouble</c> rooms-импорта (doc 125). Список включает разные
+    /// dash-кодировки (минус/em-dash/en-dash) — заказчик копипастит из Word.
+    /// </summary>
+    private static readonly HashSet<string> FactDashMarkers = new(StringComparer.Ordinal)
+    {
+        "-", "—", "–", "−",
+    };
+
+    /// <summary>
+    /// Чтение Fact-ячейки: возвращает (true, value) для числа, (false, 0) для
+    /// пустой ячейки / dash-маркера / нечислового мусора. В отличие от
+    /// <see cref="TryReadPlanCellNumber"/> здесь не различаем «пустую» и «явный 0»
+    /// (контекст другой: для Fact 0 = валидное значение, пусто = «не пиши поле»,
+    /// но дальше эта семантика всё равно режется на payload-уровне через 0).
+    /// </summary>
+    private static (bool HasValue, double Value) TryReadFactCellNumber(
+        IXLWorksheet sheet, int row, int col)
+    {
+        var cell = sheet.Cell(row, col);
+        if (cell.IsEmpty()) return (false, 0d);
+
+        if (cell.TryGetValue<double>(out var d) && !double.IsNaN(d) && !double.IsInfinity(d))
+            return (true, d);
+
+        var text = cell.GetString().Trim();
+        if (string.IsNullOrWhiteSpace(text)) return (false, 0d);
+        if (FactDashMarkers.Contains(text)) return (false, 0d);
+
+        text = text.Replace(',', '.');
+        return double.TryParse(text, NumberStyles.Any, CultureInfo.InvariantCulture, out var v)
+            ? (true, v) : (false, 0d);
+    }
+
+    /// <summary>
+    /// Ищет в колонках 1..lastCol строки <paramref name="label"/> (точное равенство
+    /// после Trim, case-insensitive). Возвращает row-индекс первой найденной строки
+    /// или -1, если не нашли.
+    /// </summary>
+    private static int FindRowByLabel(
+        IXLWorksheet sheet, int startRow, int endRow, int lastCol, string label)
+    {
+        for (int r = startRow; r <= endRow; r++)
+        {
+            for (int c = 1; c <= lastCol; c++)
+            {
+                var t = sheet.Cell(r, c).GetString().Trim();
+                if (t.Length == 0) continue;
+                if (string.Equals(t, label, StringComparison.OrdinalIgnoreCase))
+                    return r;
+                // «Этап 1»/«Этап 2» — могут идти как «Этап 1: ЖК "Имя"» с дополнением.
+                if (label.StartsWith("Этап ", StringComparison.OrdinalIgnoreCase)
+                    && t.StartsWith(label, StringComparison.OrdinalIgnoreCase))
+                    return r;
+                // «Площадь реализации, кв.м.» / «Цена реализации, тыс. руб./кв.м» /
+                // «Выручка от реализации, млн руб.» — заголовок может варьироваться
+                // суффиксом единиц (заказчик правит шаблон). Сравниваем по началу.
+                if (label.EndsWith(" реализации", StringComparison.OrdinalIgnoreCase)
+                    && t.StartsWith(label, StringComparison.OrdinalIgnoreCase))
+                    return r;
+            }
+        }
+        return -1;
+    }
+
+    internal sealed class FinModelFactParseException : Exception
+    {
+        public FinModelFactParseException(string message) : base(message) { }
     }
 
     /// <summary>
@@ -3073,6 +3796,17 @@ public sealed class FinModelImportMapper : IImportMapper
 
     private static string FormatRub(double amount)
         => amount.ToString("N2", CultureInfo.InvariantCulture).Replace(',', ' ') + " ₽";
+
+    /// <summary>
+    /// Лаконичный числовой формат для action-меток synthetic-строк: целые — без
+    /// дробной части, дробные — с разделителем тысяч и до 2 знаков. См. doc 128.
+    /// </summary>
+    private static string FormatNumber(double v)
+    {
+        if (Math.Abs(v - Math.Round(v)) < 1e-9d)
+            return ((long)Math.Round(v)).ToString("N0", CultureInfo.InvariantCulture).Replace(',', ' ');
+        return v.ToString("N2", CultureInfo.InvariantCulture).Replace(',', ' ');
+    }
 
     // ─── Generic helpers ─────────────────────────────────────────────────────
 

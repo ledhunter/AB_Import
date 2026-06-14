@@ -125,6 +125,9 @@ export const toUiRowError = (e: ApiImportError): UiRowError => ({
   columnName: e.columnName,
   errorCode: e.errorCode,
   message: e.message,
+  // Backend выдаёт "error"/"warning"/"info" (см. ImportsController.ResolveErrorSeverity).
+  // Старые ответы без поля → undefined → UI рендерит как "error" по умолчанию.
+  severity: e.severity,
 });
 
 const rowKey = (sheet: string | null | undefined, rowNumber: number): string =>
