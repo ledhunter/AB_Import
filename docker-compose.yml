@@ -19,7 +19,8 @@ name: kilo-import
 services:
   # ──────────────────────────── PostgreSQL: служебная БД сервиса ────────────────────────────
   postgres-service:
-    image: postgres:16-alpine
+    # Параметризация для корп. контура (см. doc_project/129). Дефолт — публичный docker.io.
+    image: ${POSTGRES_IMAGE:-postgres:16-alpine}
     container_name: kilo-import-pg-service
     restart: unless-stopped
     environment:
@@ -41,7 +42,7 @@ services:
 
   # ──────────────────────────── PostgreSQL: целевая БД (срез Visary) ────────────────────────
   postgres-visary:
-    image: postgres:16-alpine
+    image: ${POSTGRES_IMAGE:-postgres:16-alpine}
     container_name: kilo-import-pg-visary
     restart: unless-stopped
     environment:
@@ -71,6 +72,13 @@ services:
     build:
       context: .
       dockerfile: KiloImportService.Api/Dockerfile
+      # Build-args для корп. контура (см. doc_project/129). Дефолты — публичные хосты,
+      # сборка работает «из коробки». В закрытом контуре задать переменные в .env.
+      args:
+        DOTNET_SDK_IMAGE: ${DOTNET_SDK_IMAGE:-mcr.microsoft.com/dotnet/sdk:10.0-preview-alpine}
+        DOTNET_ASPNET_IMAGE: ${DOTNET_ASPNET_IMAGE:-mcr.microsoft.com/dotnet/aspnet:10.0-preview-alpine}
+        NUGET_FEED_URL: ${NUGET_FEED_URL:-https://api.nuget.org/v3/index.json}
+        ALPINE_MIRROR: ${ALPINE_MIRROR:-dl-cdn.alpinelinux.org}
     container_name: kilo-import-backend
     restart: unless-stopped
     environment:
@@ -120,6 +128,13 @@ services:
     build:
       context: ./KiloImportService.Web
       dockerfile: Dockerfile
+      # Локальный compose — dev-стенд с hot-reload (Vite на :5173).
+      # Для k8s/prod собирается отдельным `docker build --target prod` (nginx, см. doc 130).
+      target: dev
+      args:
+        NODE_IMAGE: ${NODE_IMAGE:-node:20-alpine}
+        NPM_REGISTRY_URL: ${NPM_REGISTRY_URL:-https://registry.npmjs.org}
+        ALPINE_MIRROR: ${ALPINE_MIRROR:-dl-cdn.alpinelinux.org}
     container_name: kilo-import-frontend
     restart: unless-stopped
     environment:

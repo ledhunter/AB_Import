@@ -1,0 +1,23 @@
+{
+    "dockerRepository": "alfa-building-docker",
+    "registryUrl": "binary.alfabank.ru",
+    "artifactName": "alfa-building-fm-import",
+    "dotNetProjectName": "AB_Import.sln",
+    "services": [
+        {
+            "label": "API",
+            "artifactName": "kilo-import-api",
+            "dockerFilePath": "KiloImportService.Api/Dockerfile",
+            "dockerBuildTarget": "runtime",
+            "dockerBuildContext": ".",
+            "dotNetProjectName": "KiloImportService.Api/KiloImportService.Api.csproj"
+        },
+        {
+            "label": "Web",
+            "artifactName": "kilo-import-web",
+            "dockerFilePath": "KiloImportService.Web/Dockerfile",
+            "dockerBuildTarget": "prod",
+            "dockerBuildContext": "KiloImportService.Web"
+        }
+    ]
+}
