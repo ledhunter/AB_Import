@@ -57,6 +57,7 @@ pipeline {
                     """)
 
                     services.eachWithIndex { svc, i ->
+                        def baKeys = (svc.dockerBuildArgs instanceof Map) ? svc.dockerBuildArgs.keySet().join(', ') : '(none)'
                         echo(
                         """
                         [${i + 1}] ${svc.label ?: svc.artifactName}
@@ -65,6 +66,7 @@ pipeline {
                            dockerBuildTarget  = ${nonBlank(svc.dockerBuildTarget) ?: '(default)'}
                            dockerBuildContext = ${nonBlank(svc.dockerBuildContext) ?: '.'}
                            dotNetProjectName  = ${nonBlank(svc.dotNetProjectName) ?: '(skip .NET build)'}
+                           dockerBuildArgs    = ${baKeys}
                         """)
                     }
                 }
@@ -98,15 +100,23 @@ pipeline {
             }
         }
 
-        // Альфа-Artifactory именует репозитории без суффиксов -snapshots/-releases
-        // (см. nuget.config: репо «nuget_public» — единственное имя для всех версий).
-        // Snapshot/release-различие переносим в тег версии (`-SNAPSHOT`), а имя
-        // Docker-репо оставляем как в jenkinsConfiguration.json — это значение
-        // используется и в DNS-имени subdomain'а для login'а.
+        // Альфа-Artifactory держит Docker-репозитории с суффиксом по типу артефакта:
+        //   alfa-building-docker-snapshots.binary.alfabank.ru — для SNAPSHOT
+        //   alfa-building-docker-releases.binary.alfabank.ru  — для RELEASE
+        // Без суффикса subdomain не зарегистрирован → docker login возвращает 400
+        // Bad Request на /v2/ (Артифактори отдаёт 400 для unknown Docker-репо).
+        // Логика повторяет эталон service-dev (см. doc_project/132).
+        // ⚠️ Это правило не распространяется на NuGet-репо — для NuGet у Альфы
+        //    единственное имя `nuget_public` без суффиксов, см. nuget.config.
         stage('Obtain docker repository') {
             steps {
                 notifyBitbucketWithState 'INPROGRESS'
                 script {
+                    if (params.artifact_target_type == 'RELEASE') {
+                        dockerRepository = dockerRepository + "-releases"
+                    } else {
+                        dockerRepository = dockerRepository + "-snapshots"
+                    }
                     echo "Docker repository: ${dockerRepository} (artifact_target_type=${params.artifact_target_type})"
                 }
             }
@@ -116,7 +126,10 @@ pipeline {
             steps {
                 notifyBitbucketWithState 'INPROGRESS'
                 script {
-                    version = "v" + readFile(file: 'version')
+                    // .trim() обязателен: любой редактор/Write добавляет trailing \n,
+                    // без trim'а конкатенация даёт "v0.0.1\n.14-SNAPSHOT" → docker отказывает
+                    // `invalid reference format` (теги не принимают \n).
+                    version = "v" + readFile(file: 'version').trim()
                     if(params.branch != 'master')
                     {
                         version = "${version}.${currentBuild.number}"
@@ -147,7 +160,7 @@ pipeline {
                 notifyBitbucketWithState 'INPROGRESS'
                 script {
                      def gitUrl = steps.sh(returnStdout: true, script: 'git config remote.origin.url').trim()
-                     def lastCommitHash = sh(script: 'git log -n 1 --pretty=format:"%H"', returnStdout: true)
+                     def lastCommitHash = sh(script: 'git log -n 1 --pretty=format:"%H"', returnStdout: true).trim()
 
                      echo "Docker version: "
                      sh('docker -v')
@@ -161,16 +174,23 @@ pipeline {
                      ]) {
                         echo "User: $USERNAME"
                         // Один docker login на сессию pipeline — оба сервиса пушим в один registry.
-                        // Login — на subdomain Docker-репозитория ("$dockerRepository.$registryUrl").
-                        // Альфа-Artifactory использует subdomain-based routing: голый хост
-                        // (binary.alfabank.ru) отдаёт 400 на /v2/ — Docker-клиент не передаёт
-                        // имя репо в ping'е, поэтому хост обязан содержать репо в DNS-имени.
-                        // --password-stdin + одинарные кавычки (Groovy не интерполирует) —
-                        // пароль не светится в логах и не триггерит «insecure interpolation» warning.
+                        // Login — на subdomain Docker-репозитория с суффиксом по target_type:
+                        //   "alfa-building-docker-snapshots.binary.alfabank.ru" (SNAPSHOT)
+                        //   "alfa-building-docker-releases.binary.alfabank.ru"  (RELEASE)
+                        // Суффикс добавлен в stage 'Obtain docker repository' выше.
+                        //
+                        // Синтаксис эталона service-dev (см. doc_project/132): legacy `--password=`
+                        // (Basic Auth) — Артифактори этот формат принимает; `--password-stdin`
+                        // (X-Registry-Auth) на их docker-listener отдаёт 400 Bad Request.
+                        //
+                        // $PASSWORD/$USERNAME пробрасываем через shell-env (withCredentials
+                        // их инжектирует), не через Groovy-interpolation — это убирает
+                        // Jenkins warning «A secret was passed to "sh" using Groovy String
+                        // interpolation» и сохраняет маскирование `***` в логах.
+                        // ${dockerRepository}/${registryUrl} — НЕ секреты, интерполируем в Groovy.
                         withEnv(["REGISTRY_HOST=${dockerRepository}.${registryUrl}"]) {
                             sh '''
-                                set +x
-                                echo "$PASSWORD" | docker login --username "$USERNAME" --password-stdin "$REGISTRY_HOST"
+                                docker login --password="$PASSWORD" --username="$USERNAME" "$REGISTRY_HOST"
                             '''
                         }
 
@@ -187,9 +207,28 @@ pipeline {
                             def buildTarget     = nonBlank(svc.dockerBuildTarget)
                             def targetArg       = buildTarget ? "--target ${buildTarget}" : ''
 
+                            // Build-args из jenkinsConfiguration.json (поле `dockerBuildArgs`, map).
+                            // Используется для проброса URL'ов корп. репозиториев в Dockerfile
+                            // (например, `NPM_REGISTRY_ALFALAB_URL` — URL внутреннего npm-репо
+                            // Альфы для scope @alfalab/*, dl-cdn зеркал, etc.).
+                            // null/пусто → дополнительных --build-arg не добавляем (используются
+                            // ARG-дефолты из Dockerfile).
+                            def buildArgsStr = ''
+                            if (svc.dockerBuildArgs instanceof Map) {
+                                svc.dockerBuildArgs.each { k, v ->
+                                    def value = nonBlank(v)
+                                    if (value) {
+                                        buildArgsStr += " --build-arg ${k}='${value}'"
+                                    }
+                                }
+                            }
+
                             echo "─── [${stepNo}/${total}] ${svc.label ?: svc.artifactName} ───"
                             echo "Сборка - Project: ${svc.artifactName}, Version: ${version}, Target: ${buildTarget ?: '(default)'}, Context: ${buildContext}"
-                            sh("docker build --no-cache ${targetArg} -f ${svc.dockerFilePath} -t '${dockerImageName}' -t build/${svc.artifactName} -t ${svc.artifactName}:${version} --label 'version=${version}' --label 'service=${svc.artifactName}' ${buildContext}")
+                            if (buildArgsStr) {
+                                echo "Build args: ${buildArgsStr.trim()}"
+                            }
+                            sh("docker build --no-cache ${targetArg}${buildArgsStr} -f ${svc.dockerFilePath} -t '${dockerImageName}' -t build/${svc.artifactName} -t ${svc.artifactName}:${version} --label 'version=${version}' --label 'service=${svc.artifactName}' ${buildContext}")
                             sh("docker image push '${dockerImageName}'")
 
                             def dockerImageDigest = getDockerImageDigest(dockerImageName, dockerRepository, registryUrl, svc.artifactName)

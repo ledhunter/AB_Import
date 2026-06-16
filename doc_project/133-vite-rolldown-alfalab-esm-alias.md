@@ -1,5 +1,12 @@
 # 🎯 Vite 8 + Rolldown: резолвер `@alfalab/core-components-*/esm` для prod-build
 
+> ⚠️ **АКТУАЛЬНОЕ РЕШЕНИЕ — [doc 134](./134-postinstall-patch-alfalab-esm-package-json.md)** (постинсталл-патч `esm/package.json`).
+> Описанный ниже плагин в `vite.config.ts` работает локально, но в Docker-сборке
+> Jenkins (`v0.0.1.31-SNAPSHOT`, 2026-06-16) **не сработал** — Vite предкомпилирует
+> конфиг во временный bundle, `process.cwd()` указывает мимо `/app`, `createRequire()`
+> бросает MODULE_NOT_FOUND, плагин молча отдаёт ход дальше → та же ошибка резолва.
+> Плагин оставлен в коде как страховка, но основное лечение — в doc 134.
+
 ## 📋 Описание
 
 `vite build` (frontend, prod-stage Dockerfile) падает с ошибкой:
@@ -187,7 +194,29 @@ build: {
 
 | Файл | Что |
 |------|-----|
-| [KiloImportService.Web/vite.config.ts](../KiloImportService.Web/vite.config.ts) | `resolve.alias` с regex |
+| [KiloImportService.Web/vite.config.ts](../KiloImportService.Web/vite.config.ts) | плагин `alfalabEsmDirAlias` (resolveId + `createRequire().resolve()`) |
+
+---
+
+## 🧪 Подтверждение работоспособности (commit 1f54b3b)
+
+Локальный `npm run build` после фикса:
+
+```
+> tsc -b && vite build
+vite v8.0.10 building client environment for production...
+✓ 1098 modules transformed.
+dist/index.html                   0.48 kB │ gzip:   0.31 kB
+dist/assets/index-*.css         332.16 kB │ gzip:  41.84 kB
+dist/assets/index-*.js          779.17 kB │ gzip: 234.50 kB
+✓ built in 706ms
+```
+
+⚠️ Старые Jenkins-логи (build до коммита `1f54b3b` — `2026-06-15`) показывают
+ровно ту же сигнатуру ошибки, что устранена. При расследовании очередного
+«Rolldown failed to resolve» **проверь timestamp лога против `git log
+KiloImportService.Web/vite.config.ts`** — если лог старее коммита `1f54b3b`,
+проблема уже исправлена, нужно лишь перезапустить Jenkins на свежем HEAD.
 
 ---
 
@@ -196,7 +225,8 @@ build: {
 - [ ] В логе сборки фраза `Rolldown failed to resolve import`?
 - [ ] Импорт идёт на подпуть пакета **без расширения и слеша после `/esm`**?
 - [ ] У целевого пакета в `package.json` отсутствует поле `"exports"`?
-- [ ] Если все три «да» — добавить аналогичный regex-alias в `vite.config.ts`.
+- [ ] `git log KiloImportService.Web/vite.config.ts` — Jenkins-лог НЕ старее последнего фикса?
+- [ ] Если всё «да» — добавить аналогичный regex-alias-плагин в `vite.config.ts`.
 
 ---
 

@@ -17,7 +17,12 @@
             "artifactName": "kilo-import-web",
             "dockerFilePath": "KiloImportService.Web/Dockerfile",
             "dockerBuildTarget": "prod",
-            "dockerBuildContext": "KiloImportService.Web"
+            "dockerBuildContext": "KiloImportService.Web",
+            "_dockerBuildArgs_note": "Дефолты в Dockerfile уже стоят на virtual репо `binary.alfabank.ru/artifactory/api/npm/npm/` (включает alfalab-internal через proxy + alfalab). Префикс `/api/npm/<repo>/` обязателен — без него Артифактори отдаёт 406 npm-клиенту. Блок переопределяет URL — иначе можно оставить пустым/удалить.",
+            "dockerBuildArgs": {
+                "NPM_REGISTRY_URL": "https://binary.alfabank.ru/artifactory/api/npm/npm/",
+                "NPM_REGISTRY_ALFALAB_URL": "https://binary.alfabank.ru/artifactory/api/npm/npm/"
+            }
         }
     ]
 }

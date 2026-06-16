@@ -77,8 +77,9 @@ services:
       args:
         DOTNET_SDK_IMAGE: ${DOTNET_SDK_IMAGE:-mcr.microsoft.com/dotnet/sdk:10.0-preview-alpine}
         DOTNET_ASPNET_IMAGE: ${DOTNET_ASPNET_IMAGE:-mcr.microsoft.com/dotnet/aspnet:10.0-preview-alpine}
+        # NUGET_FEED_URL опц.: пусто → берётся BinaryNuGetMirror из nuget.config (эталон).
+        # Для локальной сборки задаём nuget.org через override.
         NUGET_FEED_URL: ${NUGET_FEED_URL:-https://api.nuget.org/v3/index.json}
-        ALPINE_MIRROR: ${ALPINE_MIRROR:-dl-cdn.alpinelinux.org}
     container_name: kilo-import-backend
     restart: unless-stopped
     environment:
@@ -114,8 +115,11 @@ services:
         condition: service_healthy
       postgres-visary:
         condition: service_healthy
+    # wget (а не curl) — curl не входит в base aspnet:alpine, а apk add его не ставит
+    # (нет корп. Alpine-зеркала, см. doc 132). wget — из busybox, всегда есть.
+    # На k8s этот healthcheck не используется — там httpGet probes (см. doc 130).
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:5000/health"]
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:5000/health"]
       interval: 10s
       timeout: 3s
       retries: 10
@@ -133,7 +137,13 @@ services:
       target: dev
       args:
         NODE_IMAGE: ${NODE_IMAGE:-node:20-alpine}
+        # Локально по умолчанию — публичный npmjs.org (быстрее, полный набор).
+        # В корп. контуре передаётся через .env: virtual репо Артифактори Альфы
+        # `https://binary.alfabank.ru/artifactory/api/npm/npm/` (содержит alfalab-internal
+        # пакеты `@alfalab/*` + публичные через proxy; путь `/api/npm/<repo>/` —
+        # обязательный, без него Артифактори отдаёт 406 Not Acceptable npm-клиенту).
         NPM_REGISTRY_URL: ${NPM_REGISTRY_URL:-https://registry.npmjs.org}
+        NPM_REGISTRY_ALFALAB_URL: ${NPM_REGISTRY_ALFALAB_URL:-https://registry.npmjs.org/}
         ALPINE_MIRROR: ${ALPINE_MIRROR:-dl-cdn.alpinelinux.org}
     container_name: kilo-import-frontend
     restart: unless-stopped

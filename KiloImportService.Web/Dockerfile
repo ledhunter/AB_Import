@@ -8,18 +8,46 @@
 #   • build — компиляция бандла `npm run build` → /app/dist (промежуточный).
 #   • prod — nginx, раздаёт /app/dist. Используется k8s (см. doc 130).
 # ════════════════════════════════════════════════════════════════════
-ARG NODE_IMAGE=node:20-alpine
-ARG NGINX_IMAGE=nginx:1.27-alpine
+# Дефолты — корп. зеркало Альфы (эталонный путь, см. doc_project/132).
+# Для локальной сборки docker-compose передаёт NODE_IMAGE из .env с дефолтом
+# `node:20-alpine` (см. docker-compose.yml секция 7 / .env.example).
+ARG NODE_IMAGE=docker-hub.binary.alfabank.ru/library/node:20-alpine
+ARG NGINX_IMAGE=docker-hub.binary.alfabank.ru/library/nginx:1.27-alpine
 
 # ────────────── Dev stage (docker-compose, hot reload) ──────────────
 FROM ${NODE_IMAGE} AS dev
 # ARG до FROM — global; нужно переобъявить после FROM, чтобы был виден в RUN.
-ARG NPM_REGISTRY_URL=https://registry.npmjs.org
+ARG NPM_REGISTRY_URL=https://binary.alfabank.ru/artifactory/api/npm/npm/
+# Scope @alfalab/* — open-source библиотека Альфа-Банка (core-components),
+# публикуется на npmjs.org. Дефолтно идёт через тот же virtual репо
+# `binary.alfabank.ru/artifactory/api/npm/npm/`, который содержит и публичные,
+# и alfalab-internal пакеты. Отдельный ARG оставлен для override на случай,
+# если у DevOps появится отдельное @alfalab-репо.
+# ⚠️ Префикс `/api/npm/<repo>/` обязателен — без `/api/npm/` Артифактори
+# отвечает 406 Not Acceptable (UI browse-endpoint, а не npm API).
+ARG NPM_REGISTRY_ALFALAB_URL=https://binary.alfabank.ru/artifactory/api/npm/npm/
 ARG ALPINE_MIRROR=dl-cdn.alpinelinux.org
 WORKDIR /app
 RUN sed -i "s|dl-cdn.alpinelinux.org|${ALPINE_MIRROR}|g" /etc/apk/repositories
 COPY package.json package-lock.json* ./
-RUN npm config set registry "${NPM_REGISTRY_URL}" && npm install
+# scripts/ нужен ДО `npm install`: npm-хук `postinstall` (см. package.json)
+# запускает `scripts/patch-alfalab-esm.mjs` — патчер пакетов
+# `@alfalab/core-components-*`, без которого Vite 8/Rolldown не резолвит
+# подпуть `/esm` (см. doc 134).
+COPY scripts/ scripts/
+# --legacy-peer-deps — транзитивная зависимость react-popper@2.3.0 объявляет
+# peer-dep react@^16 || ^17 || ^18, а у нас react@19. В strict-режиме npm
+# пытается резолвить дополнительный react@16-18, что может тянуть лишние
+# запросы и mismatch. Флаг отключает enforcing peer-deps — npm ставит то,
+# что в lockfile (react@19), peer-проверка остаётся как warning.
+#
+# --no-audit/--no-fund — отключают аудит-вызовы к npmjs.com (в закрытом контуре
+# они дают невнятные сетевые ошибки в логе, к сборке не относятся).
+RUN npm config set registry "${NPM_REGISTRY_URL}" && \
+    if [ -n "${NPM_REGISTRY_ALFALAB_URL}" ]; then \
+        npm config set @alfalab:registry "${NPM_REGISTRY_ALFALAB_URL}"; \
+    fi && \
+    npm install --legacy-peer-deps --no-audit --no-fund
 COPY . .
 EXPOSE 5173
 ENV HOST=0.0.0.0
@@ -27,13 +55,39 @@ CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
 
 # ────────────── Build stage (компилирует bundle для prod) ──────────────
 FROM ${NODE_IMAGE} AS build
-ARG NPM_REGISTRY_URL=https://registry.npmjs.org
+ARG NPM_REGISTRY_URL=https://binary.alfabank.ru/artifactory/api/npm/npm/
+# Отдельный registry для scope @alfalab/* — см. комментарий в dev-stage выше.
+# Дефолт = тот же virtual репо, что и primary (включает alfalab-internal пакеты).
+ARG NPM_REGISTRY_ALFALAB_URL=https://binary.alfabank.ru/artifactory/api/npm/npm/
 ARG ALPINE_MIRROR=dl-cdn.alpinelinux.org
 WORKDIR /app
 RUN sed -i "s|dl-cdn.alpinelinux.org|${ALPINE_MIRROR}|g" /etc/apk/repositories
 COPY package.json package-lock.json* ./
-# npm ci — детерминированная установка из package-lock.json (быстрее и воспроизводимее install).
-RUN npm config set registry "${NPM_REGISTRY_URL}" && npm ci
+# scripts/ нужен ДО `npm install`: npm-хук `postinstall` (см. package.json)
+# запускает `scripts/patch-alfalab-esm.mjs` — патчер пакетов
+# `@alfalab/core-components-*`, без которого Vite 8/Rolldown не резолвит
+# подпуть `/esm` в Docker-build (см. doc 134).
+COPY scripts/ scripts/
+# ⚠️ Используем `npm install` вместо `npm ci`, и УДАЛЯЕМ package-lock.json перед этим.
+# Причина: npm ci идёт строго по `resolved`-URL'ам из lockfile. Lockfile сгенерирован
+# локально против registry.npmjs.org. При смене registry на корп. virtual репо
+# `resolved`-ссылки в lockfile НЕ переписываются автоматически, npm ci идёт за
+# конкретными tarball'ами на старые URL'ы → 404 / timeout.
+# `npm install` без lockfile строит дерево заново через корп. registry,
+# использует resolved-ссылки от него.
+# Минус: сборка не строго детерминирована по lockfile (хорошо бы коммитнуть
+# свежий lockfile, сгенерированный против корп. registry — отдельная задача).
+#
+# --legacy-peer-deps — react-popper@2.3.0 объявляет peer-dep react@^16 || ^17 || ^18,
+# у нас react@19. Без флага npm пытается дополнительно резолвить react@16-18.
+# --no-audit/--no-fund — отключают аудит-вызовы к npmjs.com (лишние сетевые
+# запросы в закрытом контуре, к сборке отношения не имеют).
+RUN rm -f package-lock.json && \
+    npm config set registry "${NPM_REGISTRY_URL}" && \
+    if [ -n "${NPM_REGISTRY_ALFALAB_URL}" ]; then \
+        npm config set @alfalab:registry "${NPM_REGISTRY_ALFALAB_URL}"; \
+    fi && \
+    npm install --legacy-peer-deps --no-audit --no-fund
 COPY . .
 # `npm run build` = tsc -b && vite build → /app/dist
 RUN npm run build
