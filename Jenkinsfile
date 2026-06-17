@@ -194,9 +194,15 @@ pipeline {
                             '''
                         }
 
+                        // ⚠️ Build-description парсится платформой Альфы
+                        // (PlatformArtifactsClient) по шаблону `KEY:VALUE` БЕЗ пробела
+                        // после `:`. Если поставить пробел — value включит лидирующий
+                        // пробел, и URL-запрос к artifacts-api получит `%20HASH`,
+                        // что валит 500 «artifact not found». Эталон service-dev
+                        // строго `key:value`. См. doc 136.
                         def descriptionLines = []
-                        descriptionLines << "gitBranche: ${params.branch}"
-                        descriptionLines << "version: $version"
+                        descriptionLines << "gitBranche:${params.branch}"
+                        descriptionLines << "version:$version"
 
                         services.eachWithIndex { svc, idx ->
                             def stepNo          = idx + 1
@@ -228,7 +234,14 @@ pipeline {
                             if (buildArgsStr) {
                                 echo "Build args: ${buildArgsStr.trim()}"
                             }
-                            sh("docker build --no-cache ${targetArg}${buildArgsStr} -f ${svc.dockerFilePath} -t '${dockerImageName}' -t build/${svc.artifactName} -t ${svc.artifactName}:${version} --label 'version=${version}' --label 'service=${svc.artifactName}' ${buildContext}")
+                            // `--pull` — каждая сборка тянет свежий base-образ из корп. registry.
+                            // Без него Docker реюзает локальный кеш base'а (может застрять
+                            // на snapshot месячной давности с устаревшими Alpine-пакетами).
+                            // Microsoft периодически пересобирает теги `aspnet:10.0-preview-alpine`
+                            // при выходе security-update'ов Alpine — `--pull` даёт нам свежий
+                            // snapshot, который + наш `apk upgrade` в Dockerfile закрывает CVE.
+                            // См. doc 137 v1.1.
+                            sh("docker build --pull --no-cache ${targetArg}${buildArgsStr} -f ${svc.dockerFilePath} -t '${dockerImageName}' -t build/${svc.artifactName} -t ${svc.artifactName}:${version} --label 'version=${version}' --label 'service=${svc.artifactName}' ${buildContext}")
                             sh("docker image push '${dockerImageName}'")
 
                             def dockerImageDigest = getDockerImageDigest(dockerImageName, dockerRepository, registryUrl, svc.artifactName)
@@ -255,9 +268,9 @@ pipeline {
 
                             descriptionLines << ''
                             descriptionLines << "── ${svc.label ?: svc.artifactName} ──"
-                            descriptionLines << "dockerImage: http://$registryUrl/artifactory/$dockerRepository/${svc.artifactName}/$version"
-                            descriptionLines << "dockerImageDigest: ${dockerImageDigest}"
-                            descriptionLines << "artifact_app_sha1: ${sha1sum}"
+                            descriptionLines << "dockerImage:http://$registryUrl/artifactory/$dockerRepository/${svc.artifactName}/$version"
+                            descriptionLines << "dockerImageDigest:${dockerImageDigest}"
+                            descriptionLines << "artifact_app_sha1:${sha1sum}"
                         }
 
                         currentBuild.description = descriptionLines.join('\n')

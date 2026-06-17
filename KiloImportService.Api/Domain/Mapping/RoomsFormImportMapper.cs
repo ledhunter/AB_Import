@@ -485,12 +485,30 @@ public sealed class RoomsFormImportMapper : IImportMapper
                         $"Не указан вид помещения и не удалось определить его по имени листа '{row.Sheet}'."));
                 }
             }
-            else if (!kindByTitle.TryGetValue(roomKindTitle.Trim(), out kindId))
+            else
             {
-                rowErrors.Add(new RowError(string.Join(" / ", RoomKindAliases), "fk_not_found",
-                    $"Вид помещения '{roomKindTitle}' не найден в справочнике RoomKind."));
+                // Колонка «Тип/Название/Вид» проходит ту же нормализацию, что и
+                // имя листа: алиасы (Машино-место → Машиноместо, Квартира-студия →
+                // Квартира, ПСН → Нежилое помещение, Апартамент → Апартаменты) и
+                // plural-trim (Офисы → Офис, Нежилые помещения → Нежилое помещение).
+                // Без этого пользователю прилетал fk_not_found на формулировки,
+                // которые семантически равны Title из справочника.
+                var (resolvedId, resolvedTitle) = ResolveKindByTitle(roomKindTitle, kindByTitle);
+                if (!resolvedId.HasValue)
+                {
+                    rowErrors.Add(new RowError(string.Join(" / ", RoomKindAliases), "fk_not_found",
+                        $"Вид помещения '{roomKindTitle}' не найден в справочнике RoomKind."));
+                }
+                else
+                {
+                    kindId = resolvedId.Value;
+                    // Если резолв привёл к каноническому Title (через алиас или plural-trim),
+                    // подменяем raw-значение каноническим — это идёт в Visary и в отчёт.
+                    if (!string.IsNullOrEmpty(resolvedTitle)) roomKindTitle = resolvedTitle;
+                }
             }
-            else if (sheetKindId.HasValue && kindId != sheetKindId.Value)
+            // ── расхождение row-kind vs sheet-kind ─────────────────────────────
+            if (kindId != 0 && sheetKindId.HasValue && kindId != sheetKindId.Value)
             {
                 // Колонка указывает другой вид, чем лист. Доверяем колонке, но фиксируем расхождение.
                 _log.LogWarning(
@@ -1761,49 +1779,78 @@ public sealed class RoomsFormImportMapper : IImportMapper
     // ──────────────────────────── Helpers ──────────────────────────────────
 
     /// <summary>
-    /// Алиасы коротких/отраслевых имён листов на канонические Title справочника
-    /// RoomKind. Используются ДО plural-trim, чтобы аббревиатуры, которые
-    /// эвристика «мн.→ед.ч.» не превратит в Title, всё равно резолвились.
+    /// Алиасы развёрнутых/отраслевых наименований вида помещения на канонические
+    /// Title справочника RoomKind. Используются ДО plural-trim, чтобы:
+    /// <list type="bullet">
+    ///   <item>аббревиатуры («ПСН»), которые plural-эвристика не превратит в Title,
+    ///         корректно резолвились;</item>
+    ///   <item>уточнённые формы заказчика («Машино-место МГН», «Квартира-студия»,
+    ///         «Нежилое помещение для коммерческого использования») сводились к
+    ///         базовому виду из справочника;</item>
+    ///   <item>singular-форма «Апартамент» матчилась с plural-Title «Апартаменты»
+    ///         (стандартная plural→singular эвристика тут не помогает —
+    ///         направление обратное).</item>
+    /// </list>
+    /// Применяются и к имени листа (<see cref="ResolveKindBySheetName"/>),
+    /// и к значению колонки «Тип/Название/Вид» (см. ResolveKindByTitle).
     /// Расширять по запросу заказчика. Ключи/значения сравниваются
     /// case-insensitive (см. конструктор словаря).
     /// </summary>
-    private static readonly Dictionary<string, string> SheetNameAliases =
+    private static readonly Dictionary<string, string> RoomKindTitleAliases =
         new(StringComparer.OrdinalIgnoreCase)
         {
             // «ПСН» (помещение свободного назначения) — заказчик использует как
             // имя листа для нежилых помещений.
             ["ПСН"] = "Нежилое помещение",
+
+            // Уточнения вида, которые в справочнике сворачиваются до базового Title.
+            ["Квартира-студия"]                                    = "Квартира",
+            ["Нежилое помещение для коммерческого использования"]  = "Нежилое помещение",
+            ["Машино-место"]                                        = "Машиноместо",
+            ["Машино-место МГН"]                                    = "Машиноместо",
+
+            // singular→plural: справочник содержит «Апартаменты» (plural-Title),
+            // в файлах встречается «Апартамент» — plural-trim даёт только
+            // обратное направление, поэтому фиксируем алиас явно.
+            ["Апартамент"]                                          = "Апартаменты",
         };
 
     /// <summary>
-    /// Резолвит имя листа («Квартиры», «Машиноместа», «Кладовые»,
-    /// «Коммерческие помещения», «Нежилое помещение», …) в Title/ID из
-    /// справочника RoomKind. Стратегии (по порядку):
-    ///   1) точное совпадение `kindByTitle[sheetName]`;
-    ///   2) явный алиас из <see cref="SheetNameAliases"/> (например, «ПСН» →
-    ///      «Нежилое помещение»);
-    ///   3) plural-trim КАЖДОГО слова независимо: имя листа разбивается
-    ///      по пробелам, для каждого слова собираются ед.ч.-кандидаты,
+    /// Резолвит произвольную строку (имя листа или значение колонки
+    /// «Тип/Название/Вид») в Title/ID справочника RoomKind. Используется
+    /// и для имени листа, и для значения ячейки — обе точки должны
+    /// одинаково применять алиасы (<see cref="RoomKindTitleAliases"/>) и
+    /// plural-trim, иначе пользователь получает «не найден в справочнике»
+    /// на «Машино-место» в ячейке, при том что лист «Машино-места»
+    /// резолвится корректно.
+    ///
+    /// Стратегии (по порядку):
+    ///   1) точное совпадение `kindByTitle[raw]`;
+    ///   2) явный алиас из <see cref="RoomKindTitleAliases"/> (например,
+    ///      «ПСН» → «Нежилое помещение», «Квартира-студия» → «Квартира»,
+    ///      «Машино-место» → «Машиноместо», «Апартамент» → «Апартаменты»);
+    ///   3) plural-trim КАЖДОГО слова независимо: строка разбивается по
+    ///      пробелам, для каждого слова собираются ед.ч.-кандидаты,
     ///      перебирается декартово произведение, склеенный кандидат
     ///      ищется в справочнике.
     /// Возвращает (null, null) если ничего не подошло. Substring-fallback
     /// сознательно не используется (см. doc 90): иначе «Кв_01.04.26»
     /// совпало бы с «Квартира».
     /// </summary>
-    internal static (int? Id, string? Title) ResolveKindBySheetName(
-        string sheetName, IDictionary<string, int> kindByTitle)
+    internal static (int? Id, string? Title) ResolveKindByTitle(
+        string? raw, IDictionary<string, int> kindByTitle)
     {
-        if (string.IsNullOrWhiteSpace(sheetName)) return (null, null);
-        var name = sheetName.Trim();
+        if (string.IsNullOrWhiteSpace(raw)) return (null, null);
+        var name = raw.Trim();
 
         // 1. Прямое совпадение (case-insensitive благодаря StringComparer.OrdinalIgnoreCase в kindByTitle)
         if (kindByTitle.TryGetValue(name, out var id1))
             return (id1, FindMatchingTitle(name, kindByTitle));
 
-        // 2. Алиас короткой/отраслевой формы (например, «ПСН» → «Нежилое помещение»).
-        //    Если канонический Title отсутствует в живом справочнике Visary —
-        //    провал в plural-trim, как для неизвестного имени.
-        if (SheetNameAliases.TryGetValue(name, out var aliasTitle)
+        // 2. Алиас (например, «ПСН» → «Нежилое помещение»). Если канонический
+        //    Title отсутствует в живом справочнике Visary — провал в plural-trim,
+        //    как для неизвестного имени.
+        if (RoomKindTitleAliases.TryGetValue(name, out var aliasTitle)
             && kindByTitle.TryGetValue(aliasTitle, out var idA))
             return (idA, FindMatchingTitle(aliasTitle, kindByTitle));
 
@@ -1830,11 +1877,22 @@ public sealed class RoomsFormImportMapper : IImportMapper
     }
 
     /// <summary>
+    /// Алиас для исторического API — резолв имени листа делегируется в
+    /// общий <see cref="ResolveKindByTitle"/>. Имя оставлено для читаемости
+    /// вызывающего кода в <c>ValidateAsync</c>.
+    /// </summary>
+    internal static (int? Id, string? Title) ResolveKindBySheetName(
+        string sheetName, IDictionary<string, int> kindByTitle)
+        => ResolveKindByTitle(sheetName, kindByTitle);
+
+    /// <summary>
     /// Для слова в множественном числе возвращает потенциальные формы
     /// единственного числа. Эвристика «срез последней буквы» + типичные
     /// замены русских окончаний (мн.ч.→ед.ч.):
     /// <list type="bullet">
     ///   <item><c>«ые» → «ая»</c> («Кладовые» → «Кладовая», «Жилые» → «Жилая»)</item>
+    ///   <item><c>«ые» → «ое»</c> («Нежилые» → «Нежилое»; даёт второй
+    ///         кандидат — справочник содержит «Нежилое помещение»)</item>
     ///   <item><c>«ие» → «ое»</c> («Коммерческие» → «Коммерческое»)</item>
     ///   <item><c>«ия» → «ие»</c> («помещения» → «помещение»)</item>
     ///   <item><c>«ы» → «а»</c>, <c>«и» → «я»</c>, <c>«а» → «о»</c> (старая логика)</item>
@@ -1855,7 +1913,11 @@ public sealed class RoomsFormImportMapper : IImportMapper
 
         // 2-буквенные суффиксы — берём сначала, чтобы «Кладовые» → «Кладовая»,
         // а не остановиться на ложном candidate «Кладовы».
-        if (string.Equals(last2, "ые", StringComparison.OrdinalIgnoreCase)) yield return head2 + "ая";
+        if (string.Equals(last2, "ые", StringComparison.OrdinalIgnoreCase))
+        {
+            yield return head2 + "ая"; // Кладовые → Кладовая
+            yield return head2 + "ое"; // Нежилые  → Нежилое (для «Нежилые помещения»)
+        }
         if (string.Equals(last2, "ие", StringComparison.OrdinalIgnoreCase)) yield return head2 + "ое";
         if (string.Equals(last2, "ия", StringComparison.OrdinalIgnoreCase)) yield return head2 + "ие";
 

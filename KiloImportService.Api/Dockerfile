@@ -84,6 +84,52 @@ FROM base AS runtime
 LABEL serviceName="alfa-building-fm-import-api"
 LABEL teamName="SRKBPF"
 
+# ────────────── Security upgrade: уязвимые системные пакеты ──────────────
+# Закрывает CVE из appsec_v4 (см. doc 137 v1.3):
+#   libcrypto3, libssl3 — OpenSSL CVE-2026-31789/-28387/-28388/-28389/-28390/-45447,
+#                         CVE-2025-15467/-69421 (8× High)
+#   musl, musl-utils    — CVE-2026-40200 (qsort stack corruption)
+#   zlib                — CVE-2026-22184 (untgz buffer overflow)
+#
+# `apk upgrade --no-cache <pkg>` — берёт latest из репо (не pin'им версию, чтобы
+# через 3 мес. при выходе 3.5.8-r0 сборка не сломалась stale-pin'ом).
+#
+# ALPINE_REPOSITORIES_URL — полный base URL Alpine-репо без суффикса /main|/community.
+# Корп. зеркало Альфы: https://binary.alfabank.ru/artifactory/alpine-mirror/latest-stable
+# (Артифактори, latest-stable — всегда последний stable-выпуск Alpine).
+# Path-структура корп. mirror отличается от dl-cdn.alpinelinux.org/alpine/v3.XX/ —
+# поэтому НЕ можем sed'ить host, нужно ПОЛНОСТЬЮ переписать /etc/apk/repositories.
+# Пустой дефолт → не трогаем repositories, используется штатный из base-образа
+# (для compose-локали с outbound доступом к dl-cdn.alpinelinux.org).
+#
+# Громкий fallback с баннером — компромисс между v1.0/v1.1 (см. doc 137 v1.3):
+# сборка не падает при недоступности репо (Jenkins без mirror'а), но баннер
+# в логе хорошо виден DevOps.
+ARG ALPINE_REPOSITORIES_URL=""
+RUN if [ -n "${ALPINE_REPOSITORIES_URL}" ]; then \
+        echo "${ALPINE_REPOSITORIES_URL}/main"      >  /etc/apk/repositories; \
+        echo "${ALPINE_REPOSITORIES_URL}/community" >> /etc/apk/repositories; \
+        echo "INFO: /etc/apk/repositories переписан на ${ALPINE_REPOSITORIES_URL}"; \
+    fi && \
+    ( apk upgrade --no-cache libcrypto3 libssl3 musl musl-utils zlib \
+      && echo "OK: appsec_v4 — Alpine system packages upgraded successfully" \
+    ) || ( \
+        echo ""; \
+        echo "############################################################"; \
+        echo "# WARNING: apk upgrade FAILED — Alpine репо недоступен.    #"; \
+        echo "# Уязвимые системные пакеты ОСТАЮТСЯ в финальном образе:    #"; \
+        echo "#   libcrypto3 libssl3 musl musl-utils zlib                 #"; \
+        echo "# AppSec_v4 будет показывать те же CVE до устранения.       #"; \
+        echo "#                                                          #"; \
+        echo "# DevOps action:                                           #"; \
+        echo "#  передать ALPINE_REPOSITORIES_URL в build-args, например:#"; \
+        echo "#  https://binary.alfabank.ru/artifactory/alpine-mirror/   #"; \
+        echo "#  latest-stable                                            #"; \
+        echo "# См. doc_project/137 v1.3.                                 #"; \
+        echo "############################################################"; \
+        echo ""; \
+    )
+
 # Доп. пакеты через apk add НЕ ставим — в закрытом корп. контуре Jenkins-агент
 # не имеет выхода на dl-cdn.alpinelinux.org (Permission denied на прокси), а
 # подтверждённого корп. Alpine-зеркала у Альфы пока нет (см. doc 132).

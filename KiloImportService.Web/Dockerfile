@@ -94,8 +94,40 @@ RUN npm run build
 
 # ────────────── Prod stage (nginx раздаёт собранный bundle) ──────────────
 FROM ${NGINX_IMAGE} AS prod
-ARG ALPINE_MIRROR=dl-cdn.alpinelinux.org
-RUN sed -i "s|dl-cdn.alpinelinux.org|${ALPINE_MIRROR}|g" /etc/apk/repositories
+# ────────────── Security upgrade: уязвимые системные пакеты ──────────────
+# Закрывает CVE из appsec_v4 (см. doc 137 v1.3):
+#   libcrypto3, libssl3 — 8× OpenSSL (High)
+#   musl, musl-utils    — CVE-2026-40200 (qsort stack corruption)
+#   zlib                — CVE-2026-22184 (untgz buffer overflow)
+#
+# ALPINE_REPOSITORIES_URL — полный base URL Alpine-репо без суффикса /main|/community.
+# Корп. зеркало: https://binary.alfabank.ru/artifactory/alpine-mirror/latest-stable.
+# Пустой дефолт → не трогаем repositories (используется штатный из base-образа,
+# compose-локаль с outbound на dl-cdn). Подробности — в API/Dockerfile и doc 137.
+ARG ALPINE_REPOSITORIES_URL=""
+RUN if [ -n "${ALPINE_REPOSITORIES_URL}" ]; then \
+        echo "${ALPINE_REPOSITORIES_URL}/main"      >  /etc/apk/repositories; \
+        echo "${ALPINE_REPOSITORIES_URL}/community" >> /etc/apk/repositories; \
+        echo "INFO: /etc/apk/repositories переписан на ${ALPINE_REPOSITORIES_URL}"; \
+    fi && \
+    ( apk upgrade --no-cache libcrypto3 libssl3 musl musl-utils zlib \
+      && echo "OK: appsec_v4 — Alpine system packages upgraded successfully" \
+    ) || ( \
+        echo ""; \
+        echo "############################################################"; \
+        echo "# WARNING: apk upgrade FAILED — Alpine репо недоступен.    #"; \
+        echo "# Уязвимые системные пакеты ОСТАЮТСЯ в финальном образе:    #"; \
+        echo "#   libcrypto3 libssl3 musl musl-utils zlib                 #"; \
+        echo "# AppSec_v4 будет показывать те же CVE до устранения.       #"; \
+        echo "#                                                          #"; \
+        echo "# DevOps action:                                           #"; \
+        echo "#  передать ALPINE_REPOSITORIES_URL в build-args, например:#"; \
+        echo "#  https://binary.alfabank.ru/artifactory/alpine-mirror/   #"; \
+        echo "#  latest-stable                                            #"; \
+        echo "# См. doc_project/137 v1.3.                                 #"; \
+        echo "############################################################"; \
+        echo ""; \
+    )
 # Свой конфиг (SPA-fallback + security headers + кэширование). Перезаписывает
 # дефолтный server-блок из nginx:alpine — там listen 80, у нас listen 8080.
 COPY nginx.conf /etc/nginx/conf.d/default.conf

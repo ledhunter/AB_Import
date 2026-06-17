@@ -10,7 +10,11 @@
             "dockerFilePath": "KiloImportService.Api/Dockerfile",
             "dockerBuildTarget": "runtime",
             "dockerBuildContext": ".",
-            "dotNetProjectName": "KiloImportService.Api/KiloImportService.Api.csproj"
+            "dotNetProjectName": "KiloImportService.Api/KiloImportService.Api.csproj",
+            "_dockerBuildArgs_note": "ALPINE_REPOSITORIES_URL — полный base URL корп. Alpine-зеркала Артифактори Альфы БЕЗ суффикса /main|/community (Dockerfile добавляет их сам). Используется `apk upgrade` в runtime-stage для закрытия CVE системных пакетов (libcrypto3, libssl3, musl, zlib — appsec_v4). `latest-stable` = всегда последний stable-выпуск Alpine. См. doc 137 v1.3.",
+            "dockerBuildArgs": {
+                "ALPINE_REPOSITORIES_URL": "https://binary.alfabank.ru/artifactory/alpine-mirror/latest-stable"
+            }
         },
         {
             "label": "Web",
@@ -18,10 +22,11 @@
             "dockerFilePath": "KiloImportService.Web/Dockerfile",
             "dockerBuildTarget": "prod",
             "dockerBuildContext": "KiloImportService.Web",
-            "_dockerBuildArgs_note": "Дефолты в Dockerfile уже стоят на virtual репо `binary.alfabank.ru/artifactory/api/npm/npm/` (включает alfalab-internal через proxy + alfalab). Префикс `/api/npm/<repo>/` обязателен — без него Артифактори отдаёт 406 npm-клиенту. Блок переопределяет URL — иначе можно оставить пустым/удалить.",
+            "_dockerBuildArgs_note": "NPM_REGISTRY_URL/NPM_REGISTRY_ALFALAB_URL — virtual репо `binary.alfabank.ru/artifactory/api/npm/npm/` (включает alfalab-internal через proxy + alfalab; префикс `/api/npm/<repo>/` обязателен — без него Артифактори отдаёт 406 npm-клиенту). ALPINE_REPOSITORIES_URL — для apk upgrade в prod-stage (см. note в API-сервисе и doc 137 v1.3).",
             "dockerBuildArgs": {
                 "NPM_REGISTRY_URL": "https://binary.alfabank.ru/artifactory/api/npm/npm/",
-                "NPM_REGISTRY_ALFALAB_URL": "https://binary.alfabank.ru/artifactory/api/npm/npm/"
+                "NPM_REGISTRY_ALFALAB_URL": "https://binary.alfabank.ru/artifactory/api/npm/npm/",
+                "ALPINE_REPOSITORIES_URL": "https://binary.alfabank.ru/artifactory/alpine-mirror/latest-stable"
             }
         }
     ]

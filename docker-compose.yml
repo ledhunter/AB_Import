@@ -80,6 +80,15 @@ services:
         # NUGET_FEED_URL опц.: пусто → берётся BinaryNuGetMirror из nuget.config (эталон).
         # Для локальной сборки задаём nuget.org через override.
         NUGET_FEED_URL: ${NUGET_FEED_URL:-https://api.nuget.org/v3/index.json}
+        # ALPINE_REPOSITORIES_URL — полный base URL Alpine-репо для apk upgrade
+        # в runtime-stage (закрытие appsec_v4 CVE, см. doc 137 v1.3).
+        # Корп. mirror Альфы:
+        #   https://binary.alfabank.ru/artifactory/alpine-mirror/latest-stable
+        # Пустой дефолт → НЕ трогаем /etc/apk/repositories; используется штатный
+        # `dl-cdn.alpinelinux.org/alpine/v3.XX/...` из base-образа (compose-локаль
+        # с outbound доступом к интернету — работает «из коробки»). В Jenkins —
+        # передаётся через jenkinsConfiguration.json -> dockerBuildArgs.
+        ALPINE_REPOSITORIES_URL: ${ALPINE_REPOSITORIES_URL:-}
     container_name: kilo-import-backend
     restart: unless-stopped
     environment:
@@ -144,7 +153,14 @@ services:
         # обязательный, без него Артифактори отдаёт 406 Not Acceptable npm-клиенту).
         NPM_REGISTRY_URL: ${NPM_REGISTRY_URL:-https://registry.npmjs.org}
         NPM_REGISTRY_ALFALAB_URL: ${NPM_REGISTRY_ALFALAB_URL:-https://registry.npmjs.org/}
+        # ALPINE_MIRROR — legacy host для sed в dev/build стейджах (no-op на дефолте,
+        # apk там не вызывается). Оставлен для совместимости с doc 129.
         ALPINE_MIRROR: ${ALPINE_MIRROR:-dl-cdn.alpinelinux.org}
+        # ALPINE_REPOSITORIES_URL — для apk upgrade в prod-stage (target=prod).
+        # compose локально использует target=dev — ARG проходит, но не применяется
+        # (warning «ARG not used»). При `docker build --target prod` локально —
+        # уязвимости тоже закроются, если URL задан. См. doc 137 v1.3.
+        ALPINE_REPOSITORIES_URL: ${ALPINE_REPOSITORIES_URL:-}
     container_name: kilo-import-frontend
     restart: unless-stopped
     environment:
