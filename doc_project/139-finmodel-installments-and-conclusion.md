@@ -1,5 +1,13 @@
 # 🧾 Финмодель → «Итоговое заключение КА БП7» + рассрочки
 
+> ⚠️ **Payload `dealpercentbet` изменён в [doc 144 v1.1](./144-finmodel-rate-omitted-and-gf-needs-budget.md) (2026-06-22).**
+> Поле `PercentKind` больше НЕ отправляется (Visary сам определяет «Вид ставки»
+> по `PercentBetType`). `Rate` отправляется как описано в v1.4 ниже. Парсер
+> `EnabledFinancingRate.PercentKind` + словарь `FinancingPercentKindByCode`
+> ОСТАЛИСЬ — используются для валидации LM-кода (если код не из словаря —
+> строка не считается ставкой). `DealPercentBetRaw.PercentKind` тоже остался —
+> Visary возвращает его в GET/listview.
+
 ## 📋 Описание
 
 После того как импорт «Финмодель» отработал Бюджет (см. [doc 71](./71-finmodel-budget-import.md)) и
