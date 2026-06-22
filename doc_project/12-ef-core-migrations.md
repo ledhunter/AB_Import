@@ -170,10 +170,40 @@ e.HasIndex(x => new { x.ImportTypeCode, x.FileSha256 })
 |------|----------------|
 | `KiloImportService.Api/Program.cs` | Регистрация DbContext, guard `EF.IsDesignTime`, MigrateAsync на старте |
 | `KiloImportService.Api/Data/ImportServiceDbContext.cs` | Модель + `MigrationsHistoryTable` |
-| `KiloImportService.Api/Migrations/20260429084812_Initial.cs` | Сама миграция |
+| `KiloImportService.Api/Migrations/20260429084812_Initial.cs` (+ `.Designer.cs`) | Базовая миграция: создаёт схему `import` и 5 базовых таблиц |
+| `KiloImportService.Api/Migrations/20260429170000_AddCachedProjects.cs` (+ `.Designer.cs`) | Кэш проектов |
+| `KiloImportService.Api/Migrations/20260430213808_RemoveFileSha256Constraint.cs` + 4 последующих | Поэтапные правки модели |
 | `KiloImportService.Api/Migrations/ImportServiceDbContextModelSnapshot.cs` | Текущий снимок модели |
-| `KiloImportService.Api/Migrations/Initial.sql` | Idempotent SQL для деплоя/ревью |
+| `KiloImportService.Api/Migrations/Initial.sql` | Idempotent SQL-snapshot Initial-миграции (для ручного деплоя/ревью, **НЕ исполняется** EF Core'ом — он работает только с `.cs`) |
 | `docker-compose.yml` (postgres-service) | БД, к которой применяется миграция |
+
+---
+
+## ⚠️ Никогда не удаляйте Initial-миграцию
+
+В мае 2026 (коммит `4f0e224`) `20260429084812_Initial.cs` и `20260429170000_AddCachedProjects.cs`
+были по ошибке удалены вместе с одноимёнными `.Designer.cs` (рефакторинг при «решении
+проблемы с докером»). После удаления цепочка миграций для пустой БД ломалась: `MigrateAsync()`
+пытался применить `20260430213808_RemoveFileSha256Constraint` первым, а тот `DropIndex`/`DropColumn`
+на `import_sessions` — таблицы ещё нет → `relation does not exist`. Восстановлено в июне 2026
+через `git checkout 4f0e224^ -- Migrations/20260429*` (см. doc 144 git-история).
+
+**Урок:** Initial-миграция нужна на диске постоянно. `Initial.sql` её НЕ заменяет — EF Core
+`MigrateAsync()` исполняет только `.cs` миграции, зарегистрированные в собранной сборке.
+Если нужно «обнулить» цепочку — делайте `dotnet ef migrations remove` (вытащит из снимка
+обратно), а не `rm`.
+
+**Проверка после любого касания папки `Migrations/`:**
+
+```powershell
+# 1) Цепочка валидна (видны все timestamps + первая = Initial):
+dotnet ef migrations list --context ImportServiceDbContext --no-build
+
+# 2) Скрипт «from scratch» начинается с CREATE SCHEMA + CREATE TABLE,
+#    а не с DROP/ALTER (что значило бы потерю Initial):
+dotnet ef migrations script --context ImportServiceDbContext --no-build --output /tmp/scratch.sql
+head -30 /tmp/scratch.sql   # ожидаем CREATE SCHEMA import; CREATE TABLE import.import_sessions
+```
 
 ---
 
@@ -182,6 +212,7 @@ e.HasIndex(x => new { x.ImportTypeCode, x.FileSha256 })
 - [ ] Изменил entity / `DbContext.OnModelCreating`
 - [ ] Запустил `dotnet ef migrations add <ОписаниеИзменения> --context ImportServiceDbContext`
 - [ ] Прочитал сгенерированный `*.cs` — нет ли неожиданных DROP COLUMN
+- [ ] **Не удалил ни одной существующей миграции** (см. предупреждение выше)
 - [ ] Запустил `dotnet ef database update --context ImportServiceDbContext` локально
 - [ ] Проверил структуру в psql: `\d import.<table>`
 - [ ] Сгенерировал SQL-скрипт `dotnet ef migrations script --idempotent` для production-деплоя
