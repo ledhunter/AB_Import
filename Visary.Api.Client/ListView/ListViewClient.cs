@@ -224,6 +224,70 @@ public interface IListViewClient
     Task<ListViewResponse<FmCodeRaw>> FindFmCodeByCodeAsync(
         string code, CancellationToken ct = default);
 
+    /// <summary>
+    /// Поиск «Набора данных для ФМ» (<c>datasetforfm</c>) по паре
+    /// (ConstructionSite, ConstructionProject). Один Site/Project = одна запись.
+    /// POST <c>/api/visary/listview/datasetforfm</c> с
+    /// <c>Filter [["ConstructionSite","=",siteId],"and",["ConstructionProject","=",projectId]]</c>.
+    /// Используется FinModel-импортом после POST <c>projectaudit</c>, чтобы получить
+    /// ID родителя для <c>dataforfm</c>-строк и для последующего PATCH рассрочек.
+    /// См. doc_project/139-finmodel-installments-and-conclusion.md.
+    /// </summary>
+    Task<ListViewResponse<DataSetForFmRaw>> FindDataSetForFmAsync(
+        int siteId, int projectId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Поиск существующих «Заключений» (<c>projectaudit</c>) по объекту строительства
+    /// и типу (<c>Stage</c>). Используется как pre-check перед
+    /// <see cref="CRUD.ICrudClient.CreateProjectAuditAsync"/> — повторный импорт того же
+    /// Site не должен плодить дубликаты Заключений «Итоговое заключение КА БП7».
+    /// POST <c>/api/visary/listview/projectaudit</c>.
+    /// </summary>
+    Task<ListViewResponse<ProjectAuditRaw>> FindProjectAuditsBySiteAsync(
+        int siteId, int stage, CancellationToken ct = default);
+
+    /// <summary>
+    /// Список «строк ФМ» (<c>dataforfm</c>), привязанных к конкретному <c>datasetforfm</c>.
+    /// POST <c>/api/visary/listview/dataforfm/onetomany/DataSetForFM?associationId={dataSetId}</c>.
+    /// Используется как pre-check перед <see cref="CRUD.ICrudClient.CreateDataForFmAsync"/>
+    /// — повторный импорт не плодит дубликаты по RoomKind.
+    /// </summary>
+    Task<ListViewResponse<DataForFmRaw>> GetDataForFmByDataSetAsync(
+        int dataSetId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Точечный поиск «Типа процентной ставки» (<c>percentbettype</c>) по строковому
+    /// полю <c>Code</c> (LM10/LM20/LM30/LM40/…). POST
+    /// <c>/api/visary/listview/percentbettype</c> с <c>Filter ["Code","=","LM10"]</c>.
+    /// Используется FinModel-импортом перед POST <c>dealpercentbet</c>: code → (ID, Title).
+    /// Возвращает 0 или 1 запись (Code уникален). См.
+    /// doc_project/139-finmodel-installments-and-conclusion.md (раздел про ставки).
+    /// </summary>
+    Task<ListViewResponse<PercentBetTypeRaw>> FindPercentBetTypeByCodeAsync(
+        string code, CancellationToken ct = default);
+
+    /// <summary>
+    /// Pre-check для CreateDealMonthlyData: ищем существующую запись по полному
+    /// набору ключей (Deal, Year, Month + 5 числовых значений). Серверной
+    /// идемпотентности у <c>dealmonthlydata</c> нет, поэтому это единственная
+    /// защита от дубликатов при повторном импорте того же файла.
+    /// <para/>
+    /// HAR-эндпоинт: <c>POST /api/visary/listview/dealmonthlydata</c> с
+    /// <c>Filter</c> — JSON-string. Числовые поля сравниваются через range
+    /// <c>>=N AND &lt;=N</c> (Visary не любит <c>=</c> на float). <c>Deal</c>
+    /// задаётся в формате строки <c>"ID:{id}"</c>. См. doc 142.
+    /// </summary>
+    Task<ListViewResponse<DealMonthlyDataRaw>> FindDealMonthlyDataAsync(
+        int dealId,
+        int year,
+        int month,
+        double principalDebt,
+        double simpleInterest,
+        double capitalizedInterest,
+        double principalRepayment,
+        double interestRepayment,
+        CancellationToken ct = default);
+
     // ─── Справочники (list для резолвинга «название → ID») ──────────────────
     // Используются мапперами импорта: тянем справочник один раз на сессию,
     // строим Title → ID словарь по живым данным (не хардкод switch'ем).
@@ -355,10 +419,47 @@ public sealed class ListViewClient : VisaryHttpBase<ListViewClient>, IListViewCl
     // Колонки для fmmodel listview — точно тот же набор, что шлёт Visary UI
     // (HAR заказчика). Минимальный набор сервер отбивал 400. Расширенный список
     // зеркалит payload UI; лишние поля идут в FmModelRaw как unused — это OK.
+    // Колонки datasetforfm — минимум, нужный для поиска и получения RowVersion.
+    // Полный список по HAR значительно больше; импорту достаточно ID + RowVersion +
+    // парные связи с ConstructionSite/Project (для подтверждения, что нашли «свою»
+    // запись). Title — для логов/UI.
+    private static readonly string[] DataSetForFmColumns =
+        ["ID", "Title", "ConstructionSite", "ConstructionProject", "RowVersion"];
+
+    // Колонки projectaudit — минимум для pre-check «Заключения»: ID + Stage + Status
+    // + Site/Project; Title для логов. По HAR полный список из 17 полей, но импорту
+    // их не нужно — мы создаём новую запись, а не апдейтим существующую.
+    private static readonly string[] ProjectAuditColumns =
+        ["ID", "Title", "ConstructionSite", "Project", "Stage", "Status", "Date"];
+
+    // Колонки dataforfm — минимум для pre-check (есть ли уже строка по этому RoomKind).
+    private static readonly string[] DataForFmColumns =
+        ["ID", "Title", "DataSetForFM", "RoomKind", "Indicator"];
+
+    // Колонки percentbettype — HAR заказчика (Context/har заключ рассрочки равн.txt-нет,
+    // см. сообщение в чате с примером ответа listview/percentbettype). Минимум для
+    // резолва Code → (ID, Title). ModifiedBy в DTO не хранится — не нужно.
+    private static readonly string[] PercentBetTypeColumns =
+        ["ID", "Title", "Code", "ModifiedBy"];
+
+    // Sorts для percentbettype — JSON-string с сортировкой по ID desc (по HAR заказчика
+    // — UI Visary шлёт именно так). SortsNullSentinel="null" сервер не отбивал, но
+    // лучше быть точным к UI-ожиданиям (на случай server-side индексов).
+    private const string PercentBetTypeSortsByIdDesc = "[{\"selector\":\"ID\",\"desc\":true}]";
+
     private static readonly string[] FmModelColumns =
         ["ID", "Title", "Portfolio", "ProjectCode", "ConstructionSiteCode",
          "ABProjectID", "ABConstructionSiteID", "PeriodStart", "PeriodEnd",
          "CreditLineCode", "ABCreditLineID", "CommisioningPeriod"];
+
+    // Колонки запроса listview/dealmonthlydata — точный набор, который UI
+    // Visary шлёт в HAR pre-check'е. Меньше — risk 400/empty; больше — risk
+    // server-side errors на неизвестных полях.
+    private static readonly string[] DealMonthlyDataColumns =
+        ["ID", "Deal", "Year", "Month",
+         "PrincipalDebtAmount", "SimpleInterestAmount", "CapitalizedInterestAmount",
+         "PrincipalRepaymentAmount", "InterestRepaymentAmount",
+         "CreateDate", "ModifiedBy", "ModifiedAt"];
 
     private static readonly string[] ShareAgreementColumns =
         ["ID", "Title", "Number", "Date", "ConstructionPermitNumber", "ConstructionPermitDate",
@@ -1162,6 +1263,192 @@ public sealed class ListViewClient : VisaryHttpBase<ListViewClient>, IListViewCl
             $"{BaseUrl}/api/visary/listview/{VisaryMnemonics.FmCode}",
             body,
             $"{VisaryMnemonics.FmCode} code='{code}'",
+            ct);
+    }
+
+    // ─── ProjectAudit / DataSetForFm / DataForFm (Заключение + рассрочки) ────
+
+    public Task<ListViewResponse<DataSetForFmRaw>> FindDataSetForFmAsync(
+        int siteId, int projectId, CancellationToken ct)
+    {
+        // POST /api/visary/listview/datasetforfm — фильтр по паре (Site, Project).
+        // По HAR Filter тут — JSON-string (как у fmmodel), не нативный массив:
+        //   "Filter": "[[\"ConstructionSite\",\"=\",8030],\"and\",[\"ConstructionProject\",\"=\",4653]]"
+        // На паре (Site, Project) сервер хранит максимум одну запись (создаётся
+        // автоматически при POST projectaudit).
+        var filterJson = JsonSerializer.Serialize(new object[]
+        {
+            new object[] { "ConstructionSite",   "=", siteId },
+            "and",
+            new object[] { "ConstructionProject", "=", projectId },
+        });
+        var body = new
+        {
+            Mnemonic = VisaryMnemonics.DataSetForFm,
+            PageSkip = 0,
+            PageSize = 50,
+            Columns = DataSetForFmColumns,
+            Filter = filterJson,
+        };
+        _log.LogDebug(
+            "Visary → POST listview/{Mnemonic} siteId={SiteId} projectId={ProjectId}",
+            VisaryMnemonics.DataSetForFm, siteId, projectId);
+        return PostListViewAsync<DataSetForFmRaw>(
+            $"{BaseUrl}/api/visary/listview/{VisaryMnemonics.DataSetForFm}",
+            body,
+            $"{VisaryMnemonics.DataSetForFm} (siteId={siteId}, projectId={projectId})",
+            ct);
+    }
+
+    public Task<ListViewResponse<ProjectAuditRaw>> FindProjectAuditsBySiteAsync(
+        int siteId, int stage, CancellationToken ct)
+    {
+        // Pre-check для CreateProjectAuditAsync. Один Site может иметь несколько
+        // Заключений разных типов (Stage). Фильтруем по (Site, Stage), чтобы
+        // повторный импорт того же типа (Итоговое заключение КА БП7, Stage=110)
+        // не порождал второй экземпляр.
+        var filterJson = JsonSerializer.Serialize(new object[]
+        {
+            new object[] { "ConstructionSite", "=", siteId },
+            "and",
+            new object[] { "Stage", "=", stage },
+        });
+        var body = new
+        {
+            Mnemonic = VisaryMnemonics.ProjectAudit,
+            PageSkip = 0,
+            PageSize = 50,
+            Columns = ProjectAuditColumns,
+            Filter = filterJson,
+        };
+        _log.LogDebug(
+            "Visary → POST listview/{Mnemonic} siteId={SiteId} stage={Stage}",
+            VisaryMnemonics.ProjectAudit, siteId, stage);
+        return PostListViewAsync<ProjectAuditRaw>(
+            $"{BaseUrl}/api/visary/listview/{VisaryMnemonics.ProjectAudit}",
+            body,
+            $"{VisaryMnemonics.ProjectAudit} (siteId={siteId}, stage={stage})",
+            ct);
+    }
+
+    public Task<ListViewResponse<PercentBetTypeRaw>> FindPercentBetTypeByCodeAsync(
+        string code, CancellationToken ct)
+    {
+        // POST listview/percentbettype с Filter ["Code","=","LM10"]. Sorts — JSON-string
+        // как у fmcode/fmmodel (см. HAR заказчика). Возврат — 0/1 запись.
+        var body = new
+        {
+            Mnemonic = VisaryMnemonics.PercentBetType,
+            PageSkip = 0,
+            PageSize = 50,
+            Columns = PercentBetTypeColumns,
+            Filter = JsonSerializer.Serialize(new object[] { "Code", "=", code }),
+            SearchPhrase = (string?)null,
+            Sorts = PercentBetTypeSortsByIdDesc,
+            Hidden = false,
+            Summaries = Array.Empty<object>(),
+        };
+        _log.LogDebug(
+            "Visary → POST listview/{Mnemonic} code='{Code}'",
+            VisaryMnemonics.PercentBetType, code);
+        return PostListViewAsync<PercentBetTypeRaw>(
+            $"{BaseUrl}/api/visary/listview/{VisaryMnemonics.PercentBetType}",
+            body,
+            $"{VisaryMnemonics.PercentBetType} code='{code}'",
+            ct);
+    }
+
+    public Task<ListViewResponse<DealMonthlyDataRaw>> FindDealMonthlyDataAsync(
+        int dealId,
+        int year,
+        int month,
+        double principalDebt,
+        double simpleInterest,
+        double capitalizedInterest,
+        double principalRepayment,
+        double interestRepayment,
+        CancellationToken ct)
+    {
+        // POST listview/dealmonthlydata. Filter — JSON-string (как у fmmodel/fmcode);
+        // 0..N записей по полному набору ключей. Visary использует range-match
+        // (>=N AND <=N) для float-полей вместо «=» — точное совпадение по HAR.
+        // Deal задаётся как строка "ID:{id}", не VisaryRef-объектом.
+        static object NumRange(string field, double v) => new object[]
+        {
+            new object[] { field, ">=", v },
+            "and",
+            new object[] { field, "<=", v },
+        };
+
+        var conditions = new List<object>
+        {
+            new object[] { "Month", "=", month },
+            "and",
+            new object[] { "Year", "=", year },
+            "and",
+            NumRange("PrincipalDebtAmount",        principalDebt),
+            "and",
+            NumRange("SimpleInterestAmount",       simpleInterest),
+            "and",
+            NumRange("CapitalizedInterestAmount",  capitalizedInterest),
+            "and",
+            NumRange("PrincipalRepaymentAmount",   principalRepayment),
+            "and",
+            NumRange("InterestRepaymentAmount",    interestRepayment),
+            "and",
+            new object[] { "Deal", "=", $"ID:{dealId}" },
+        };
+        var filterJson = JsonSerializer.Serialize(conditions);
+
+        var body = new
+        {
+            Mnemonic = VisaryMnemonics.DealMonthlyData,
+            PageSkip = 0,
+            PageSize = 50,
+            Columns = DealMonthlyDataColumns,
+            Filter = filterJson,
+            SearchPhrase = (string?)null,
+            Sorts = SortsNullSentinel,
+            Hidden = false,
+            Summaries = Array.Empty<object>(),
+        };
+        _log.LogDebug(
+            "Visary → POST listview/{Mnemonic} dealId={DealId} year={Year} month={Month} " +
+            "pda={PDA} sia={SIA} cia={CIA} pra={PRA} ira={IRA}",
+            VisaryMnemonics.DealMonthlyData, dealId, year, month,
+            principalDebt, simpleInterest, capitalizedInterest,
+            principalRepayment, interestRepayment);
+        return PostListViewAsync<DealMonthlyDataRaw>(
+            $"{BaseUrl}/api/visary/listview/{VisaryMnemonics.DealMonthlyData}",
+            body,
+            $"{VisaryMnemonics.DealMonthlyData} (dealId={dealId}, {year}-{month:D2})",
+            ct);
+    }
+
+    public Task<ListViewResponse<DataForFmRaw>> GetDataForFmByDataSetAsync(
+        int dataSetId, CancellationToken ct)
+    {
+        // POST listview/dataforfm/onetomany/DataSetForFM?associationId={dataSetId}
+        // По HAR ассоциация — onetomany через DataSetForFM (parent = datasetforfm).
+        var body = new
+        {
+            Mnemonic = VisaryMnemonics.DataForFm,
+            PageSkip = 0,
+            PageSize = Options.LargePageSize,
+            Columns = DataForFmColumns,
+            Filter = (string?)null,
+            SearchPhrase = (string?)null,
+            Sorts = SortsNullSentinel,
+            Hidden = false,
+            Summaries = Array.Empty<object>(),
+        };
+        _log.LogDebug(
+            "Visary → POST {Mnemonic}/onetomany/DataSetForFM dataSetId={Id}",
+            VisaryMnemonics.DataForFm, dataSetId);
+        return PostListViewAsync<DataForFmRaw>(
+            $"{BaseUrl}/api/visary/listview/{VisaryMnemonics.DataForFm}/onetomany/DataSetForFM?associationId={dataSetId}",
+            body,
+            $"{VisaryMnemonics.DataForFm}/onetomany/DataSetForFM id={dataSetId}",
             ct);
     }
 

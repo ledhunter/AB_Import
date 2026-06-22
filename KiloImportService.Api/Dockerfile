@@ -85,50 +85,92 @@ LABEL serviceName="alfa-building-fm-import-api"
 LABEL teamName="SRKBPF"
 
 # ────────────── Security upgrade: уязвимые системные пакеты ──────────────
-# Закрывает CVE из appsec_v4 (см. doc 137 v1.3):
+# Закрывает CVE из appsec_v4 (см. doc 137 v1.4):
 #   libcrypto3, libssl3 — OpenSSL CVE-2026-31789/-28387/-28388/-28389/-28390/-45447,
 #                         CVE-2025-15467/-69421 (8× High)
 #   musl, musl-utils    — CVE-2026-40200 (qsort stack corruption)
 #   zlib                — CVE-2026-22184 (untgz buffer overflow)
 #
-# `apk upgrade --no-cache <pkg>` — берёт latest из репо (не pin'им версию, чтобы
-# через 3 мес. при выходе 3.5.8-r0 сборка не сломалась stale-pin'ом).
+# Логика (v1.4 — двух-зеркальный fallback + apk update + sanity-check):
+#   1) Если ALPINE_REPOSITORIES_URL задан — переписываем /etc/apk/repositories
+#      на корп. зеркало Альфы (Артифактори, latest-stable). v1.3 пробовал
+#      только это, и если корп. зеркало в Jenkins вернуло несовместимый
+#      индекс или 5xx — попадали в fallback, образ выезжал с уязвимыми
+#      пакетами (см. doc 137 v1.4 «диагностика»).
+#   2) `apk update` ЯВНО — гарантирует свежий индекс (apk upgrade без update
+#      может опираться на индекс из base-образа, тот заморожен).
+#   3) `apk upgrade --no-cache --available <pkgs>` — `--available` форсирует
+#      переход на актуальную версию, даже если репо считает её «downgrade»
+#      (бывает при смене мажорной ветки Alpine между base и зеркалом).
+#   4) Если этот шаг упал — пробуем штатный dl-cdn.alpinelinux.org
+#      (compose-локаль с outbound, разработчик локально). Восстанавливаем
+#      штатный repositories по /etc/alpine-release, чтобы взять
+#      версия-specific path (несовместимости индекса не будет).
+#   5) Если оба зеркала упали — громкий баннер-fallback (Jenkins без сети
+#      на оба зеркала; сборка не падает, эталон сохраняется, но баннер
+#      виден DevOps).
+#   6) Sanity-check `apk info -v <pkgs>` — печатает финальные версии в
+#      лог сборки, DevOps подтверждает обновление по логу, не на образе.
 #
-# ALPINE_REPOSITORIES_URL — полный base URL Alpine-репо без суффикса /main|/community.
-# Корп. зеркало Альфы: https://binary.alfabank.ru/artifactory/alpine-mirror/latest-stable
-# (Артифактори, latest-stable — всегда последний stable-выпуск Alpine).
-# Path-структура корп. mirror отличается от dl-cdn.alpinelinux.org/alpine/v3.XX/ —
-# поэтому НЕ можем sed'ить host, нужно ПОЛНОСТЬЮ переписать /etc/apk/repositories.
-# Пустой дефолт → не трогаем repositories, используется штатный из base-образа
-# (для compose-локали с outbound доступом к dl-cdn.alpinelinux.org).
-#
-# Громкий fallback с баннером — компромисс между v1.0/v1.1 (см. doc 137 v1.3):
-# сборка не падает при недоступности репо (Jenkins без mirror'а), но баннер
-# в логе хорошо виден DevOps.
+# `apk upgrade --available <pkg>` — берёт latest из репо (не pin'им версию,
+# через 3 мес. при выходе 3.5.8-r0 сборка не сломается stale-pin'ом).
+# Пустой дефолт ALPINE_REPOSITORIES_URL → шаг (1) пропускается, сразу
+# идём через штатный repositories из base-образа (шаги 2-3).
 ARG ALPINE_REPOSITORIES_URL=""
-RUN if [ -n "${ALPINE_REPOSITORIES_URL}" ]; then \
-        echo "${ALPINE_REPOSITORIES_URL}/main"      >  /etc/apk/repositories; \
-        echo "${ALPINE_REPOSITORIES_URL}/community" >> /etc/apk/repositories; \
-        echo "INFO: /etc/apk/repositories переписан на ${ALPINE_REPOSITORIES_URL}"; \
-    fi && \
-    ( apk upgrade --no-cache libcrypto3 libssl3 musl musl-utils zlib \
-      && echo "OK: appsec_v4 — Alpine system packages upgraded successfully" \
-    ) || ( \
-        echo ""; \
+RUN set -e; \
+    REPO_URL="${ALPINE_REPOSITORIES_URL:-}"; \
+    if [ -n "$REPO_URL" ]; then \
+        echo "${REPO_URL}/main"      >  /etc/apk/repositories; \
+        echo "${REPO_URL}/community" >> /etc/apk/repositories; \
+        echo "INFO: /etc/apk/repositories переписан на ${REPO_URL}"; \
+    fi; \
+    APK_PKGS="libcrypto3 libssl3 musl musl-utils zlib"; \
+    if apk update 2>&1 && apk upgrade --no-cache --available $APK_PKGS 2>&1; then \
+        echo "OK: appsec_v4 — Alpine system packages upgraded via primary mirror"; \
+    else \
+        echo "WARN: primary apk upgrade failed — попытка через штатный dl-cdn.alpinelinux.org"; \
+        ALPINE_VER=$(cut -d. -f1,2 /etc/alpine-release 2>/dev/null || echo "3.20"); \
+        echo "http://dl-cdn.alpinelinux.org/alpine/v${ALPINE_VER}/main"      >  /etc/apk/repositories; \
+        echo "http://dl-cdn.alpinelinux.org/alpine/v${ALPINE_VER}/community" >> /etc/apk/repositories; \
+        if apk update 2>&1 && apk upgrade --no-cache --available $APK_PKGS 2>&1; then \
+            echo "OK: appsec_v4 — Alpine system packages upgraded via dl-cdn fallback"; \
+        else \
+            echo ""; \
+            echo "############################################################"; \
+            echo "# WARNING: apk upgrade FAILED — оба Alpine-зеркала упали.   #"; \
+            echo "# Уязвимые системные пакеты ОСТАЮТСЯ в финальном образе:    #"; \
+            echo "#   libcrypto3 libssl3 musl musl-utils zlib                 #"; \
+            echo "# AppSec_v4 будет показывать те же CVE до устранения.       #"; \
+            echo "#                                                          #"; \
+            echo "# DevOps action — проверить:                                #"; \
+            echo "#  1. Outbound к binary.alfabank.ru/artifactory/...         #"; \
+            echo "#  2. Outbound к dl-cdn.alpinelinux.org (если разрешён)     #"; \
+            echo "#  3. ALPINE_REPOSITORIES_URL в jenkinsConfiguration.json  #"; \
+            echo "# См. doc_project/137 v1.4.                                 #"; \
+            echo "############################################################"; \
+            echo ""; \
+        fi; \
+    fi; \
+    echo "── Финальные версии Alpine-пакетов (для трассировки AppSec) ──"; \
+    apk info -v $APK_PKGS 2>&1 || true; \
+    echo "── Verify: libcrypto3 >= 3.5.7-r0 (CVE-2026-45447 PKCS#7 use-after-free, см. doc 137 v1.5) ──"; \
+    CRYPTO_VER=$(apk info -v libcrypto3 2>/dev/null | head -1 | sed -E 's/^libcrypto3-//'); \
+    MIN_VER="3.5.7-r0"; \
+    LOWER=$(printf '%s\n%s\n' "$CRYPTO_VER" "$MIN_VER" | sort -V | head -1); \
+    if [ "$LOWER" = "$MIN_VER" ]; then \
+        echo "OK: libcrypto3=$CRYPTO_VER >= $MIN_VER — CVE-2026-45447 закрыт"; \
+    else \
         echo "############################################################"; \
-        echo "# WARNING: apk upgrade FAILED — Alpine репо недоступен.    #"; \
-        echo "# Уязвимые системные пакеты ОСТАЮТСЯ в финальном образе:    #"; \
-        echo "#   libcrypto3 libssl3 musl musl-utils zlib                 #"; \
-        echo "# AppSec_v4 будет показывать те же CVE до устранения.       #"; \
-        echo "#                                                          #"; \
-        echo "# DevOps action:                                           #"; \
-        echo "#  передать ALPINE_REPOSITORIES_URL в build-args, например:#"; \
-        echo "#  https://binary.alfabank.ru/artifactory/alpine-mirror/   #"; \
-        echo "#  latest-stable                                            #"; \
-        echo "# См. doc_project/137 v1.3.                                 #"; \
+        echo "# WARNING: libcrypto3=$CRYPTO_VER < $MIN_VER"; \
+        echo "# CVE-2026-45447 (PKCS#7 use-after-free, потенц. RCE)       #"; \
+        echo "# ОСТАЁТСЯ в образе для libcrypto3 + libssl3.               #"; \
+        echo "# Apk upgrade сработал, но Alpine репо не содержит >=3.5.7. #"; \
+        echo "# DevOps action — Alpine-ветка корп. mirror устарела:       #"; \
+        echo "#  /etc/alpine-release: $(cat /etc/alpine-release)"; \
+        echo "#  Перепривязать latest-stable или поднять base-образ.       #"; \
+        echo "# См. doc_project/137 v1.5.                                 #"; \
         echo "############################################################"; \
-        echo ""; \
-    )
+    fi
 
 # Доп. пакеты через apk add НЕ ставим — в закрытом корп. контуре Jenkins-агент
 # не имеет выхода на dl-cdn.alpinelinux.org (Permission denied на прокси), а

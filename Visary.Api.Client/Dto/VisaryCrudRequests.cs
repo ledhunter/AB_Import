@@ -478,6 +478,13 @@ public sealed class FmModelCreateRequest
     public int ABConstructionSiteID { get; set; }
     public string PeriodStart { get; set; } = null!;
     public string PeriodEnd { get; set; } = null!;
+    /// <summary>
+    /// Квартал ввода в эксплуатацию (формат <c>"{Year}Q{N}"</c>). Опционально:
+    /// если в основном файле строка «Этап 1.» / колонка «Ввод в эксплуатацию»
+    /// не нашлись — отправляется null, остальные поля POST работают как раньше.
+    /// См. <see cref="FmModelRaw.CommisioningPeriod"/> и doc 139 v1.3.
+    /// </summary>
+    public string? CommisioningPeriod { get; set; }
 }
 
 /// <summary>
@@ -521,4 +528,120 @@ public sealed class InputDataCreateRequest
     public double Amount { get; set; }
     public double Cost { get; set; }
     public double Percent { get; set; }
+}
+
+/// <summary>
+/// POST <c>/api/visary/crud/projectaudit</c> — создание «Заключения». Тело по HAR:
+/// <code>{"Date":"2026-06-17T08:41:39Z","Status":10,"Project":{"ID":4653},
+///        "ProjectID":4653,"Stage":110}</code>
+/// • <see cref="Stage"/>=110 — «Итоговое заключение КА БП7» (единственный тип,
+///   с которым работает импорт). • <see cref="Status"/>=10 — начальный статус.
+/// • <see cref="ConstructionSite"/> опционален: HAR сервер сам подцепил Site
+///   по проекту, но если нужно зафиксировать конкретный объект — передаём его.
+///   Импорт всегда явно передаёт <see cref="ConstructionSite"/>, чтобы исключить
+///   попадание Заключения на чужой Site проекта.
+/// См. doc_project/139-finmodel-installments-and-conclusion.md.
+/// </summary>
+public sealed class ProjectAuditCreateRequest
+{
+    public string Date { get; set; } = null!;
+    public int Status { get; set; } = 10;
+    public int Stage { get; set; } = 110;
+    public int ProjectID { get; set; }
+    public VisaryRef Project { get; set; } = null!;
+    public VisaryRef? ConstructionSite { get; set; }
+}
+
+/// <summary>
+/// POST <c>/api/visary/crud/dataforfm</c> — одна «строка ФМ» на (RoomKind × DataSet).
+/// Тело по HAR:
+/// <code>{"DataSetForFMID":8030,"DataSetForFM":{"ID":8030},
+///        "Title":"Данные по Квартирам",
+///        "RoomKind":{"Title":"Квартира","ID":3}}</code>
+/// Indicator не передаём (заказчик: «не надо заполнять поле Indicator
+/// и искать для него значения»). См. doc 141.
+/// </summary>
+public sealed class DataForFmCreateRequest
+{
+    public int DataSetForFMID { get; set; }
+    public VisaryRef DataSetForFM { get; set; } = null!;
+    public string Title { get; set; } = null!;
+    public VisaryRef RoomKind { get; set; } = null!;
+}
+
+/// <summary>
+/// PATCH <c>/api/visary/crud/datasetforfm/{id}?forceUpdate=false</c> — запись долей
+/// рассрочек по одной схеме (равномерная / единовременная / ДКП).
+/// Один PATCH = одна схема (одна тройка полей <c>{Prefix}OwnShare</c>,
+/// <c>{Prefix}PostpShare</c>, <c>{Prefix}RoomKinds</c>). Если в файле включены
+/// сразу несколько схем — мапер делает несколько PATCH-ов подряд, всякий раз
+/// перечитывая <see cref="RowVersion"/>.
+/// <para/>
+/// Тело гибкое: точные имена полей зависят от схемы (см. HAR;
+/// <see cref="OwnSharePropertyName"/>/<see cref="PostpSharePropertyName"/>/
+/// <see cref="RoomKindsPropertyName"/> определяются caller-ом). Из-за этого
+/// сериализатор делает payload вручную, а не через сильно типизированный объект.
+/// См. doc_project/139-finmodel-installments-and-conclusion.md.
+/// </summary>
+public sealed class DataSetForFmInstallmentsPatchRequest
+{
+    public int ID { get; set; }
+    public long RowVersion { get; set; }
+    public string OwnSharePropertyName { get; set; } = null!;
+    public string PostpSharePropertyName { get; set; } = null!;
+    public string RoomKindsPropertyName { get; set; } = null!;
+    public double? OwnShare { get; set; }
+    public double? PostpShare { get; set; }
+    public IReadOnlyList<VisaryRef> RoomKinds { get; set; } = Array.Empty<VisaryRef>();
+}
+
+/// <summary>
+/// POST <c>/api/visary/crud/dealpercentbet</c> — создание процентной ставки по сделке.
+/// Тело по примеру заказчика (см. doc 139 v1.4):
+/// <code>{"DealID":91,"Deal":{"ID":91},"PercentKind":10,"LmID":"18-09-2025-15-50-51",
+///        "Rate":100,"PercentBetType":{"Title":"Фиксированная (базовая)","ID":7}}</code>
+/// <para/>
+/// • <see cref="PercentKind"/> — числовой код типа ставки. Импорт Финмодели
+///   маппит коды LM10/LM20/LM30/LM40 в 10/20/30/40 соответственно.
+/// • <see cref="LmID"/> — строковый идентификатор формата
+///   <c>"dd-MM-yyyy-HH-mm-ss"</c> (момент импорта).
+/// • <see cref="Rate"/> — значение в процентах (число > 1 = «как есть»,
+///   ≤ 1 = доля → парсер ×100).
+/// • <see cref="PercentBetType"/> — ссылка на справочник <c>percentbettype</c>
+///   (резолвится по <c>Code</c> через
+///   <see cref="ListView.IListViewClient.FindPercentBetTypeByCodeAsync"/>).
+/// </summary>
+public sealed class DealPercentBetCreateRequest
+{
+    public int DealID { get; set; }
+    public VisaryRef Deal { get; set; } = null!;
+    public int PercentKind { get; set; }
+    public string LmID { get; set; } = null!;
+    public double Rate { get; set; }
+    public VisaryRef PercentBetType { get; set; } = null!;
+}
+
+/// <summary>
+/// POST <c>/api/visary/crud/dealmonthlydata</c> — помесячные данные по сделке
+/// (раздел «Инвестиционный кредит: Этап 1» листа Outputs).
+/// <para/>
+/// Тело по примеру заказчика (см. doc 142):
+/// <code>{"Deal":{"ID":91},"Year":2025,"Month":4,"PrincipalDebtAmount":1,
+///        "SimpleInterestAmount":2,"CapitalizedInterestAmount":3,
+///        "PrincipalRepaymentAmount":4,"InterestRepaymentAmount":5}</code>
+/// <para/>
+/// Значения — суммы в рублях (после умножения парсером на единицу измерения
+/// строки: тыс.руб → ×1 000, млн руб → ×1 000 000, руб → ×1). Пустая ячейка,
+/// прочерк или 0 — отправляются как 0.
+/// </summary>
+public sealed class DealMonthlyDataCreateRequest
+{
+    public VisaryRef Deal { get; set; } = null!;
+    public int Year { get; set; }
+    public int Month { get; set; }
+    public double PrincipalDebtAmount { get; set; }
+    public double SimpleInterestAmount { get; set; }
+    public double CapitalizedInterestAmount { get; set; }
+    public double PrincipalRepaymentAmount { get; set; }
+    public double InterestRepaymentAmount { get; set; }
 }

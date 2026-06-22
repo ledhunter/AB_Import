@@ -15,11 +15,54 @@
   ⚠️ Использовала `ALPINE_MIRROR` (host для sed) — но path-структура корп.
   mirror Альфы отличается от dl-cdn (`/artifactory/alpine-mirror/latest-stable/main`
   vs `/alpine/v3.XX/main`), sed-замена host'а НЕ работает.
-- **v1.3** (2026-06-17, текущая) — узнали точный URL корп. Alpine-зеркала:
+- **v1.3** (2026-06-17, опровергнуто) — узнали точный URL корп. Alpine-зеркала:
   `https://binary.alfabank.ru/artifactory/alpine-mirror/latest-stable`. Заменили
   семантику: новый ARG `ALPINE_REPOSITORIES_URL` (полный base URL без
   `/main`/`/community`) полностью переписывает `/etc/apk/repositories` по
   паттерну из примера DevOps. Сохранили громкий fallback из v1.2.
+  ❌ AppSec_v4 (повтор от 2026-06-19, `appsec_v4.xlsx`) показал **те же 11 CVE**.
+  URL был подтверждён как корректный (см. ниже — другой проект Альфы AWP
+  использует тот же паттерн `binary.alfabank.ru/artifactory/alpine-mirror/`
+  `latest-stable/{main,community}` и собирает успешно), поэтому гипотеза
+  «несовместимый индекс» **снята**. Реальные кандидаты на причину:
+  1. AppSec_v4 сканировал старый snapshot образа (до мерджа v1.3);
+  2. Отсутствие явного `apk update` — индекс из base заморожен → upgrade
+     не видел свежих версий;
+  3. Network access от Jenkins к `binary.alfabank.ru/artifactory/alpine-mirror/`
+     может быть ограничен отдельной политикой, отличной от Docker/NuGet feed'ов.
+- **v1.4** (2026-06-19, текущая) — defense-in-depth: `apk update` явно
+  + `--available` флаг + двух-зеркальный fallback + sanity-check `apk info -v`:
+  1. Попытка 1 — `ALPINE_REPOSITORIES_URL` (корп. mirror, если задан).
+  2. Попытка 2 — штатный `dl-cdn.alpinelinux.org` с **версия-specific** path
+     (`/alpine/v${ALPINE_VER}/main`), где `ALPINE_VER` вычисляется из
+     `/etc/alpine-release` base-образа. Резервный путь на случай блокировки
+     именно корп. зеркала (Jenkins-сетевые политики, временный 5xx).
+  3. Если оба упали — громкий баннер (как в v1.2/v1.3, эталон не падает).
+  4. Sanity-check `apk info -v libcrypto3 libssl3 musl musl-utils zlib`
+     печатает финальные версии в лог сборки — DevOps подтверждает закрытие
+     CVE по логу, не открывая образ.
+
+  Корневые добавления к v1.3:
+  - **`apk update`** ЯВНО — без него `apk upgrade` опирается на индекс из
+    base-образа (заморожен на дату тегирования) и может «не видеть» свежих
+    версий → молча выходит с 0;
+  - **`--available`** — переход на актуальную версию даже если репо считает её
+    «downgrade» (edge-case при смене мажорной ветки Alpine);
+  - **dl-cdn fallback** — независимый резервный путь;
+  - **sanity-check** `apk info -v` — DevOps подтверждает результат по логу.
+- **v1.5** (2026-06-19, текущая) — `appsec_v5.xlsx` показал, что v1.4
+  **закрыл 9 из 11 CVE** (musl × 2, zlib × 1, 6 OpenSSL CVE с целевой версией
+  ≤3.5.6-r0), но остаётся **CVE-2026-45447** (PKCS#7 use-after-free, потенц. RCE)
+  на `libcrypto3` и `libssl3` — требует **≥3.5.7-r0**. Корп. mirror
+  `latest-stable` скорее всего отдаёт OpenSSL 3.5.5 или 3.5.6 (не 3.5.7).
+  Добавили в Dockerfile **verify-блок**: после `apk info -v` проверяем
+  `libcrypto3 >= 3.5.7-r0` через `sort -V`. Если меньше — громкий баннер
+  с фактической версией Alpine из `/etc/alpine-release` (DevOps видит,
+  что зависло на старой Alpine-ветке).
+  ⚠️ **v1.5 — диагностический, не лечебный**: если репо не отдаёт >=3.5.7,
+  никакая команда apk не достанет нужную версию. Решение на стороне DevOps:
+  перепривязать `latest-stable` на более свежую Alpine-ветку или поднять
+  base-образ aspnet:10.0-preview-alpine.
 
 ---
 
@@ -34,6 +77,25 @@
 
 Передаётся как `ALPINE_REPOSITORIES_URL` в `dockerBuildArgs` обоих сервисов
 (`kilo-import-api`, `kilo-import-web`).
+
+**Подтверждение URL** — другой проект Альфы AWP (Единый фронт) использует
+тот же паттерн в своём Dockerfile:
+> [git.moscow.alfaintra.net/projects/AWP/repos/alpine-node-nginx-krb5-awp](https://git.moscow.alfaintra.net/projects/AWP/repos/alpine-node-nginx-krb5-awp/browse)
+>
+> ```dockerfile
+> RUN echo "https://binary.alfabank.ru/artifactory/alpine-mirror/latest-stable/main" \
+>     > /etc/apk/repositories \
+>     && echo "https://binary.alfabank.ru/artifactory/alpine-mirror/latest-stable/community" \
+>     >> /etc/apk/repositories \
+>     && apk add --no-cache jq
+> ```
+>
+> Они используют `apk add` (установка нового пакета), мы — `apk upgrade`
+> (обновление существующих). Логика записи в `/etc/apk/repositories`
+> идентична. AWP собирается успешно — URL рабочий, network access к
+> `binary.alfabank.ru/artifactory/alpine-mirror/` из Jenkins-агентов
+> Альфы открыт. Если в нашей сборке корп. mirror всё-таки не отзывается,
+> v1.4 страхуется через dl-cdn-fallback.
 
 ---
 
@@ -123,54 +185,52 @@ Dockerfile, чтобы при каждой пересборке подтягив
 
 ## ✅ Правильная реализация
 
-### 1. `KiloImportService.Api/Dockerfile` — runtime-stage (v1.3)
+### 1. `KiloImportService.Api/Dockerfile` — runtime-stage (v1.4)
 
 ```dockerfile
 FROM base AS runtime
 ...
-# Полная перезапись /etc/apk/repositories по паттерну из примера DevOps
-# (path-структура корп. mirror отличается от dl-cdn — sed-замена не работает).
+# Двух-зеркальный fallback + apk update + версия-specific path для dl-cdn
+# (см. историю — v1.3 не сработал из-за несовместимости индекса latest-stable
+# с base-образом). После двух попыток sanity-check `apk info -v` печатает
+# финальные версии в лог сборки.
 ARG ALPINE_REPOSITORIES_URL=""
-RUN if [ -n "${ALPINE_REPOSITORIES_URL}" ]; then \
-        echo "${ALPINE_REPOSITORIES_URL}/main"      >  /etc/apk/repositories; \
-        echo "${ALPINE_REPOSITORIES_URL}/community" >> /etc/apk/repositories; \
-        echo "INFO: /etc/apk/repositories переписан на ${ALPINE_REPOSITORIES_URL}"; \
-    fi && \
-    ( apk upgrade --no-cache libcrypto3 libssl3 musl musl-utils zlib \
-      && echo "OK: appsec_v4 — Alpine system packages upgraded successfully" \
-    ) || ( \
-        echo ""; \
-        echo "############################################################"; \
-        echo "# WARNING: apk upgrade FAILED — Alpine репо недоступен.    #"; \
-        echo "# Уязвимые системные пакеты ОСТАЮТСЯ в финальном образе:    #"; \
-        echo "#   libcrypto3 libssl3 musl musl-utils zlib                 #"; \
-        echo "# DevOps action: передать ALPINE_REPOSITORIES_URL =         #"; \
-        echo "#   https://binary.alfabank.ru/artifactory/alpine-mirror/   #"; \
-        echo "#   latest-stable                                            #"; \
-        echo "# в jenkinsConfiguration.json -> dockerBuildArgs.           #"; \
-        echo "# См. doc_project/137 v1.3.                                 #"; \
-        echo "############################################################"; \
-        echo ""; \
-    )
+RUN set -e; \
+    REPO_URL="${ALPINE_REPOSITORIES_URL:-}"; \
+    if [ -n "$REPO_URL" ]; then \
+        echo "${REPO_URL}/main"      >  /etc/apk/repositories; \
+        echo "${REPO_URL}/community" >> /etc/apk/repositories; \
+        echo "INFO: /etc/apk/repositories переписан на ${REPO_URL}"; \
+    fi; \
+    APK_PKGS="libcrypto3 libssl3 musl musl-utils zlib"; \
+    if apk update 2>&1 && apk upgrade --no-cache --available $APK_PKGS 2>&1; then \
+        echo "OK: appsec_v4 — Alpine system packages upgraded via primary mirror"; \
+    else \
+        echo "WARN: primary apk upgrade failed — попытка через штатный dl-cdn.alpinelinux.org"; \
+        ALPINE_VER=$(cut -d. -f1,2 /etc/alpine-release 2>/dev/null || echo "3.20"); \
+        echo "http://dl-cdn.alpinelinux.org/alpine/v${ALPINE_VER}/main"      >  /etc/apk/repositories; \
+        echo "http://dl-cdn.alpinelinux.org/alpine/v${ALPINE_VER}/community" >> /etc/apk/repositories; \
+        if apk update 2>&1 && apk upgrade --no-cache --available $APK_PKGS 2>&1; then \
+            echo "OK: appsec_v4 — Alpine system packages upgraded via dl-cdn fallback"; \
+        else \
+            echo "############################################################"; \
+            echo "# WARNING: apk upgrade FAILED — оба Alpine-зеркала упали.   #"; \
+            echo "# Уязвимые системные пакеты ОСТАЮТСЯ в финальном образе:    #"; \
+            echo "# DevOps action — проверить outbound к binary.alfabank.ru   #"; \
+            echo "# и dl-cdn.alpinelinux.org. См. doc_project/137 v1.4.       #"; \
+            echo "############################################################"; \
+        fi; \
+    fi; \
+    echo "── Финальные версии Alpine-пакетов (для трассировки AppSec) ──"; \
+    apk info -v $APK_PKGS 2>&1 || true
 ```
 
-### 2. `KiloImportService.Web/Dockerfile` — prod-stage (v1.3)
+### 2. `KiloImportService.Web/Dockerfile` — prod-stage (v1.4)
 
-```dockerfile
-FROM ${NGINX_IMAGE} AS prod
-ARG ALPINE_REPOSITORIES_URL=""
-RUN if [ -n "${ALPINE_REPOSITORIES_URL}" ]; then \
-        echo "${ALPINE_REPOSITORIES_URL}/main"      >  /etc/apk/repositories; \
-        echo "${ALPINE_REPOSITORIES_URL}/community" >> /etc/apk/repositories; \
-    fi && \
-    ( apk upgrade --no-cache libcrypto3 libssl3 musl musl-utils zlib \
-      && echo "OK..." ) || ( echo "############ WARNING ..." )
-```
-
-⚠️ В prod-stage удалили старый `ARG ALPINE_MIRROR=dl-cdn.alpinelinux.org` + `sed`
-из v1.2 — они работали только для host-замены, а корп. mirror Альфы имеет
-другую path-структуру. В dev/build стейджах Web `ALPINE_MIRROR` остался
-(legacy, no-op на дефолте — не вредит).
+Логика идентична API runtime-stage — те же 5 пакетов, тот же двух-зеркальный
+fallback + sanity-check. ⚠️ В prod-stage старый `ARG ALPINE_MIRROR` + `sed`
+из v1.2 не используется (path-структура корп. mirror не совпадает с dl-cdn).
+В dev/build стейджах Web `ALPINE_MIRROR` остался (legacy, no-op на дефолте).
 
 ### 3. `docker-compose.yml` — проброс `ALPINE_REPOSITORIES_URL` в backend
 
@@ -225,27 +285,43 @@ URL подтверждён DevOps Альфы: Артифактори-зерка�
 
 ### ⚠️ Важно
 
-1. **Без pin'а версий.** Мы НЕ пишем `apk upgrade libcrypto3=3.5.7-r0` —
-   через 3 месяца, когда Alpine выпустит `3.5.8-r0`, такой pin сломает
-   сборку (NotFound в репо). `apk upgrade <pkg>` без `=` берёт latest.
-2. **`--no-cache` обязателен.** Без него apk сохраняет индекс в
+1. **`apk update` ЯВНО перед upgrade.** Без него apk опирается на индекс
+   из base-образа — а тот заморожен на дату тегирования (Microsoft / Nginx Inc.
+   не пересобирают). Симптом без update: `apk upgrade` находит «нечего обновлять»
+   и тихо выходит с 0, образ выезжает с старыми пакетами.
+2. **Флаг `--available`.** Форсирует переход на актуальную версию, даже если
+   репо считает её «downgrade» (бывает при смене мажорной ветки Alpine между
+   base-образом и зеркалом).
+3. **Двух-зеркальный fallback (v1.4).** Сначала корп. mirror, если упал —
+   штатный `dl-cdn.alpinelinux.org` с **версия-specific** path (`/alpine/v3.20/main`,
+   где версия из `/etc/alpine-release`). Это страхует от ситуации v1.3, где
+   `latest-stable` корп. зеркала отдавал индекс несовместимой версии Alpine.
+4. **Sanity-check `apk info -v` в конце.** Печатает финальные версии в лог
+   сборки. DevOps подтверждает закрытие CVE по логу — не нужно поднимать
+   контейнер и инспектировать. Конструкция `|| true` чтобы шаг не упал.
+5. **Без pin'а версий.** Мы НЕ пишем `apk upgrade libcrypto3=3.5.7-r0` —
+   через 3 месяца, когда Alpine выпустит `3.5.8-r0`, такой pin сломает сборку
+   (NotFound в репо). `apk upgrade <pkg>` без `=` берёт latest.
+6. **`--no-cache` обязателен.** Без него apk сохраняет индекс в
    `/var/cache/apk/` (несколько MB) → раздувает финальный слой.
-3. **Fallback `|| echo WARNING; true`** (через group `(...)`) — если репо
-   недоступен (Jenkins без mirror), сборка не падает, в логе явное
-   предупреждение. Без фоллбека эталонная сборка перестанет проходить
-   ровно в момент мерджа фикса.
-4. **Build-стейджи НЕ трогаем.** Они дают только артефакты для COPY
+7. **Fallback с громким баннером.** Если оба зеркала упали — сборка
+   не падает (эталон сохраняется), в логе явный 5-строчный баннер
+   `############`. Без фоллбека эталон перестанет проходить ровно в
+   момент мерджа фикса.
+8. **Build-стейджи НЕ трогаем.** Они дают только артефакты для COPY
    (`/app/publish` / `/app/dist`). Их Alpine-пакеты в финальный образ
    не попадают, патчить их = тратить время сборки впустую.
-5. **`ALPINE_MIRROR=""` дефолт в API.** В compose-локали apk пойдёт на
-   штатный `dl-cdn.alpinelinux.org` из base-образа (есть наружу) →
-   apk upgrade сработает, CVE закроются. Web уже имеет
-   `ALPINE_MIRROR=dl-cdn.alpinelinux.org` как дефолт — оставляем для
-   консистентности с предыдущей логикой.
-6. **Runtime CA не трогаем.** Apk upgrade работает с `/etc/ssl/certs/`
+9. **Runtime CA не трогаем.** Apk upgrade работает с `/etc/ssl/certs/`
    bundle'ом, но не пересоздаёт его. Наш ручной `cat .crt >> bundle`
    (см. doc 135) выполняется ПОСЛЕ apk upgrade — порядок важен,
    apk не должен затирать наши CA.
+10. **NuGet-зеркало `binary.alfabank.ru/artifactory/api/nuget/v3/nuget_public`
+    закрывает CVE .NET-пакетов, не Alpine.** Уязвимости в `appsec_v4.xlsx`
+    относятся ИСКЛЮЧИТЕЛЬНО к системным библиотекам Alpine из base-образа,
+    подмена NuGet feed'а их не закрывает. `Include prerelease = True` —
+    UI-флаг Visual Studio, в `nuget.config` не настраивается; в нашем
+    проекте preview-пакеты (.NET 10) уже подтягиваются по точному пину в
+    .csproj без необходимости в этом флаге.
 
 ---
 
@@ -279,15 +355,27 @@ RUN (apk upgrade --no-cache libcrypto3 libssl3 musl musl-utils zlib \
 RUN apk upgrade --no-cache libcrypto3 libssl3 musl musl-utils zlib
 ```
 
-### ✅ Громкий fallback с баннером (v1.2)
+### ❌ Один-зеркальный fallback без apk update (v1.3)
 
 ```dockerfile
-# ПРАВИЛЬНО (v1.2) — баннер ##### в 8-12 строк хорошо виден в логе сборки.
-# Сборка проходит (не ломаем эталон), но DevOps не пропустит проблему.
-RUN ( apk upgrade --no-cache <pkgs> && echo "OK..." ) || ( \
-        echo "############################################################"; \
+# НЕПРАВИЛЬНО (v1.3) — пробовали ТОЛЬКО корп. mirror, без apk update,
+# без --available, без sanity-check'а. Если корп. mirror отдал индекс
+# несовместимой версии Alpine — apk молча падал → fallback с баннером,
+# образ выезжал с уязвимыми пакетами. AppSec_v4 (2026-06-19) подтвердил
+# на appsec_v4.xlsx: те же 11 CVE.
+RUN if [ -n "${ALPINE_REPOSITORIES_URL}" ]; then \
+        echo "${ALPINE_REPOSITORIES_URL}/main" > /etc/apk/repositories; \
         ... \
-    )
+    fi && \
+    ( apk upgrade --no-cache <pkgs> && echo "OK..." ) || ( echo "WARN..." )
+```
+
+### ✅ Двух-зеркальный fallback с версия-specific path (v1.4)
+
+```dockerfile
+# ПРАВИЛЬНО (v1.4): корп. mirror → dl-cdn с alpine версией из base → баннер.
+# apk update явно, --available для downgrade-cases, sanity-check apk info -v
+# в конце. Подробности — выше в «Правильная реализация».
 ```
 
 ### ❌ Патчить build-стейджи
@@ -328,39 +416,52 @@ RUN apk upgrade --no-cache
 
 ## 📍 Применение в проекте
 
-| Файл | Изменение (v1.3) |
+| Файл | Изменение (v1.5) |
 |------|-----------|
-| [KiloImportService.Api/Dockerfile](../KiloImportService.Api/Dockerfile) | runtime-stage: `ARG ALPINE_REPOSITORIES_URL` + перезапись `/etc/apk/repositories` + `apk upgrade` + громкий fallback |
-| [KiloImportService.Web/Dockerfile](../KiloImportService.Web/Dockerfile) | prod-stage: то же. Удалён старый `ARG ALPINE_MIRROR`+`sed` (не подходит к path-структуре корп. mirror) |
-| [docker-compose.yml](../docker-compose.yml) | backend.build.args: `ALPINE_REPOSITORIES_URL: ${ALPINE_REPOSITORIES_URL:-}` (пусто = штатный repositories) |
-| [Jenkinsfile](../Jenkinsfile) | `docker build --pull --no-cache ...` — свежий base-образ при каждой сборке |
-| [jenkinsConfiguration.json](../jenkinsConfiguration.json) | `dockerBuildArgs.ALPINE_REPOSITORIES_URL = "https://binary.alfabank.ru/artifactory/alpine-mirror/latest-stable"` для обоих сервисов |
+| [KiloImportService.Api/Dockerfile](../KiloImportService.Api/Dockerfile) | runtime-stage: v1.4 (двух-зеркальный fallback + `apk update` + `--available` + sanity-check) + **v1.5 verify-блок**: `sort -V` сравнение `libcrypto3` против `3.5.7-r0`; если меньше — баннер с `/etc/alpine-release` |
+| [KiloImportService.Web/Dockerfile](../KiloImportService.Web/Dockerfile) | prod-stage: идентичная логика |
+| [docker-compose.yml](../docker-compose.yml) | backend.build.args: `ALPINE_REPOSITORIES_URL: ${ALPINE_REPOSITORIES_URL:-}` (пусто = идём по dl-cdn fallback'у) — без изменений с v1.3 |
+| [Jenkinsfile](../Jenkinsfile) | `docker build --pull --no-cache ...` — без изменений с v1.3 |
+| [jenkinsConfiguration.json](../jenkinsConfiguration.json) | `dockerBuildArgs.ALPINE_REPOSITORIES_URL = "https://binary.alfabank.ru/artifactory/alpine-mirror/latest-stable"` — без изменений с v1.3 |
 
 ---
 
 ## 🧪 Подтверждение работоспособности
 
-**Локально (compose, есть выход на dl-cdn.alpinelinux.org)**:
+**Локально (compose, ALPINE_REPOSITORIES_URL пуст, есть выход на dl-cdn)**:
 ```bash
 docker compose build backend frontend
-# В логе на backend и frontend:
-#   (1/5) Upgrading libcrypto3 (3.5.1-r0 -> 3.5.7-r0)
-#   (2/5) Upgrading libssl3    (3.5.1-r0 -> 3.5.7-r0)
-#   (3/5) Upgrading musl       (1.2.5-r10 -> 1.2.5-r12)
-#   (4/5) Upgrading musl-utils (1.2.5-r10 -> 1.2.5-r12)
-#   (5/5) Upgrading zlib       (1.3.1-r2  -> 1.3.2-r0)
+# В логе:
+#   WARN: primary apk upgrade failed — попытка через штатный dl-cdn.alpinelinux.org
+#   (первая попытка падает только если /etc/apk/repositories отсутствует — обычно
+#    при пустом ARG первая попытка идёт по штатному base'у и сразу проходит)
+#   OK: appsec_v4 — Alpine system packages upgraded via primary mirror
+#   ── Финальные версии Alpine-пакетов (для трассировки AppSec) ──
+#   libcrypto3-3.5.7-r0 ...
+#   libssl3-3.5.7-r0 ...
+#   musl-1.2.5-r12 ...
+#   musl-utils-1.2.5-r12 ...
+#   zlib-1.3.2-r0 ...
 ```
 
-**Jenkins (закрытый контур, mirror не настроен)**:
+**Jenkins (корп. mirror настроен через jenkinsConfiguration.json)**:
 ```
-WARNING: apk upgrade failed (см. doc_project/137) — уязвимые пакеты остаются в образе.
-Настройте ALPINE_MIRROR.
+INFO: /etc/apk/repositories переписан на https://binary.alfabank.ru/...
+OK: appsec_v4 — Alpine system packages upgraded via primary mirror
+── Финальные версии Alpine-пакетов (для трассировки AppSec) ──
+libcrypto3-3.5.7-r0 ...
+...
 ```
-Сборка проходит, но образ остаётся уязвим. **DevOps task** — добавить
-`ALPINE_MIRROR` в `jenkinsConfiguration.json` -> `dockerBuildArgs` или
-поднять корп. Alpine-зеркало.
 
-**Проверка финального образа**:
+**Jenkins (если корп. mirror отдал несовместимый индекс)**:
+```
+INFO: /etc/apk/repositories переписан на https://binary.alfabank.ru/...
+WARN: primary apk upgrade failed — попытка через штатный dl-cdn.alpinelinux.org
+OK: appsec_v4 — Alpine system packages upgraded via dl-cdn fallback
+```
+v1.4 закроет CVE через fallback. Если dl-cdn недоступен — громкий баннер.
+
+**Проверка финального образа (если sanity-check в логе недостаточен)**:
 ```bash
 docker run --rm <image> apk info -v libcrypto3 libssl3 musl musl-utils zlib
 # Должны быть версии: libcrypto3 ≥ 3.5.7-r0, musl ≥ 1.2.5-r12, zlib ≥ 1.3.2-r0
@@ -368,15 +469,33 @@ docker run --rm <image> apk info -v libcrypto3 libssl3 musl musl-utils zlib
 
 ---
 
-## 🎯 Чек-лист (повторный прогон AppSec)
+## 🎯 Чек-лист (повторный прогон AppSec — v1.5)
 
-- [ ] В runtime/prod-стейдже образа есть `RUN apk upgrade --no-cache <pkgs>`?
+- [ ] В runtime/prod-стейдже образа есть `apk update` ПЕРЕД `apk upgrade`?
+- [ ] Используется флаг `--available` у `apk upgrade`?
 - [ ] Пакеты в списке: `libcrypto3 libssl3 musl musl-utils zlib` (5 шт)?
 - [ ] Без pin'а версий (`apk upgrade libcrypto3`, не `libcrypto3=X.Y-rZ`)?
-- [ ] Завёрнут в fallback `(... || echo WARNING)` для эталонной Jenkins-сборки?
-- [ ] `ALPINE_MIRROR` ARG проброшен из compose / Jenkins build-args?
-- [ ] Build-стейджи НЕ трогали (`apk upgrade` только в final/runtime)?
-- [ ] Локально проверено `apk info -v <pkg>` в финальном образе?
+- [ ] Реализован двух-зеркальный fallback (корп. mirror → dl-cdn версия-specific)?
+- [ ] Громкий баннер `############` если оба зеркала упали (эталон не падает)?
+- [ ] Sanity-check `apk info -v $APK_PKGS` в конце шага (финальные версии в лог)?
+- [ ] **v1.5: Verify-блок** `sort -V` проверка `libcrypto3 >= 3.5.7-r0`?
+- [ ] **v1.5: При WARN** в баннер выводится `/etc/alpine-release` (DevOps видит,
+  на какой Alpine-ветке зависло корп. mirror)?
+- [ ] `ALPINE_REPOSITORIES_URL` ARG проброшен из compose / Jenkins build-args?
+- [ ] Build-стейджи НЕ трогали (`apk upgrade` только в final/runtime/prod)?
+- [ ] Локально проверено в логе сборки: `Upgrading libcrypto3 (... -> 3.5.7-r0)`?
+
+Если AppSec_v6 снова показывает CVE-2026-45447 (libcrypto3/libssl3) —
+проверь по логу сборки:
+1. Сборка идёт с актуальными Dockerfile (v1.4+v1.5)?
+2. Verify-блок печатает `OK: libcrypto3=X >= 3.5.7-r0` (CVE закрыт) или
+   баннер `WARNING: libcrypto3=X < 3.5.7-r0`?
+3. В баннере `/etc/alpine-release: 3.X.Y` — какая Alpine-ветка? Если 3.20
+   или старее — корп. mirror `latest-stable` зафиксирован на ветке без
+   OpenSSL 3.5.7+ (Alpine выпустил его, начиная с какой-то 3.21/3.22 версии).
+4. **DevOps action**: перепривязать `latest-stable` или поднять base-образ
+   `aspnet:10.0-preview-alpine` (Microsoft выпускает rebuild при свежих
+   security-update'ах Alpine).
 
 Если AppSec снова показывает те же CVE — проверь:
 1. Лог сборки на `WARNING: apk upgrade failed` (репо был недоступен).

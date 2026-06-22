@@ -37,7 +37,7 @@ namespace KiloImportService.Api.Domain.Mapping;
 /// Справочники подтягиваются динамически из Visary (Title → ID lookup case-insensitive).
 /// Хардкод-фолбэков нет: если справочник недоступен — file-level error.
 /// </summary>
-public sealed class FinModelImportMapper : IImportMapper
+public sealed partial class FinModelImportMapper : IImportMapper
 {
     public string ImportTypeCode => "finmodel";
 
@@ -653,6 +653,22 @@ public sealed class FinModelImportMapper : IImportMapper
                 scheduleArticleRows.Count, siteId);
         }
 
+        // ─── Заключение «Итоговое заключение КА БП7» + рассрочки ──────────
+        // После Budget+ГФ создаём Заключение и заполняем поля DataSetForFm
+        // (равномерная / единовременная / ДКП), плюс по одной DataForFm на
+        // каждый «1 - Да» вид помещения. Источник данных — лист Control
+        // (блок «Продажи») и лист Outputs (площади реализации, Этап 1).
+        // Шаг ортогонален mapped-строкам — работает по основному файлу
+        // независимо от того, прошёл ли Apply параметров/бюджета/ГФ. См. doc 139.
+        if (context.VisaryProjectId is { } projectIdForAudit)
+        {
+            await EnsureProjectAuditAndInstallmentsAsync(
+                projectIdForAudit, siteId,
+                context.PrimaryFileRelativePath,
+                paramsApplied, budgetUploadOk,
+                errors, synthetic, ct);
+        }
+
         // EnsureFmModelAsync вызван в начале ApplyAsync (до validRows-проверки) —
         // он ортогонален mapped-строкам и работает только по второму файлу.
         return new ApplyResult(
@@ -803,7 +819,43 @@ public sealed class FinModelImportMapper : IImportMapper
                 projectId);
         }
 
-        // 4. POST /crud/fmmodel (если pre-check не нашёл существующую).
+        // 4. CommisioningPeriod — квартал ввода в эксплуатацию. Берётся из
+        //    ОСНОВНОГО файла («Параметры»): лист Control → раздел «Конфигурация
+        //    этапов» → строка «Этап 1.» → колонка «Ввод в эксплуатацию (получение РнВ)».
+        //    Дата преобразуется в формат "{Year}QN" с правилом «последний день
+        //    квартала → следующий квартал» (см. DateToFmPeriod). Опциональный
+        //    шаг: если основного файла нет / якорей нет / ячейка пуста —
+        //    отправляем null и продолжаем как раньше.
+        string? commisioningPeriod = null;
+        if (!string.IsNullOrWhiteSpace(primaryFilePath))
+        {
+            try
+            {
+                await using var stream = await _fileStorage.OpenReadAsync(primaryFilePath!, ct);
+                var data = ReadCommissioningData(stream);
+                if (data is not null)
+                {
+                    commisioningPeriod = data.CommissioningPeriod;
+                    _log.LogInformation(
+                        "FinModelImportMapper: CommisioningPeriod={Period} (РнВ={Date:dd.MM.yyyy})",
+                        commisioningPeriod, data.CommissioningDate);
+                }
+                else
+                {
+                    _log.LogInformation(
+                        "FinModelImportMapper: CommisioningPeriod пропущен (лист Control / раздел «Конфигурация этапов» / строка «Этап 1.» не найдены или дата пуста)");
+                }
+            }
+            catch (Exception ex)
+            {
+                // Не блокирует POST fmmodel — продолжаем без CommisioningPeriod.
+                _log.LogWarning(ex,
+                    "FinModelImportMapper: чтение CommisioningPeriod не удалось (path={Path}) — продолжаем без него",
+                    primaryFilePath);
+            }
+        }
+
+        // 5. POST /crud/fmmodel (если pre-check не нашёл существующую).
         int fmModelId;
         if (existingFmModelId is { } existingId)
         {
@@ -821,13 +873,16 @@ public sealed class FinModelImportMapper : IImportMapper
                     ABConstructionSiteID = siteId,
                     PeriodStart = planData.PeriodStart,
                     PeriodEnd = planData.PeriodEnd,
+                    CommisioningPeriod = commisioningPeriod,
                 }, ct);
                 fmModelId = created.ID;
                 _log.LogInformation(
-                    "FinModelImportMapper: fmmodel создан id={Id} period={Start}..{End} (projectId={ProjectId}, siteId={SiteId})",
-                    created.ID, planData.PeriodStart, planData.PeriodEnd, projectId, siteId);
+                    "FinModelImportMapper: fmmodel создан id={Id} period={Start}..{End} commisioning={Commisioning} (projectId={ProjectId}, siteId={SiteId})",
+                    created.ID, planData.PeriodStart, planData.PeriodEnd,
+                    commisioningPeriod ?? "(null)", projectId, siteId);
                 synthetic.Emit(SyntheticSheetFmModel, StagedRowStatus.Applied,
-                    [$"Финмодель: создана (id={created.ID}, период {planData.PeriodStart}..{planData.PeriodEnd})"]);
+                    [$"Финмодель: создана (id={created.ID}, период {planData.PeriodStart}..{planData.PeriodEnd}" +
+                     (commisioningPeriod is not null ? $", ввод в эксплуатацию {commisioningPeriod}" : string.Empty) + ")"]);
             }
             catch (Exception ex)
             {

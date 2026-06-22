@@ -123,6 +123,66 @@ public interface ICrudClient
         int versionId, int inputDataId, CancellationToken ct = default);
 
     /// <summary>
+    /// Создать «Заключение» (<c>projectaudit</c>). POST <c>/api/visary/crud/projectaudit</c>.
+    /// Импорт Финмодели после успешных Бюджета+ГФ создаёт Заключение типа
+    /// «Итоговое заключение КА БП7» (<see cref="ProjectAuditCreateRequest.Stage"/>=110).
+    /// Идемпотентности на сервере нет — caller pre-check'ит через
+    /// <see cref="ListView.IListViewClient.FindProjectAuditsBySiteAsync"/>.
+    /// См. doc_project/139-finmodel-installments-and-conclusion.md.
+    /// </summary>
+    Task<ProjectAuditRaw> CreateProjectAuditAsync(
+        ProjectAuditCreateRequest request, CancellationToken ct = default);
+
+    /// <summary>
+    /// Создать «строку ФМ» (<c>dataforfm</c>) — одна на вид помещения. POST
+    /// <c>/api/visary/crud/dataforfm</c>. Идемпотентности на сервере нет; caller
+    /// pre-check'ит через
+    /// <see cref="ListView.IListViewClient.GetDataForFmByDataSetAsync"/>.
+    /// </summary>
+    Task<DataForFmRaw> CreateDataForFmAsync(
+        DataForFmCreateRequest request, CancellationToken ct = default);
+
+    /// <summary>
+    /// PATCH «Набор данных для ФМ» (<c>datasetforfm</c>) — записать тройку полей
+    /// одной схемы рассрочки (равномерная / единовременная / ДКП). Сервер требует
+    /// <c>RowVersion</c> в теле — caller обязан получить его через
+    /// <see cref="GetDataSetForFmByIdAsync"/> непосредственно перед PATCH.
+    /// При повторном PATCH в рамках одного импорта (для второй/третьей схемы)
+    /// <c>RowVersion</c> необходимо перечитывать заново.
+    /// </summary>
+    Task<bool> PatchDataSetForFmInstallmentsAsync(
+        DataSetForFmInstallmentsPatchRequest request, CancellationToken ct = default);
+
+    /// <summary>
+    /// Прочитать «Набор данных для ФМ» по ID — нужен для получения актуального
+    /// <see cref="DataSetForFmRaw.RowVersion"/> перед PATCH-ом рассрочек.
+    /// GET <c>/api/visary/crud/datasetforfm/{id}</c>.
+    /// </summary>
+    Task<DataSetForFmRaw> GetDataSetForFmByIdAsync(int id, CancellationToken ct = default);
+
+    /// <summary>
+    /// Создать «Процентную ставку по сделке» (<c>dealpercentbet</c>). POST
+    /// <c>/api/visary/crud/dealpercentbet</c>. Импорт Финмодели вызывает этот метод
+    /// один раз на каждую включённую ставку «Этап 1» (LM10/LM20/LM30/LM40) перед
+    /// созданием Заключения. Идемпотентности на сервере нет — повторный импорт
+    /// породит вторую запись на ту же (Deal, PercentKind); в первой версии не
+    /// делаем pre-check (поведение озвучено заказчиком: «каждый импорт = новые
+    /// ставки», по аналогии с projectaudit).
+    /// </summary>
+    Task<DealPercentBetRaw> CreateDealPercentBetAsync(
+        DealPercentBetCreateRequest request, CancellationToken ct = default);
+
+    /// <summary>
+    /// Создать «Помесячные данные по сделке» (<c>dealmonthlydata</c>). POST
+    /// <c>/api/visary/crud/dealmonthlydata</c>. Импорт Финмодели вызывает один
+    /// раз на (Deal, ТекущийГод, ТекущийМесяц) с 5 числовыми полями из раздела
+    /// «Инвестиционный кредит: Этап 1» листа Outputs. Идемпотентности на сервере
+    /// нет (по аналогии с <see cref="CreateDealPercentBetAsync"/> и projectaudit).
+    /// </summary>
+    Task<DealMonthlyDataRaw> CreateDealMonthlyDataAsync(
+        DealMonthlyDataCreateRequest request, CancellationToken ct = default);
+
+    /// <summary>
     /// Создать запись <c>typedimportwbs</c> — TypedJournal-задание импорта бюджета (XLSX)
     /// из файла, уже загруженного в файловое хранилище. Поле <c>File</c> в request — это
     /// link-токен, возвращённый <see cref="FileStorage.IFileStorageClient.GetFileLinkAsync"/>.
@@ -655,6 +715,99 @@ public sealed class CrudClient : VisaryHttpBase<CrudClient>, ICrudClient
         ["ID", "Title", "FMModelVersion", "FMPeriod", "Code", "CreditLineCode",
          "ConstructionSiteCode", "CodeGroup", "Summ", "Amount", "Cost", "Percent",
          "Replicate", "Group"];
+
+    // ─── ProjectAudit / DataForFm / DataSetForFm (Заключение + рассрочки) ────
+
+    public async Task<ProjectAuditRaw> CreateProjectAuditAsync(
+        ProjectAuditCreateRequest request, CancellationToken ct)
+    {
+        _log.LogDebug(
+            "Visary → POST {Mnemonic} projectId={ProjectId} siteId={SiteId} stage={Stage} status={Status}",
+            VisaryMnemonics.ProjectAudit, request.ProjectID,
+            request.ConstructionSite?.ID, request.Stage, request.Status);
+        var result = await PostCrudAsync<ProjectAuditRaw>(
+            $"{BaseUrl}/api/visary/crud/{VisaryMnemonics.ProjectAudit}",
+            request, VisaryMnemonics.ProjectAudit, ct);
+        _log.LogInformation(
+            "CrudClient.CreateProjectAuditAsync: created id={Id} projectId={ProjectId} siteId={SiteId} stage={Stage}",
+            result.ID, request.ProjectID, request.ConstructionSite?.ID, request.Stage);
+        return result;
+    }
+
+    public async Task<DataForFmRaw> CreateDataForFmAsync(
+        DataForFmCreateRequest request, CancellationToken ct)
+    {
+        _log.LogDebug(
+            "Visary → POST {Mnemonic} dataSetId={DataSetId} roomKindId={RoomKindId}",
+            VisaryMnemonics.DataForFm, request.DataSetForFMID, request.RoomKind.ID);
+        var result = await PostCrudAsync<DataForFmRaw>(
+            $"{BaseUrl}/api/visary/crud/{VisaryMnemonics.DataForFm}",
+            request, VisaryMnemonics.DataForFm, ct);
+        _log.LogInformation(
+            "CrudClient.CreateDataForFmAsync: created id={Id} dataSetId={DataSetId} roomKindId={RoomKindId} title='{Title}'",
+            result.ID, request.DataSetForFMID, request.RoomKind.ID, request.Title);
+        return result;
+    }
+
+    public Task<DataSetForFmRaw> GetDataSetForFmByIdAsync(int id, CancellationToken ct)
+        => GetCrudByIdAsync<DataSetForFmRaw>(VisaryMnemonics.DataSetForFm, id, ct);
+
+    public async Task<DealPercentBetRaw> CreateDealPercentBetAsync(
+        DealPercentBetCreateRequest request, CancellationToken ct)
+    {
+        _log.LogDebug(
+            "Visary → POST {Mnemonic} dealId={DealId} percentKind={Kind} betTypeId={BetTypeId} rate={Rate}",
+            VisaryMnemonics.DealPercentBet, request.DealID,
+            request.PercentKind, request.PercentBetType.ID, request.Rate);
+        var result = await PostCrudAsync<DealPercentBetRaw>(
+            $"{BaseUrl}/api/visary/crud/{VisaryMnemonics.DealPercentBet}",
+            request, VisaryMnemonics.DealPercentBet, ct);
+        _log.LogInformation(
+            "CrudClient.CreateDealPercentBetAsync: created id={Id} dealId={DealId} percentKind={Kind} rate={Rate}",
+            result.ID, request.DealID, request.PercentKind, request.Rate);
+        return result;
+    }
+
+    public async Task<DealMonthlyDataRaw> CreateDealMonthlyDataAsync(
+        DealMonthlyDataCreateRequest request, CancellationToken ct)
+    {
+        _log.LogDebug(
+            "Visary → POST {Mnemonic} dealId={DealId} year={Year} month={Month}",
+            VisaryMnemonics.DealMonthlyData, request.Deal.ID, request.Year, request.Month);
+        var result = await PostCrudAsync<DealMonthlyDataRaw>(
+            $"{BaseUrl}/api/visary/crud/{VisaryMnemonics.DealMonthlyData}",
+            request, VisaryMnemonics.DealMonthlyData, ct);
+        _log.LogInformation(
+            "CrudClient.CreateDealMonthlyDataAsync: created id={Id} dealId={DealId} year={Year} month={Month}",
+            result.ID, request.Deal.ID, request.Year, request.Month);
+        return result;
+    }
+
+    public async Task<bool> PatchDataSetForFmInstallmentsAsync(
+        DataSetForFmInstallmentsPatchRequest request, CancellationToken ct)
+    {
+        // Build payload вручную, поскольку имена 3 полей (OwnShare/PostpShare/RoomKinds)
+        // зависят от схемы рассрочки (равномерная DDUSteady*, единовременная DDUOnetime*,
+        // ДКП DKP*) — типизированный класс с фиксированными именами не подходит.
+        // RoomKinds — массив объектов { "Object": { ID, Title } } по HAR.
+        var payload = new Dictionary<string, object?>(StringComparer.Ordinal)
+        {
+            [request.OwnSharePropertyName] = request.OwnShare,
+            [request.PostpSharePropertyName] = request.PostpShare,
+            [request.RoomKindsPropertyName] = request.RoomKinds
+                .Select(rk => new { Object = new { rk.Title, rk.ID } })
+                .ToArray(),
+            ["ID"] = request.ID,
+            ["RowVersion"] = request.RowVersion,
+        };
+        var url = $"{BaseUrl}/api/visary/crud/{VisaryMnemonics.DataSetForFm}/{request.ID}?forceUpdate=false";
+        await PatchCrudAsync(url, payload,
+            $"{VisaryMnemonics.DataSetForFm}/{request.ID}", ct);
+        _log.LogInformation(
+            "CrudClient.PatchDataSetForFmInstallmentsAsync: id={Id} prefix='{Prefix}' kinds={Count} success",
+            request.ID, request.OwnSharePropertyName, request.RoomKinds.Count);
+        return true;
+    }
 
     // ─── TypedImportWbs (TypedJournal-импорт бюджета) ────────────────────────
 
