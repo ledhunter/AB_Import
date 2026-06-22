@@ -1439,11 +1439,13 @@ public sealed partial class FinModelImportMapper
 
             try
             {
+                // doc 144 v1.1: Rate отправляем по прежней логике (как в v1.4 doc 139).
+                // PercentKind НЕ отправляем — «Вид ставки» (Floating/Fixed) Visary
+                // определяет сам по PercentBetType, импорт не должен его проставлять.
                 var created = await _visaryClient.CreateDealPercentBetAsync(new DealPercentBetCreateRequest
                 {
                     DealID = deal.ID,
                     Deal = new VisaryRef { ID = deal.ID },
-                    PercentKind = rate.PercentKind,
                     LmID = lmId,
                     Rate = rate.Rate,
                     PercentBetType = new VisaryRef { ID = betType.ID, Title = betType.Title },

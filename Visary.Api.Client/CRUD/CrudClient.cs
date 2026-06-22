@@ -756,15 +756,15 @@ public sealed class CrudClient : VisaryHttpBase<CrudClient>, ICrudClient
         DealPercentBetCreateRequest request, CancellationToken ct)
     {
         _log.LogDebug(
-            "Visary → POST {Mnemonic} dealId={DealId} percentKind={Kind} betTypeId={BetTypeId} rate={Rate}",
+            "Visary → POST {Mnemonic} dealId={DealId} betTypeId={BetTypeId} rate={Rate}",
             VisaryMnemonics.DealPercentBet, request.DealID,
-            request.PercentKind, request.PercentBetType.ID, request.Rate);
+            request.PercentBetType.ID, request.Rate);
         var result = await PostCrudAsync<DealPercentBetRaw>(
             $"{BaseUrl}/api/visary/crud/{VisaryMnemonics.DealPercentBet}",
             request, VisaryMnemonics.DealPercentBet, ct);
         _log.LogInformation(
-            "CrudClient.CreateDealPercentBetAsync: created id={Id} dealId={DealId} percentKind={Kind} rate={Rate}",
-            result.ID, request.DealID, request.PercentKind, request.Rate);
+            "CrudClient.CreateDealPercentBetAsync: created id={Id} dealId={DealId} rate={Rate}",
+            result.ID, request.DealID, request.Rate);
         return result;
     }
 

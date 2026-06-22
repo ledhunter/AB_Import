@@ -1,4 +1,5 @@
 using System.Text.Json;
+using KiloImportService.Api.Budget;
 using KiloImportService.Api.Data.Visary;
 using KiloImportService.Api.Data.Visary.Entities;
 using KiloImportService.Api.Domain.Importing;
@@ -6,10 +7,12 @@ using KiloImportService.Api.Domain.Importing.Parsers;
 using KiloImportService.Api.Domain.Mapping;
 using KiloImportService.Api.Domain.Mapping.Budget;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Visary.Api.CRUD;
 using Visary.Api.Dto;
+using Visary.Api.FileStorage;
 using Visary.Api.ListView;
 using Xunit;
 
@@ -28,6 +31,8 @@ public class FinModelChapter1ScheduleTests : IDisposable
     private readonly VisaryDbContext _dbContext;
     private readonly Mock<ICrudClient> _mockCrud;
     private readonly Mock<IListViewClient> _mockListView;
+    private readonly Mock<IBudgetVisaryUploader> _mockBudgetUploader;
+    private readonly ServiceProvider _serviceProvider;
 
     private const int SiteId = 4585;
     private const int ProjectId = 4584;
@@ -54,8 +59,29 @@ public class FinModelChapter1ScheduleTests : IDisposable
                 Total = 1,
             });
 
+        // doc 144 v1.1: для ГФ Бюджет должен реально импортироваться. Мокаем
+        // IBudgetVisaryUploader на успех — Pre-check 1 (WBS не существует, см.
+        // SetupWbsBySite) → запускаем upload → uploader возвращает success →
+        // budgetUploadOk=true → ГФ запускается. После запуска ApplyChapter1ScheduleAsync
+        // снова зовёт GetWbsBySiteAsync, который теперь возвращает WBS (Visary
+        // их «создал» по результату upload) — это эмулируется SetupSequence в
+        // SetupWbsBySite.
+        _mockBudgetUploader = new Mock<IBudgetVisaryUploader>();
+        _mockBudgetUploader
+            .Setup(u => u.UploadAndWaitAsync(It.IsAny<Guid>(), It.IsAny<TimeSpan?>(),
+                It.IsAny<TimeSpan?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new BudgetVisaryUploadAndWaitResult(
+                Upload: new BudgetVisaryUploadResult(
+                    FileStorageItemId: 1, TypedImportWbsId: 999, FileName: "stub.xlsx"),
+                Success: true, TimedOut: false,
+                FinalStatus: "Закончен успешно", CountErrors: 0, CountWarnings: 0));
+
+        var services = new ServiceCollection();
+        services.AddSingleton(_mockBudgetUploader.Object);
+        _serviceProvider = services.BuildServiceProvider();
+        var scopeFactory = _serviceProvider.GetRequiredService<IServiceScopeFactory>();
+
         var budgetRef = new BudgetReferenceProvider(NullLogger<BudgetReferenceProvider>.Instance);
-        var scopeFactory = new Mock<Microsoft.Extensions.DependencyInjection.IServiceScopeFactory>().Object;
         _mapper = new FinModelImportMapper(
             NullLogger<FinModelImportMapper>.Instance,
             _mockCrud.Object,
@@ -78,7 +104,11 @@ public class FinModelChapter1ScheduleTests : IDisposable
         _dbContext.SaveChanges();
     }
 
-    public void Dispose() => _dbContext?.Dispose();
+    public void Dispose()
+    {
+        _dbContext?.Dispose();
+        _serviceProvider?.Dispose();
+    }
 
     private static ImportContext Ctx() => new(Guid.NewGuid(), ProjectId, SiteId, null);
 
@@ -189,13 +219,25 @@ public class FinModelChapter1ScheduleTests : IDisposable
     // Apply
     // ──────────────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// doc 144 v1.1: WBS-pre-check (1-й вызов <c>GetWbsBySiteAsync</c> из
+    /// <c>WbsAlreadyExistsForSiteAsync</c>) должен вернуть ПУСТО, чтобы pre-check
+    /// разрешил импорт Бюджета и ГФ. Второй+ вызовы (из <c>ApplyChapter1ScheduleAsync</c>)
+    /// возвращают WBS-список — Visary его «создал» по результату upload. Один
+    /// Setup с счётчиком моделирует обе фазы.
+    /// </summary>
     private void SetupWbsBySite(params (string Code, int Id)[] articles)
     {
         var wbsList = articles
             .Select(a => new WbsRaw { ID = a.Id, Code = a.Code, Title = $"WBS {a.Code}" })
             .ToList();
-        _mockListView.Setup(c => c.GetWbsBySiteAsync(SiteId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ListViewResponse<WbsRaw> { Data = wbsList, Total = wbsList.Count });
+        var fullResponse = new ListViewResponse<WbsRaw> { Data = wbsList, Total = wbsList.Count };
+        var emptyResponse = new ListViewResponse<WbsRaw> { Data = [], Total = 0 };
+
+        var calls = 0;
+        _mockListView
+            .Setup(c => c.GetWbsBySiteAsync(SiteId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() => Interlocked.Increment(ref calls) == 1 ? emptyResponse : fullResponse);
     }
 
     private void SetupExistingCostItems(int wbsId, params CostItemRaw[] items)
@@ -324,14 +366,62 @@ public class FinModelChapter1ScheduleTests : IDisposable
             a.Contains("K483", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public async Task Apply_ScheduleArticle_NoBudgetRows_SkipsGfEntirely()
+    {
+        // doc 144: ГФ запускается только если бюджет тоже импортируется. Если в
+        // файле нет ни одной бюджетной строки (budgetRows.Count == 0), ГФ
+        // молча пропускается с info-сообщением schedule_skipped_no_budget — даже
+        // когда WBS-узлы в ИСР объекта уже существуют.
+        SetupWbsBySite(("1.1.", Wbs11Id));
+        SetupExistingCostItems(Wbs11Id);
+
+        // Прогоняем фикстуру БЕЗ бюджетного блока — только schedule.
+        var rows = WithChapter1Fixture(
+            ScheduleRow(481, "Затраты на приобретение прав на ЗУ", h: "238000")).ToList();
+        var validation = await _mapper.ValidateAsync(Ctx(), rows, _dbContext, default);
+        var apply = await _mapper.ApplyAsync(Ctx(), _dbContext, validation.Rows, default);
+
+        _mockCrud.Verify(c => c.CreateCostItemAsync(It.IsAny<CostItemCreateRequest>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+
+        Assert.Contains(apply.Errors, e => e.ErrorCode == "schedule_skipped_no_budget");
+    }
+
     /// <summary>
     /// Прогоняет фикстуру через Validate и возвращает все mapped-строки (включая
     /// quarters-header) — Apply ожидает их все вместе.
+    /// <para/>
+    /// doc 144: ГФ запускается только если бюджет тоже импортируется. Поэтому
+    /// в Apply-фикстуру всегда добавляем минимальный бюджетный блок (Глава 1 +
+    /// одна статья + «Итого»). Pre-check 1 doc 109 поверх SetupWbsBySite
+    /// возвращает существующую ИСР → upload skip, budgetUploadOk=true,
+    /// ГФ продолжает работать.
     /// </summary>
     private async Task<List<MappedRow>> ValidateAndCollect(params ParsedRow[] articles)
     {
-        var rows = WithChapter1Fixture(articles).ToList();
+        var rows = WithChapter1Fixture(articles)
+            .Concat(BudgetFixtureForScheduleTests())
+            .ToList();
         var result = await _mapper.ValidateAsync(Ctx(), rows, _dbContext, default);
         return result.Rows.ToList();
+    }
+
+    /// <summary>
+    /// Минимальный бюджет-блок, чтобы маппер видел budgetRows.Count > 0 и зашёл
+    /// в ветку Pre-check 1 (doc 109). SetupWbsBySite в каждом Apply-тесте уже
+    /// возвращает непустую ИСР → upload skip, budgetUploadOk=true → ГФ
+    /// запускается. См. doc 144.
+    /// </summary>
+    private static IEnumerable<ParsedRow> BudgetFixtureForScheduleTests()
+    {
+        static ParsedRow Budget(int rowNum, string c, string? e = null) =>
+            new(rowNum, "Inputs (budget)", new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["A"] = "", ["B"] = "", ["C"] = c, ["D"] = "", ["E"] = e ?? "", ["F"] = "", ["G"] = "",
+            });
+        yield return Budget(575, "Глава 1. Стоимость земельного участка и расходы по его содержанию");
+        yield return Budget(581, "Затраты на приобретение прав на ЗУ", e: "100");
+        yield return Budget(584, "Итого", e: "100");
     }
 }

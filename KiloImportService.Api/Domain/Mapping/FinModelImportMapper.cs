@@ -577,14 +577,15 @@ public sealed partial class FinModelImportMapper : IImportMapper
         }
 
         // budget upload status — управляет тем, можно ли запускать ГФ Главы 1.
-        // null означает «бюджета в файле нет» — это допустимый сценарий (например,
-        // повторный импорт после ручной правки бюджета в Visary), ГФ выполняем.
+        // null означает «бюджета в файле нет / ИСР уже сформирована» — оба
+        // случая блокируют ГФ (см. doc 144 v1.1).
         bool? budgetUploadOk = null;
         if (budgetRows.Count > 0)
         {
-            // Pre-check: если в ИСР объекта уже есть WBS-узлы — бюджет повторно
-            // не заливаем. Заказчик не хочет «перезатирать» уже сформированную ИСР
-            // вторым typedimportwbs. ГФ Главы 1 запускаем сразу — узлы есть.
+            // Pre-check: если в ИСР объекта уже есть WBS-узлы — заказчик считает
+            // объект «уже сформированным» и не хочет туда писать ничего повторно.
+            // doc 144 v1.1: пропускаем И заливку Бюджета, И ГФ Главы 1 (раньше ГФ
+            // пытался дополнить существующую ИСР — больше нет).
             // См. doc_project/109-finmodel-prechecks-wbs-and-gf.md.
             var schedulePending = scheduleArticleRows.Count > 0 && scheduleQuartersRow is not null;
             var wbsExists = await WbsAlreadyExistsForSiteAsync(siteId, errors, ct);
@@ -598,14 +599,15 @@ public sealed partial class FinModelImportMapper : IImportMapper
             else if (wbsExists.Value)
             {
                 _log.LogInformation(
-                    "FinModelImportMapper: ИСР объекта siteId={SiteId} уже содержит WBS-узлы — заливка XLSX-бюджета пропущена",
+                    "FinModelImportMapper: ИСР объекта siteId={SiteId} уже содержит WBS-узлы — заливка XLSX-бюджета и ГФ Главы 1 пропущены",
                     siteId);
                 errors.Add(new RowError(null, "budget_upload_skipped_wbs_exists",
                     "Импорт бюджета в Visary пропущен: ИСР объекта строительства уже сформирована (есть WBS-узлы). " +
                     (schedulePending
-                        ? "ГФ Главы 1 будет применён к существующим статьям ИСР."
+                        ? "ГФ Главы 1 также пропущен — заказчик не дополняет уже сформированную ИСР."
                         : "ГФ Главы 1 не запрашивался.")));
-                budgetUploadOk = true;
+                // budgetUploadOk остаётся null — это сигнал «бюджет в этой сессии
+                // не импортирован»; doc 144 правило `!= true` заблокирует ГФ ниже.
             }
             else
             {
@@ -628,13 +630,34 @@ public sealed partial class FinModelImportMapper : IImportMapper
 
         if (scheduleArticleRows.Count > 0 && scheduleQuartersRow is not null)
         {
-            if (budgetUploadOk == false)
+            if (budgetUploadOk != true)
             {
-                // Бюджет в Visary не доехал — WBS-узлов для ГФ ещё нет. Skip ГФ молча:
-                // факт «ГФ Главы 1 не создан» уже включён в сообщение budget_upload_*.
-                _log.LogWarning(
-                    "FinModelImportMapper: бюджет в Visary не завершён успешно — ГФ Главы 1 пропущен (siteId={SiteId})",
-                    siteId);
+                // doc 144 v1.1: ГФ Главы 1 запускается ТОЛЬКО если бюджет реально
+                // импортирован в этой сессии (XLSX-заливка завершилась успешно).
+                // Все остальные случаи блокируют ГФ:
+                //   • budgetRows.Count == 0 — бюджета в файле нет;
+                //   • ИСР уже сформирована (WBS exists) — заказчик не хочет
+                //     дополнять чужую ИСР, см. doc 109 + 144 v1.1;
+                //   • budgetUploadOk == false — заливка упала / pre-check листинга
+                //     упал.
+                // Кейсы WBS-exists и upload-failed уже описаны в errors через
+                // budget_upload_*; для «бюджета в файле нет» эмитим отдельный
+                // schedule_skipped_no_budget (severity=info).
+                if (budgetRows.Count == 0)
+                {
+                    _log.LogWarning(
+                        "FinModelImportMapper: ГФ Главы 1 пропущен — в файле нет строк бюджета (siteId={SiteId})",
+                        siteId);
+                    errors.Add(new RowError(null, "schedule_skipped_no_budget",
+                        "ГФ Главы 1 не создан: в файле нет данных бюджета — " +
+                        "импорт ГФ выполняется только когда бюджет тоже импортируется."));
+                }
+                else
+                {
+                    _log.LogWarning(
+                        "FinModelImportMapper: бюджет в Visary не импортирован — ГФ Главы 1 пропущен (siteId={SiteId})",
+                        siteId);
+                }
             }
             else
             {

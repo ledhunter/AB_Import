@@ -597,25 +597,28 @@ public sealed class DataSetForFmInstallmentsPatchRequest
 
 /// <summary>
 /// POST <c>/api/visary/crud/dealpercentbet</c> — создание процентной ставки по сделке.
-/// Тело по примеру заказчика (см. doc 139 v1.4):
-/// <code>{"DealID":91,"Deal":{"ID":91},"PercentKind":10,"LmID":"18-09-2025-15-50-51",
+/// Тело по примеру заказчика (см. doc 139 v1.4 + doc 144 v1.1 — `PercentKind`
+/// не отправляем, `Rate` отправляем как раньше):
+/// <code>{"DealID":91,"Deal":{"ID":91},"LmID":"18-09-2025-15-50-51",
 ///        "Rate":100,"PercentBetType":{"Title":"Фиксированная (базовая)","ID":7}}</code>
 /// <para/>
-/// • <see cref="PercentKind"/> — числовой код типа ставки. Импорт Финмодели
-///   маппит коды LM10/LM20/LM30/LM40 в 10/20/30/40 соответственно.
 /// • <see cref="LmID"/> — строковый идентификатор формата
-///   <c>"dd-MM-yyyy-HH-mm-ss"</c> (момент импорта).
+///   <c>"dd-MM-yyyy-HH-mm-ss-fff-{Code}-{idx}"</c> (момент импорта + код + индекс
+///   для UNIQUE-индекса `UX_DealPercentBet_LmID`).
 /// • <see cref="Rate"/> — значение в процентах (число > 1 = «как есть»,
 ///   ≤ 1 = доля → парсер ×100).
 /// • <see cref="PercentBetType"/> — ссылка на справочник <c>percentbettype</c>
 ///   (резолвится по <c>Code</c> через
 ///   <see cref="ListView.IListViewClient.FindPercentBetTypeByCodeAsync"/>).
+/// <para/>
+/// Поле <c>PercentKind</c> сознательно убрано (doc 144 v1.1): «Вид ставки»
+/// (Floating/Fixed) Visary определяет сам по типу ставки <see cref="PercentBetType"/>;
+/// импорт не должен его проставлять.
 /// </summary>
 public sealed class DealPercentBetCreateRequest
 {
     public int DealID { get; set; }
     public VisaryRef Deal { get; set; } = null!;
-    public int PercentKind { get; set; }
     public string LmID { get; set; } = null!;
     public double Rate { get; set; }
     public VisaryRef PercentBetType { get; set; } = null!;

@@ -484,6 +484,9 @@ public class ImportsController : ControllerBase
             "budget_upload_skipped_wbs_exists" => "warning",
             // «Файла нет / шаг неприменим» — информативное сообщение, не проблема.
             "fmmodel_skipped_no_plan_file"     => "info",
+            // ГФ Главы 1 не запускался, потому что бюджета в файле нет (doc 144).
+            // Это не ошибка — пользователь сознательно не приложил бюджетные данные.
+            "schedule_skipped_no_budget"       => "info",
             _ => "error",
         };
     }
