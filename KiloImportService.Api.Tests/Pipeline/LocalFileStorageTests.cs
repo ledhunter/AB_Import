@@ -96,4 +96,52 @@ public class LocalFileStorageTests : IDisposable
         var p2 = await _storage.SaveAsync(b, "same.csv", CancellationToken.None);
         Assert.NotEqual(p1, p2);
     }
+
+    // ─────────────── Path Traversal hardening (см. doc 144) ───────────────
+    // На Linux '\' НЕ входит в Path.GetInvalidFileNameChars, поэтому без
+    // Path.GetFileName в Sanitize старая версия пропускала кросс-OS payload
+    // `..\..\..\evil`. После фикса любые path-составляющие вырезаются.
+
+    [Theory]
+    [InlineData("../../../etc/passwd")]
+    [InlineData("..\\..\\..\\windows\\system32\\drivers\\etc\\hosts")]
+    [InlineData("/etc/shadow")]
+    [InlineData("\\\\server\\share\\evil")]
+    public async Task SaveAsync_StripsPathComponentsFromOriginalFileName(string dirty)
+    {
+        using var content = new MemoryStream(new byte[] { 1 });
+        var rel = await _storage.SaveAsync(content, dirty, CancellationToken.None);
+        // Финальный файл лежит ровно внутри _root, без побега наверх.
+        var full = Path.GetFullPath(Path.Combine(_root, rel));
+        var rootFull = Path.GetFullPath(_root) + Path.DirectorySeparatorChar;
+        Assert.StartsWith(rootFull, full, StringComparison.Ordinal);
+        Assert.True(File.Exists(full));
+        // Имя файла НЕ содержит '/' / '\' (path-разделители вырезаны).
+        var leaf = Path.GetFileName(rel);
+        Assert.DoesNotContain('/', leaf);
+        Assert.DoesNotContain('\\', leaf);
+    }
+
+    [Theory]
+    // Кросс-OS payload'ы: '..' отлавливается явной Contains-проверкой ДО Path.Combine,
+    // '/etc/shadow' — Path.IsPathRooted true на Linux+Windows; OS-зависимые
+    // 'C:\...' / '\\server\share' оставляем за пределами теста (на Linux IsPathRooted
+    // там false и containment-check «пройдёт» — но File.OpenRead просто не найдёт файл).
+    [InlineData("../../etc/passwd")]
+    [InlineData("..\\..\\etc\\passwd")]
+    [InlineData("/etc/shadow")]
+    public async Task OpenReadAsync_RejectsTraversalAndAbsolutePaths(string maliciousPath)
+    {
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(
+            () => _storage.OpenReadAsync(maliciousPath, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task OpenReadAsync_RejectsEmptyOrWhitespacePath()
+    {
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => _storage.OpenReadAsync("", CancellationToken.None));
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => _storage.OpenReadAsync("   ", CancellationToken.None));
+    }
 }

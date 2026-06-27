@@ -8,10 +8,13 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "test": "vitest",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "postinstall": "node scripts/patch-alfalab-esm.mjs"
   },
   "dependencies": {
     "@alfalab/core-components": "50.12.0",
+    "@alfalab/core-components-config": "^1.1.0",
+    "@alfalab/core-components-stack-context": "^1.0.1",
     "@alfalab/core-components-vars": "11.0.2",
     "@microsoft/signalr": "8.0.17",
     "react": "19.2.5",

@@ -7,20 +7,24 @@ import { defineConfig, globalIgnores } from 'eslint/config'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Кастомные правила безопасности. См. doc_project/121-security-fixes-appsec-v1.md
-// (§ AppSec v2-rescan, § Анти-паттерны).
+// (§ AppSec v2…v6, § Анти-паттерны).
 //
-//  • no-restricted-syntax: запрет прямого вызова глобального `fetch(...)`.
-//    Все сетевые запросы обязаны идти через `services/safeFetch.ts`, где
-//    URL проверяется по whitelist API-корней — это закрывает SSRF-rule
-//    структурно, а не путём «переименования» переменной с URL.
+//  • no-restricted-syntax запрещает ВСЕ способы инициировать HTTP-запрос в обход
+//    `services/safeFetch.ts`:
+//      ❌ `fetch(...)`           — прямой вызов глобала
+//      ❌ `window.fetch(...)`    — через window
+//      ❌ `globalThis.fetch(...)`— через globalThis
+//      ❌ `new XMLHttpRequest()` — низкоуровневый XHR-API (v6 fix: safeFetch
+//         сам поверх XHR — единственная разрешённая точка инстанцирования)
 //
-//  • no-restricted-globals: запрет ссылок на `fetch` через `globalThis.fetch`,
-//    `window.fetch`, или просто `fetch` без вызова (в т.ч. деструктуризация,
-//    `const f = fetch` и т.п.).
+// Все сетевые запросы обязаны идти через `safeFetch(url, init)`. Внутри:
+// 5 guard'ов (тип / non-empty / protocol-relative / same-origin абс. путь /
+// traversal) + whitelist API-корней. Это закрывает SSRF структурно.
 //
-// Один файл — `services/safeFetch.ts` — исключён из правила; там стоит
-// in-source `// eslint-disable-next-line` рядом с единственным разрешённым
-// вызовом `fetch(url, init)` ПОСЛЕ whitelist-проверки.
+// Один файл — `services/safeFetch.ts` — содержит line-level
+// `// eslint-disable-next-line no-restricted-syntax` ровно на той строке, где
+// единственный `new XMLHttpRequest()` создаётся ПОСЛЕ guard'ов. Файл-level
+// override НЕ ставим: любой новый sink-вызов в safeFetch.ts тоже должен ловиться.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const noBareFetchSyntaxRule = [
@@ -39,6 +43,11 @@ const noBareFetchSyntaxRule = [
     selector: "MemberExpression[property.name='fetch'][object.name='globalThis']",
     message:
       "Запрещён globalThis.fetch: используй safeFetch из 'services/safeFetch'.",
+  },
+  {
+    selector: "NewExpression[callee.name='XMLHttpRequest']",
+    message:
+      "Запрещён прямой new XMLHttpRequest(): используй safeFetch из 'services/safeFetch' (см. doc_project/121, AppSec v6 — XHR-transition).",
   },
 ];
 

@@ -14,7 +14,6 @@ KiloImportService.Api.Tests/
 
 # Базы данных и логи
 db/
-*.log
 docker-up.log
 
 # Документация и заметки
@@ -35,3 +34,22 @@ FinModel/
 
 # Прочее
 scripts/
+**/.dockerignore
+**/.env
+**/.project
+**/.settings
+**/.toolstarget
+**/*.*proj.user
+**/*.*proj.user
+**/*.dbmdl
+**/*.jfm
+**/azds.yaml
+**/charts
+**/docker-compose*
+**/Dockerfile*
+**/node_modules
+**/npm-debug.log
+**/secrets.dev.yaml
+**/values.dev.yaml
+LICENSE
+README.md

@@ -52,7 +52,8 @@ public sealed record KeyValueVertical(
     BudgetSectionHint? Budget = null,
     ChapterScheduleHint? ChapterSchedule = null,
     IReadOnlyList<SingleValueOverride>? SingleValues = null,
-    IReadOnlyList<ControlValueRef>? ControlValues = null) : FileLayoutHint;
+    IReadOnlyList<ControlValueRef>? ControlValues = null,
+    EquityFundingHint? EquityFunding = null) : FileLayoutHint;
 
 /// <summary>
 /// Override-ячейка для KV-vertical: значение параметра <paramref name="KeyText"/>
@@ -170,3 +171,44 @@ public sealed record ChapterScheduleHint(
     string FirstQuarterColumn,
     string LastQuarterColumn,
     string SheetMarker = "(schedule)");
+
+/// <summary>
+/// Подсказка для парсера: на том же листе <see cref="KeyValueVertical.SheetName"/>
+/// под строкой-маркером <paramref name="StartMarker"/> в <paramref name="MarkerColumn"/>
+/// (например, «Финансирование: Этап 1») лежит строка с параметром <paramref name="KeyName"/>
+/// (например, «Вложение собственных средств»), у которой:
+/// • в <paramref name="UnitColumn"/> — единица измерения («руб.», «тыс. руб.», «млн руб.»),
+/// • в колонках <paramref name="FirstQuarterColumn"/>..<paramref name="LastQuarterColumn"/>
+///   (та же шапка кварталов, что и в <see cref="ChapterScheduleHint"/>) — квартальные значения.
+///
+/// Парсер эмитит две <see cref="ParsedRow"/> с <c>Sheet = "{sheetName} {SheetMarker}"</c>:
+/// 1) Header-row (<c>SourceRowNumber = QuarterHeaderRow</c>) — <c>Cells[MarkerColumn] = "__equity_quarters__"</c>
+///    (sentinel), а в колонках H..CU — ISO-даты начала кварталов.
+/// 2) Data-row — <c>Cells[MarkerColumn] = KeyName</c>, <c>Cells[UnitColumn]</c> = единица,
+///    <c>Cells[H]..Cells[LastQuarterColumn]</c> = текстовые значения квартальных ячеек.
+///
+/// Поиск data-row: точное равенство <c>cell[MarkerColumn].Trim() == KeyName</c> (case-insensitive)
+/// в окне <paramref name="ScanLimitRows"/> ниже StartMarker. Берётся ПЕРВАЯ строка, в которой
+/// одновременно совпадает <paramref name="KeyName"/> и есть непустая ячейка в <paramref name="UnitColumn"/>
+/// — чтобы отличить заголовок параметра от собственно строки с данными (в шаблоне заказчика
+/// строка «Вложение собственных средств» встречается дважды: подзаголовок и данные).
+/// </summary>
+/// <param name="MarkerColumn">Колонка с заголовком/Title (обычно та же, что <c>KeyColumn</c>, «C»).</param>
+/// <param name="StartMarker">Текст-маркер начала раздела (точное равенство, trim, case-insensitive).</param>
+/// <param name="KeyName">Точный текст строки с данными в <paramref name="MarkerColumn"/>.</param>
+/// <param name="UnitColumn">Буква колонки с единицей измерения (например, «D»).</param>
+/// <param name="QuarterHeaderRow">Номер строки шапки квартальных дат (например, 7).</param>
+/// <param name="FirstQuarterColumn">Буква первой квартальной колонки (например, «H»).</param>
+/// <param name="LastQuarterColumn">Буква последней квартальной колонки (например, «CU»).</param>
+/// <param name="ScanLimitRows">Сколько строк ниже StartMarker сканировать (защита от ухода в чужие разделы).</param>
+/// <param name="SheetMarker">Суффикс для <c>Sheet</c> эмитируемых строк.</param>
+public sealed record EquityFundingHint(
+    string MarkerColumn,
+    string StartMarker,
+    string KeyName,
+    string UnitColumn,
+    int QuarterHeaderRow,
+    string FirstQuarterColumn,
+    string LastQuarterColumn,
+    int ScanLimitRows = 200,
+    string SheetMarker = "(equity-funding)");

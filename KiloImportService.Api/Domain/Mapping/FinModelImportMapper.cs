@@ -37,7 +37,7 @@ namespace KiloImportService.Api.Domain.Mapping;
 /// Справочники подтягиваются динамически из Visary (Title → ID lookup case-insensitive).
 /// Хардкод-фолбэков нет: если справочник недоступен — file-level error.
 /// </summary>
-public sealed class FinModelImportMapper : IImportMapper
+public sealed partial class FinModelImportMapper : IImportMapper
 {
     public string ImportTypeCode => "finmodel";
 
@@ -103,7 +103,19 @@ public sealed class FinModelImportMapper : IImportMapper
                 ValueColumn: "G",
                 ParameterName: "Номер КД",
                 OutputKey: "Номер договора"),
-        });
+        },
+        // «Вложение собственных средств» (раздел «Финансирование: Этап 1») —
+        // строка с единицей измерения в D и квартальными значениями в H..CU.
+        // Маппер использует эти значения для дополнительных `inputdata` с
+        // fmcode=604 (см. doc 146).
+        EquityFunding: new EquityFundingHint(
+            MarkerColumn: "C",
+            StartMarker: "Финансирование: Этап 1",
+            KeyName: "Вложение собственных средств",
+            UnitColumn: "D",
+            QuarterHeaderRow: 7,
+            FirstQuarterColumn: "H",
+            LastQuarterColumn: "CU"));
 
     private static readonly string[] FinishingTypeAliases =
         ["Тип отделки", "FinishingType", "Finishing"];
@@ -167,6 +179,10 @@ public sealed class FinModelImportMapper : IImportMapper
     // Маркер «строки ГФ», эмитируемой XlsxParser-ом (см. ChapterScheduleHint.SheetMarker).
     // У schedule-строк — Sheet вида "Inputs (schedule)".
     private const string ScheduleSheetSuffix = "(schedule)";
+
+    // Маркер «строки Вложения собственных средств», эмитируемой XlsxParser-ом
+    // (см. EquityFundingHint.SheetMarker). Sheet вида "Inputs (equity-funding)".
+    private const string EquityFundingSheetSuffix = "(equity-funding)";
 
     // Колонки квартального блока ГФ Главы 1 в файле «Параметры к переносу в АБ.xlsx»:
     // H = 8-я колонка (первый квартал), CU = 99-я (23-й квартал). За CU идут годовые
@@ -267,14 +283,16 @@ public sealed class FinModelImportMapper : IImportMapper
         }
 
         // Разделяем строки по типу секции:
-        //   • (budget)   — табличная секция бюджета (главы/статьи + Итого);
-        //   • (schedule) — квартальный блок ГФ Главы 1 (dates-header + статьи Этапа 1);
-        //   • остальное  — обычные KV-стадии (тип отделки, класс, показатели).
-        // Источник суффиксов — BudgetSectionHint.SheetMarker / ChapterScheduleHint.SheetMarker.
+        //   • (budget)         — табличная секция бюджета (главы/статьи + Итого);
+        //   • (schedule)       — квартальный блок ГФ Главы 1 (dates-header + статьи Этапа 1);
+        //   • (equity-funding) — «Вложение собственных средств» (dates-header + одна data-строка);
+        //   • остальное         — обычные KV-стадии (тип отделки, класс, показатели).
+        // Источник суффиксов — BudgetSectionHint / ChapterScheduleHint / EquityFundingHint.
         var budgetRows = rows.Where(IsBudgetRow).ToList();
         var scheduleRows = rows.Where(IsScheduleRow).ToList();
+        var equityFundingRows = rows.Where(IsEquityFundingRow).ToList();
         var stageRows = rows
-            .Where(r => !IsBudgetRow(r) && !IsScheduleRow(r))
+            .Where(r => !IsBudgetRow(r) && !IsScheduleRow(r) && !IsEquityFundingRow(r))
             .ToList();
 
         var (paramMappedRows, paramFileErrors) = await ValidateParametersAsync(
@@ -283,19 +301,23 @@ public sealed class FinModelImportMapper : IImportMapper
 
         var budgetMappedRows = ValidateBudget(budgetRows, fileErrors);
         var scheduleMappedRows = ValidateChapter1Schedule(scheduleRows, fileErrors);
+        var equityFundingMappedRows = ValidateEquityFunding(equityFundingRows, fileErrors);
 
         // Если параметрический поток отбраковал всё (нет целевых колонок шаблона) и
-        // бюджет+ГФ тоже пусты — возвращаем только file-level errors. Если хоть один
-        // поток дал mapped-строки — возвращаем их вместе.
+        // бюджет+ГФ+equity тоже пусты — возвращаем только file-level errors. Если хоть
+        // один поток дал mapped-строки — возвращаем их вместе.
         var combined = new List<MappedRow>(
-            paramMappedRows.Count + budgetMappedRows.Count + scheduleMappedRows.Count);
+            paramMappedRows.Count + budgetMappedRows.Count
+            + scheduleMappedRows.Count + equityFundingMappedRows.Count);
         combined.AddRange(paramMappedRows);
         combined.AddRange(budgetMappedRows);
         combined.AddRange(scheduleMappedRows);
+        combined.AddRange(equityFundingMappedRows);
 
         _log.LogInformation(
-            "FinModelImportMapper.ValidateAsync: completed paramRows={Param} budgetRows={Budget} scheduleRows={Schedule} fileErrors={FileErrorCount}",
-            paramMappedRows.Count, budgetMappedRows.Count, scheduleMappedRows.Count, fileErrors.Count);
+            "FinModelImportMapper.ValidateAsync: completed paramRows={Param} budgetRows={Budget} scheduleRows={Schedule} equityRows={Equity} fileErrors={FileErrorCount}",
+            paramMappedRows.Count, budgetMappedRows.Count, scheduleMappedRows.Count,
+            equityFundingMappedRows.Count, fileErrors.Count);
         return new ValidationResult(combined, fileErrors);
     }
 
@@ -509,6 +531,8 @@ public sealed class FinModelImportMapper : IImportMapper
     private const string SyntheticSheetFmModel       = "Финмодель";
     private const string SyntheticSheetPlanInputData = "План — Общий график";
     private const string SyntheticSheetFactInputData = "Outputs — Факт";
+    private const string SyntheticSheetEquityFundingInputData = "Вложение собственных средств";
+    private const string SyntheticSheetClientData = "Данные клиента";
 
     public async Task<ApplyResult> ApplyAsync(
         ImportContext context,
@@ -534,9 +558,19 @@ public sealed class FinModelImportMapper : IImportMapper
         var siteIdForFmModel = context.VisarySiteId.Value;
         if (context.VisaryProjectId is { } projectIdForFmModel)
         {
+            // Equity-funding mapped-rows доступны уже на этом этапе — они приходят
+            // из ValidateAsync и парсятся из основного файла «Параметры». Передаём
+            // в EnsureFmModelAsync, чтобы после создания версии Финмодели сразу
+            // долить inputdata с fmcode=604 (см. doc 146).
+            var equityFundingMappedRows = rows
+                .Where(r => r.IsValid)
+                .Where(r => GetKind(r) is "equity_funding_quarters" or "equity_funding_data")
+                .ToList();
+
             await EnsureFmModelAsync(
                 projectIdForFmModel, siteIdForFmModel,
                 context.SecondaryFileRelativePath, context.PrimaryFileRelativePath,
+                equityFundingMappedRows,
                 errors, synthetic, ct);
         }
 
@@ -577,14 +611,15 @@ public sealed class FinModelImportMapper : IImportMapper
         }
 
         // budget upload status — управляет тем, можно ли запускать ГФ Главы 1.
-        // null означает «бюджета в файле нет» — это допустимый сценарий (например,
-        // повторный импорт после ручной правки бюджета в Visary), ГФ выполняем.
+        // null означает «бюджета в файле нет / ИСР уже сформирована» — оба
+        // случая блокируют ГФ (см. doc 144 v1.1).
         bool? budgetUploadOk = null;
         if (budgetRows.Count > 0)
         {
-            // Pre-check: если в ИСР объекта уже есть WBS-узлы — бюджет повторно
-            // не заливаем. Заказчик не хочет «перезатирать» уже сформированную ИСР
-            // вторым typedimportwbs. ГФ Главы 1 запускаем сразу — узлы есть.
+            // Pre-check: если в ИСР объекта уже есть WBS-узлы — заказчик считает
+            // объект «уже сформированным» и не хочет туда писать ничего повторно.
+            // doc 144 v1.1: пропускаем И заливку Бюджета, И ГФ Главы 1 (раньше ГФ
+            // пытался дополнить существующую ИСР — больше нет).
             // См. doc_project/109-finmodel-prechecks-wbs-and-gf.md.
             var schedulePending = scheduleArticleRows.Count > 0 && scheduleQuartersRow is not null;
             var wbsExists = await WbsAlreadyExistsForSiteAsync(siteId, errors, ct);
@@ -598,14 +633,15 @@ public sealed class FinModelImportMapper : IImportMapper
             else if (wbsExists.Value)
             {
                 _log.LogInformation(
-                    "FinModelImportMapper: ИСР объекта siteId={SiteId} уже содержит WBS-узлы — заливка XLSX-бюджета пропущена",
+                    "FinModelImportMapper: ИСР объекта siteId={SiteId} уже содержит WBS-узлы — заливка XLSX-бюджета и ГФ Главы 1 пропущены",
                     siteId);
                 errors.Add(new RowError(null, "budget_upload_skipped_wbs_exists",
                     "Импорт бюджета в Visary пропущен: ИСР объекта строительства уже сформирована (есть WBS-узлы). " +
                     (schedulePending
-                        ? "ГФ Главы 1 будет применён к существующим статьям ИСР."
+                        ? "ГФ Главы 1 также пропущен — заказчик не дополняет уже сформированную ИСР."
                         : "ГФ Главы 1 не запрашивался.")));
-                budgetUploadOk = true;
+                // budgetUploadOk остаётся null — это сигнал «бюджет в этой сессии
+                // не импортирован»; doc 144 правило `!= true` заблокирует ГФ ниже.
             }
             else
             {
@@ -628,13 +664,34 @@ public sealed class FinModelImportMapper : IImportMapper
 
         if (scheduleArticleRows.Count > 0 && scheduleQuartersRow is not null)
         {
-            if (budgetUploadOk == false)
+            if (budgetUploadOk != true)
             {
-                // Бюджет в Visary не доехал — WBS-узлов для ГФ ещё нет. Skip ГФ молча:
-                // факт «ГФ Главы 1 не создан» уже включён в сообщение budget_upload_*.
-                _log.LogWarning(
-                    "FinModelImportMapper: бюджет в Visary не завершён успешно — ГФ Главы 1 пропущен (siteId={SiteId})",
-                    siteId);
+                // doc 144 v1.1: ГФ Главы 1 запускается ТОЛЬКО если бюджет реально
+                // импортирован в этой сессии (XLSX-заливка завершилась успешно).
+                // Все остальные случаи блокируют ГФ:
+                //   • budgetRows.Count == 0 — бюджета в файле нет;
+                //   • ИСР уже сформирована (WBS exists) — заказчик не хочет
+                //     дополнять чужую ИСР, см. doc 109 + 144 v1.1;
+                //   • budgetUploadOk == false — заливка упала / pre-check листинга
+                //     упал.
+                // Кейсы WBS-exists и upload-failed уже описаны в errors через
+                // budget_upload_*; для «бюджета в файле нет» эмитим отдельный
+                // schedule_skipped_no_budget (severity=info).
+                if (budgetRows.Count == 0)
+                {
+                    _log.LogWarning(
+                        "FinModelImportMapper: ГФ Главы 1 пропущен — в файле нет строк бюджета (siteId={SiteId})",
+                        siteId);
+                    errors.Add(new RowError(null, "schedule_skipped_no_budget",
+                        "ГФ Главы 1 не создан: в файле нет данных бюджета — " +
+                        "импорт ГФ выполняется только когда бюджет тоже импортируется."));
+                }
+                else
+                {
+                    _log.LogWarning(
+                        "FinModelImportMapper: бюджет в Visary не импортирован — ГФ Главы 1 пропущен (siteId={SiteId})",
+                        siteId);
+                }
             }
             else
             {
@@ -651,6 +708,22 @@ public sealed class FinModelImportMapper : IImportMapper
             _log.LogWarning(
                 "FinModelImportMapper: schedule article rows={Count} но датовая строка не найдена — ГФ пропущен (siteId={SiteId})",
                 scheduleArticleRows.Count, siteId);
+        }
+
+        // ─── Заключение «Итоговое заключение КА БП7» + рассрочки ──────────
+        // После Budget+ГФ создаём Заключение и заполняем поля DataSetForFm
+        // (равномерная / единовременная / ДКП), плюс по одной DataForFm на
+        // каждый «1 - Да» вид помещения. Источник данных — лист Control
+        // (блок «Продажи») и лист Outputs (площади реализации, Этап 1).
+        // Шаг ортогонален mapped-строкам — работает по основному файлу
+        // независимо от того, прошёл ли Apply параметров/бюджета/ГФ. См. doc 139.
+        if (context.VisaryProjectId is { } projectIdForAudit)
+        {
+            await EnsureProjectAuditAndInstallmentsAsync(
+                projectIdForAudit, siteId,
+                context.PrimaryFileRelativePath,
+                paramsApplied, budgetUploadOk,
+                errors, synthetic, ct);
         }
 
         // EnsureFmModelAsync вызван в начале ApplyAsync (до validRows-проверки) —
@@ -705,6 +778,7 @@ public sealed class FinModelImportMapper : IImportMapper
         int siteId,
         string? secondaryFilePath,
         string? primaryFilePath,
+        IReadOnlyList<MappedRow> equityFundingMappedRows,
         List<RowError> errors,
         SyntheticRowEmitter synthetic,
         CancellationToken ct)
@@ -803,7 +877,43 @@ public sealed class FinModelImportMapper : IImportMapper
                 projectId);
         }
 
-        // 4. POST /crud/fmmodel (если pre-check не нашёл существующую).
+        // 4. CommisioningPeriod — квартал ввода в эксплуатацию. Берётся из
+        //    ОСНОВНОГО файла («Параметры»): лист Control → раздел «Конфигурация
+        //    этапов» → строка «Этап 1.» → колонка «Ввод в эксплуатацию (получение РнВ)».
+        //    Дата преобразуется в формат "{Year}QN" с правилом «последний день
+        //    квартала → следующий квартал» (см. DateToFmPeriod). Опциональный
+        //    шаг: если основного файла нет / якорей нет / ячейка пуста —
+        //    отправляем null и продолжаем как раньше.
+        string? commisioningPeriod = null;
+        if (!string.IsNullOrWhiteSpace(primaryFilePath))
+        {
+            try
+            {
+                await using var stream = await _fileStorage.OpenReadAsync(primaryFilePath!, ct);
+                var data = ReadCommissioningData(stream);
+                if (data is not null)
+                {
+                    commisioningPeriod = data.CommissioningPeriod;
+                    _log.LogInformation(
+                        "FinModelImportMapper: CommisioningPeriod={Period} (РнВ={Date:dd.MM.yyyy})",
+                        commisioningPeriod, data.CommissioningDate);
+                }
+                else
+                {
+                    _log.LogInformation(
+                        "FinModelImportMapper: CommisioningPeriod пропущен (лист Control / раздел «Конфигурация этапов» / строка «Этап 1.» не найдены или дата пуста)");
+                }
+            }
+            catch (Exception ex)
+            {
+                // Не блокирует POST fmmodel — продолжаем без CommisioningPeriod.
+                _log.LogWarning(ex,
+                    "FinModelImportMapper: чтение CommisioningPeriod не удалось (path={Path}) — продолжаем без него",
+                    primaryFilePath);
+            }
+        }
+
+        // 5. POST /crud/fmmodel (если pre-check не нашёл существующую).
         int fmModelId;
         if (existingFmModelId is { } existingId)
         {
@@ -821,13 +931,16 @@ public sealed class FinModelImportMapper : IImportMapper
                     ABConstructionSiteID = siteId,
                     PeriodStart = planData.PeriodStart,
                     PeriodEnd = planData.PeriodEnd,
+                    CommisioningPeriod = commisioningPeriod,
                 }, ct);
                 fmModelId = created.ID;
                 _log.LogInformation(
-                    "FinModelImportMapper: fmmodel создан id={Id} period={Start}..{End} (projectId={ProjectId}, siteId={SiteId})",
-                    created.ID, planData.PeriodStart, planData.PeriodEnd, projectId, siteId);
+                    "FinModelImportMapper: fmmodel создан id={Id} period={Start}..{End} commisioning={Commisioning} (projectId={ProjectId}, siteId={SiteId})",
+                    created.ID, planData.PeriodStart, planData.PeriodEnd,
+                    commisioningPeriod ?? "(null)", projectId, siteId);
                 synthetic.Emit(SyntheticSheetFmModel, StagedRowStatus.Applied,
-                    [$"Финмодель: создана (id={created.ID}, период {planData.PeriodStart}..{planData.PeriodEnd})"]);
+                    [$"Финмодель: создана (id={created.ID}, период {planData.PeriodStart}..{planData.PeriodEnd}" +
+                     (commisioningPeriod is not null ? $", ввод в эксплуатацию {commisioningPeriod}" : string.Empty) + ")"]);
             }
             catch (Exception ex)
             {
@@ -845,8 +958,10 @@ public sealed class FinModelImportMapper : IImportMapper
 
         // 5. Версия Финмодели + входные данные + связь. Любая ошибка — single row-error,
         //    шаги-параметры/бюджет/ГФ выше уже отработали, не валим Apply целиком.
+        //    После Plan-точек дополнительно создаём inputdata «Вложение собственных
+        //    средств» (fmcode=604) по equity-funding mapped-rows основного файла.
         var versionId = await EnsureFmModelVersionAndInputDataAsync(
-            fmModelId, planData, errors, synthetic, ct);
+            fmModelId, planData, equityFundingMappedRows, errors, synthetic, ct);
 
         // 6. Fact-блок «Доходы поэтапно» / «Этап 1» с листа Outputs основного файла
         //    (см. doc 126). Дополняет ту же только что созданную версию записями
@@ -857,6 +972,14 @@ public sealed class FinModelImportMapper : IImportMapper
             await EnsureFmModelVersionFactInputDataAsync(
                 vId, primaryFilePath!, errors, synthetic, ct);
         }
+
+        // 7. «Данные клиента» (clientdata) — поквартальная запись на (Site × RoomKind)
+        //    с теми же значениями Cost («Стоимость 1 кв.м») и Rates («Площадь 1 кв.м»),
+        //    что уже распарсены для inputdata. Сущность ОРТОГОНАЛЬНА fmmodel/version
+        //    (свой объект Visary), но семантически часть импорта Финмодели и
+        //    выполняется в той же транзакции apply-фазы. Любая ошибка — row-error,
+        //    остальные шаги уже отработали. См. doc 150.
+        await EnsureClientDataAsync(projectId, siteId, planData, errors, synthetic, ct);
     }
 
     /// <summary>
@@ -876,6 +999,7 @@ public sealed class FinModelImportMapper : IImportMapper
     private async Task<int?> EnsureFmModelVersionAndInputDataAsync(
         int fmModelId,
         FinModelPlanData planData,
+        IReadOnlyList<MappedRow> equityFundingMappedRows,
         List<RowError> errors,
         SyntheticRowEmitter synthetic,
         CancellationToken ct)
@@ -1058,7 +1182,476 @@ public sealed class FinModelImportMapper : IImportMapper
             "FinModelImportMapper: inputdata загрузка завершена versionId={VersionId} created={Created} skipped={Skipped} failed={Failed}",
             versionId, createdCount, skippedCount, failedCount);
 
+        // 5) «Вложение собственных средств» (fmcode=604) — отдельный каскад. Берёт
+        //    equity-funding mapped-rows из основного файла и создаёт по одной
+        //    inputdata-записи на каждый непустой квартал, заполняя ТОЛЬКО Summ.
+        //    Кварталы и значения уже посчитаны в ValidateEquityFunding (Value =
+        //    Excel-число × множитель единицы измерения), здесь только POST + link.
+        //    Ошибки идут в errors (не валят основной flow), versionId возвращается
+        //    как есть. См. doc 146.
+        await EnsureEquityFundingInputDataAsync(
+            versionId, equityFundingMappedRows, errors, synthetic, ct);
+
         return versionId;
+    }
+
+    /// <summary>
+    /// Создаёт inputdata-точки fmcode=604 («Вложение собственных средств») по
+    /// equity-funding mapped-rows. Каждая точка — один квартал, заполнено только
+    /// поле <see cref="InputDataCreateRequest.Summ"/>. Поведение при ошибках —
+    /// как у Plan-каскада (один row-error на проблему, остальные точки идут).
+    /// </summary>
+    private async Task EnsureEquityFundingInputDataAsync(
+        int versionId,
+        IReadOnlyList<MappedRow> equityFundingMappedRows,
+        List<RowError> errors,
+        SyntheticRowEmitter synthetic,
+        CancellationToken ct)
+    {
+        if (equityFundingMappedRows.Count == 0)
+        {
+            _log.LogDebug(
+                "FinModelImportMapper: equity-funding mapped-rows нет — Вложение собственных средств пропущено (versionId={VersionId})",
+                versionId);
+            return;
+        }
+
+        var quartersRow = equityFundingMappedRows.FirstOrDefault(r => GetKind(r) == "equity_funding_quarters");
+        var dataRow = equityFundingMappedRows.FirstOrDefault(r => GetKind(r) == "equity_funding_data");
+        if (quartersRow is null || dataRow is null)
+        {
+            _log.LogInformation(
+                "FinModelImportMapper: equity-funding mapped-rows неполные (quarters={HasQ}, data={HasD}) — Вложение собственных средств пропущено (versionId={VersionId})",
+                quartersRow is not null, dataRow is not null, versionId);
+            return;
+        }
+
+        var quartersByLetter = new Dictionary<string, DateTime>(StringComparer.Ordinal);
+        foreach (var q in quartersRow.MappedValues.RootElement.GetProperty("Quarters").EnumerateArray())
+        {
+            var col = q.GetProperty("Col").GetString()!;
+            var date = DateTime.ParseExact(
+                q.GetProperty("Date").GetString()!, "yyyy-MM-dd",
+                CultureInfo.InvariantCulture, DateTimeStyles.None);
+            quartersByLetter[col] = date;
+        }
+
+        var dataRoot = dataRow.MappedValues.RootElement;
+        var unitText = dataRoot.TryGetProperty("Unit", out var uEl) ? uEl.GetString() ?? string.Empty : string.Empty;
+        var scale = dataRoot.TryGetProperty("ScaleMultiplier", out var sEl) ? sEl.GetDouble() : 1d;
+        var pointsRaw = dataRoot.GetProperty("Points").EnumerateArray()
+            .Select(p => (
+                Col: p.GetProperty("Col").GetString()!,
+                Value: p.GetProperty("Value").GetDouble()))
+            .ToList();
+        if (pointsRaw.Count == 0)
+        {
+            _log.LogInformation(
+                "FinModelImportMapper: equity-funding точек нет (versionId={VersionId}, unit='{Unit}', scale={Scale}) — Вложение собственных средств пропущено",
+                versionId, unitText, scale);
+            return;
+        }
+
+        // Резолвим fmcode=604 (точечный запрос). Сетевая ошибка — одна row-error +
+        // skip всего каскада «Вложение собственных средств», fmmodel/version/Plan
+        // inputdata уже созданы и не откатываются.
+        int codeId;
+        string codeTitle;
+        try
+        {
+            var resp = await _listViewClient.FindFmCodeByCodeAsync(FmCodeEquityInvestment, ct);
+            var found = resp.Data?.FirstOrDefault(c => c.ID > 0);
+            if (found is null)
+            {
+                _log.LogWarning(
+                    "FinModelImportMapper: fmcode '{Code}' (Вложение собственных средств) не найден в Visary — каскад пропущен (versionId={VersionId})",
+                    FmCodeEquityInvestment, versionId);
+                errors.Add(new RowError(null, "equity_funding_code_not_found",
+                    $"В справочнике Visary «Код фин. модели» не найдена запись с Code «{FmCodeEquityInvestment}». " +
+                    "Входные данные «Вложение собственных средств» не созданы."));
+                return;
+            }
+            codeId = found.ID;
+            codeTitle = !string.IsNullOrWhiteSpace(found.Title)
+                ? found.Title!
+                : ResolveFallbackTitle(FmCodeEquityInvestment);
+        }
+        catch (Exception ex)
+        {
+            _log.LogError(ex,
+                "FinModelImportMapper: не удалось получить fmcode '{Code}' (Вложение собственных средств) (versionId={VersionId})",
+                FmCodeEquityInvestment, versionId);
+            errors.Add(new RowError(null, "equity_funding_codes_unavailable",
+                "Не удалось получить справочник «Код фин. модели» из Visary " +
+                $"(listview/fmcode, code=«{FmCodeEquityInvestment}»): {ex.Message}. " +
+                "Входные данные «Вложение собственных средств» не созданы."));
+            return;
+        }
+
+        int created = 0, failed = 0, skippedNoQuarter = 0;
+        foreach (var (col, value) in pointsRaw)
+        {
+            ct.ThrowIfCancellationRequested();
+            if (!quartersByLetter.TryGetValue(col, out var qStart))
+            {
+                skippedNoQuarter++;
+                continue;
+            }
+            var fmPeriod = $"{qStart.Year}Q{(qStart.Month - 1) / 3 + 1}";
+
+            int inputDataId;
+            try
+            {
+                var createdEntry = await _visaryClient.CreateInputDataAsync(
+                    new InputDataCreateRequest
+                    {
+                        FMModelVersionID = versionId,
+                        FMModelVersion = new VisaryRef { ID = versionId },
+                        FMPeriod = fmPeriod,
+                        Code = new VisaryRef { ID = codeId, Title = codeTitle },
+                        // По решению заказчика заполняем только Summ; остальные числовые
+                        // поля inputdata-контракта Visary не допускают null, поэтому 0.
+                        Summ = value,
+                        Amount = 0d,
+                        Cost = 0d,
+                        Percent = 0d,
+                    }, ct);
+                inputDataId = createdEntry.ID;
+                synthetic.Emit(SyntheticSheetEquityFundingInputData, StagedRowStatus.Applied,
+                    [$"Вложение собственных средств [{fmPeriod}]: создано (Сумма={FormatNumber(value)})"],
+                    System.Text.Json.JsonSerializer.Serialize(new
+                    {
+                        FmPeriod = fmPeriod,
+                        Code = codeTitle,
+                        Summ = value,
+                    }));
+            }
+            catch (Exception ex)
+            {
+                failed++;
+                _log.LogError(ex,
+                    "FinModelImportMapper: ошибка создания equity-funding inputdata (versionId={VersionId}, period={Period}, value={Value})",
+                    versionId, fmPeriod, value);
+                synthetic.Emit(SyntheticSheetEquityFundingInputData, StagedRowStatus.Failed,
+                    [$"Вложение собственных средств [{fmPeriod}]: ошибка создания — {ex.Message}"]);
+                continue;
+            }
+
+            try
+            {
+                await _visaryClient.LinkInputDataToVersionAsync(versionId, inputDataId, ct);
+                created++;
+            }
+            catch (Exception ex)
+            {
+                failed++;
+                _log.LogError(ex,
+                    "FinModelImportMapper: ошибка привязки equity-funding inputdata к версии (versionId={VersionId}, inputDataId={Id})",
+                    versionId, inputDataId);
+            }
+        }
+
+        if (failed > 0)
+        {
+            errors.Add(new RowError(null, "equity_funding_create_failed",
+                $"Не удалось создать/привязать {failed} записей «Вложение собственных средств» в Visary. " +
+                "См. лог приложения для деталей."));
+        }
+
+        _log.LogInformation(
+            "FinModelImportMapper: equity-funding inputdata загрузка завершена versionId={VersionId} unit='{Unit}' scale={Scale} created={Created} failed={Failed} skipped_no_quarter={SkippedNoQuarter}",
+            versionId, unitText, scale, created, failed, skippedNoQuarter);
+    }
+
+    // ─────────────────────────  ClientData  ────────────────────────────────────
+    //
+    // «Данные клиента» (clientdata) — поквартальная запись стоимости 1 кв.м (Cost) и
+    // площади 1 кв.м (Rates) для одного RoomKind на объекте. POST /crud/clientdata
+    // по одной записи на каждый непустой (Quarter × RoomKind) из листа «Общий
+    // график». См. doc 150.
+
+    // Маппинг FmCode → канон RoomKind-словаря Visary + префикс дублирующих полей
+    // в payload. RoomCategory в POST не отправляется — Visary вычисляет её сама
+    // по RoomKind. См. doc 150.
+    private static readonly IReadOnlyDictionary<string, ClientDataKindBinding> ClientDataKindByFmCode =
+        new Dictionary<string, ClientDataKindBinding>(StringComparer.OrdinalIgnoreCase)
+        {
+            [FmCodeApartment]      = new("Квартира",          Prefix: "Residential"),
+            [FmCodeNonResidential] = new("Нежилое помещение", Prefix: "Nonresidential"),
+            [FmCodeStoreroom]      = new("Кладовая",          Prefix: "Othernonresidential"),
+            [FmCodeParking]        = new("Машиноместо",       Prefix: "Parking"),
+        };
+
+    internal sealed record ClientDataKindBinding(string Title, string Prefix);
+
+    /// <summary>
+    /// Создаёт записи <c>clientdata</c> по квартальным точкам Plan-файла. На каждую
+    /// (Quarter × RoomKind) — один POST /crud/clientdata с заполненными общими
+    /// <c>Cost</c>/<c>Rates</c> и префиксированными <c>{Prefix}Cost</c>/<c>{Prefix}Rates</c>
+    /// (для одного вида помещения); остальные prefixed-поля = 0.
+    /// <para/>
+    /// Пропускаемые точки:
+    /// <list type="bullet">
+    /// <item>FmCode не входит в маппинг ClientDataKindByFmCode (например, 060
+    /// «Апартаменты»/Fact-коды) — у заказчика для них нет соответствующих полей в payload.</item>
+    /// <item>Точки с Cost=0 И Amount=0 (только Summ — нечего класть в ClientData).</item>
+    /// </list>
+    /// Ошибки независимы от Plan/Equity/Fact-каскадов: одна ошибка резолва справочников
+    /// → row-error и skip ВСЕХ ClientData, ошибка POST на отдельной точке → row-error
+    /// в конце со счётчиком failed. См. doc 150.
+    /// </summary>
+    private async Task EnsureClientDataAsync(
+        int projectId,
+        int siteId,
+        FinModelPlanData planData,
+        List<RowError> errors,
+        SyntheticRowEmitter synthetic,
+        CancellationToken ct)
+    {
+        // 1) Отфильтровать поддерживаемые точки. ClientData нужны Cost («Стоимость 1 кв.м»)
+        //    или Rates («Площадь 1 кв.м»); точка только-Summ (план продаж без unit-цен)
+        //    в ClientData не имеет смысла.
+        var supportedPoints = planData.InputDataPoints
+            .Where(p => ClientDataKindByFmCode.ContainsKey(p.FmCode))
+            .Where(p => p.Cost != 0d || p.Amount != 0d)
+            .ToList();
+        if (supportedPoints.Count == 0)
+        {
+            _log.LogInformation(
+                "FinModelImportMapper: clientdata пропущено — нет поддерживаемых (Quarter × RoomKind) точек с Cost/Rates (siteId={SiteId})",
+                siteId);
+            return;
+        }
+
+        // 2) Title объекта строительства — нужен для Site.{Title,ID} в payload.
+        //    Без Title клиентская консоль Visary покажет ClientData без имени сайта,
+        //    что неудобно — но не критично; на пустой Title подставляем фолбэк.
+        string? siteTitle = null;
+        try
+        {
+            var site = await _listViewClient.GetSiteByProjectAndIdAsync(projectId, siteId, ct);
+            siteTitle = site?.Title;
+        }
+        catch (Exception ex)
+        {
+            // Не блокируем — продолжаем с фолбэк-Title.
+            _log.LogWarning(ex,
+                "FinModelImportMapper: clientdata — не удалось получить Title объекта (projectId={ProjectId}, siteId={SiteId}); используем фолбэк",
+                projectId, siteId);
+        }
+        var siteRef = new VisaryRef
+        {
+            ID = siteId,
+            Title = string.IsNullOrWhiteSpace(siteTitle) ? $"Объект #{siteId}" : siteTitle,
+        };
+
+        // 3) Резолв RoomKind-словаря — один запрос за вызов. Visary может содержать
+        //    «Нежилые помещения» (plural) или «Нежилое помещение для коммерческого
+        //    использования» (qualified), а наш canonical из ClientDataKindByFmCode —
+        //    «Нежилое помещение». Прямой Title-lookup тогда промахивается. Решение:
+        //    переиспользуем RoomsFormImportMapper.ResolveKindByTitle (alias-map +
+        //    per-word plural-trim) — для каждой Visary-записи нормализуем её Title
+        //    к одному из 4 canonical-имён и строим обратный индекс.
+        List<RoomKindRaw> liveKinds;
+        try
+        {
+            var resp = await _listViewClient.ListRoomKindsAsync(ct);
+            liveKinds = (resp.Data ?? new List<RoomKindRaw>())
+                .Where(rk => rk.ID > 0 && !string.IsNullOrWhiteSpace(rk.Title))
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            _log.LogError(ex,
+                "FinModelImportMapper: clientdata — listview/roomkind упал (siteId={SiteId})", siteId);
+            errors.Add(new RowError(null, "clientdata_roomkind_unavailable",
+                "Не удалось получить справочник «Виды помещений» из Visary " +
+                $"(listview/roomkind): {ex.Message}. «Данные клиента» не созданы."));
+            synthetic.Emit(SyntheticSheetClientData, StagedRowStatus.Failed,
+                ["Данные клиента: справочник видов помещений недоступен — " + ex.Message]);
+            return;
+        }
+
+        var canonicalPivot = ClientDataKindByFmCode.Values
+            .Select(b => b.Title)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(t => t, _ => 1, StringComparer.OrdinalIgnoreCase);
+
+        var kindByCanonical = new Dictionary<string, RoomKindRaw>(StringComparer.OrdinalIgnoreCase);
+        // Два прохода: сначала точные совпадения, потом alias/plural — точный матч
+        // всегда побеждает (если Visary вдруг содержит ОБА «Нежилое помещение» и
+        // «Нежилые помещения», выбираем canonical-вариант).
+        foreach (var rk in liveKinds)
+        {
+            var trimmed = rk.Title!.Trim();
+            if (canonicalPivot.ContainsKey(trimmed) && !kindByCanonical.ContainsKey(trimmed))
+                kindByCanonical[trimmed] = rk;
+        }
+        foreach (var rk in liveKinds)
+        {
+            var (_, canonical) = RoomsFormImportMapper.ResolveKindByTitle(rk.Title, canonicalPivot);
+            if (canonical != null && !kindByCanonical.ContainsKey(canonical))
+                kindByCanonical[canonical] = rk;
+        }
+        _log.LogInformation(
+            "FinModelImportMapper: clientdata RoomKind резолв — из {Live} живых записей сматчилось {Matched} canonical: {Map}",
+            liveKinds.Count, kindByCanonical.Count,
+            string.Join(", ", kindByCanonical.Select(kv => $"«{kv.Key}»←«{kv.Value.Title}» (id={kv.Value.ID})")));
+
+        // 4) Цикл по точкам. Один отсутствующий Title в словаре → копим в missingKindTitles,
+        //    в конце один row-error со списком (как в EnsureFmModelVersionAndInputDataAsync).
+        var missingKindTitles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        int created = 0, failed = 0, skippedMissingKind = 0, skippedBadPeriod = 0;
+        foreach (var point in supportedPoints)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            var binding = ClientDataKindByFmCode[point.FmCode];
+            if (!kindByCanonical.TryGetValue(binding.Title, out var roomKind))
+            {
+                missingKindTitles.Add(binding.Title);
+                skippedMissingKind++;
+                continue;
+            }
+
+            if (!TryConvertFmPeriodToDate(point.FmPeriod, out var periodStart))
+            {
+                skippedBadPeriod++;
+                _log.LogWarning(
+                    "FinModelImportMapper: clientdata — не удалось распарсить FmPeriod='{Period}' (fmCode={FmCode}, siteId={SiteId}) — точка пропущена",
+                    point.FmPeriod, point.FmCode, siteId);
+                continue;
+            }
+
+            var request = BuildClientDataRequest(
+                siteRef, roomKind, binding, point, periodStart);
+
+            try
+            {
+                var createdEntry = await _visaryClient.CreateClientDataAsync(request, ct);
+                created++;
+                synthetic.Emit(SyntheticSheetClientData, StagedRowStatus.Applied,
+                    [$"Данные клиента [{point.FmPeriod}, {binding.Title}]: создано " +
+                     $"(Cost={FormatNumber(point.Cost)}, Rates={FormatNumber(point.Amount)}, id={createdEntry.ID})"],
+                    System.Text.Json.JsonSerializer.Serialize(new
+                    {
+                        FmPeriod = point.FmPeriod,
+                        RoomKind = binding.Title,
+                        Cost = point.Cost,
+                        Rates = point.Amount,
+                        PeriodStartDate = request.PeriodStartDate,
+                        Date = request.Date,
+                    }));
+            }
+            catch (Exception ex)
+            {
+                failed++;
+                _log.LogError(ex,
+                    "FinModelImportMapper: ошибка создания clientdata (siteId={SiteId}, kind='{Kind}', period={Period})",
+                    siteId, binding.Title, point.FmPeriod);
+                synthetic.Emit(SyntheticSheetClientData, StagedRowStatus.Failed,
+                    [$"Данные клиента [{point.FmPeriod}, {binding.Title}]: ошибка создания — {ex.Message}"]);
+            }
+        }
+
+        if (missingKindTitles.Count > 0)
+        {
+            var liveTitles = liveKinds.Select(k => k.Title!).OrderBy(t => t).ToList();
+            errors.Add(new RowError(null, "clientdata_roomkind_not_found",
+                "В справочнике Visary «Виды помещений» не найдены: " +
+                string.Join(", ", missingKindTitles.Select(t => $"«{t}»")) +
+                $". Часть «Данных клиента» не создана ({skippedMissingKind} точек пропущено). " +
+                $"В Visary доступны: {string.Join(", ", liveTitles.Select(t => $"«{t}»"))}."));
+        }
+
+        if (failed > 0)
+        {
+            errors.Add(new RowError(null, "clientdata_create_failed",
+                $"Не удалось создать {failed} записей «Данные клиента» в Visary. " +
+                "См. лог приложения для деталей."));
+        }
+
+        _log.LogInformation(
+            "FinModelImportMapper: clientdata загрузка завершена siteId={SiteId} created={Created} failed={Failed} skipped_missing_kind={MissingKind} skipped_bad_period={BadPeriod}",
+            siteId, created, failed, skippedMissingKind, skippedBadPeriod);
+    }
+
+    /// <summary>
+    /// Собирает payload для POST /crud/clientdata. Общие поля <c>Cost</c>/<c>Rates</c>
+    /// и префиксированные <c>{Prefix}Cost</c>/<c>{Prefix}Rates</c> заполняются одним и
+    /// тем же значением (Cost из файла = «Стоимость 1 кв.м», Amount из файла =
+    /// «Площадь 1 кв.м»). Остальные префиксированные поля и все <c>ODCount*</c> = 0.
+    /// </summary>
+    internal static ClientDataCreateRequest BuildClientDataRequest(
+        VisaryRef siteRef, RoomKindRaw roomKind, ClientDataKindBinding binding,
+        FinModelPlanInputDataPoint point, DateTime periodStart)
+    {
+        var iso = periodStart.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        var req = new ClientDataCreateRequest
+        {
+            Cost = point.Cost,
+            Rates = point.Amount,
+            RoomKind = new VisaryRef { ID = roomKind.ID, Title = roomKind.Title },
+            Site = siteRef,
+            PeriodStartDate = iso,
+            Date = iso,
+            // ODCount* из файла не берутся — Visary не допускает null, проставляем 0.
+            ODCount = 0d,
+            ODCountRes = 0d,
+            ODCountNonRes = 0d,
+            ODCountOtherNonRes = 0d,
+            ODCountParking = 0d,
+            // Остальные prefixed-поля = 0; «своё» заполнится ниже.
+            ParkingCost = 0d, ParkingRates = 0d,
+            OtherNonresidentialCost = 0d, OthernonresidentialRates = 0d,
+            NonresidentialCost = 0d, NonresidentialRates = 0d,
+            ResidentialCost = 0d, ResidentialRates = 0d,
+        };
+
+        // Префиксированные поля одного вида помещения = те же значения, что и общие
+        // Cost/Rates. Заказчик хочет видеть и общие (дашборды), и кид-специфические
+        // (детальные срезы) числа.
+        switch (binding.Prefix)
+        {
+            case "Residential":
+                req.ResidentialCost = point.Cost;
+                req.ResidentialRates = point.Amount;
+                break;
+            case "Nonresidential":
+                req.NonresidentialCost = point.Cost;
+                req.NonresidentialRates = point.Amount;
+                break;
+            case "Othernonresidential":
+                req.OtherNonresidentialCost = point.Cost;
+                req.OthernonresidentialRates = point.Amount;
+                break;
+            case "Parking":
+                req.ParkingCost = point.Cost;
+                req.ParkingRates = point.Amount;
+                break;
+        }
+        return req;
+    }
+
+    /// <summary>
+    /// Преобразует строку формата <c>"{Year}Q{N}"</c> (как в <see cref="FinModelPlanColumn.FmPeriod"/>)
+    /// в первый день этого же квартала. И <see cref="ClientDataCreateRequest.PeriodStartDate"/>,
+    /// и <see cref="ClientDataCreateRequest.Date"/> заполняются одной датой — началом
+    /// указанного квартала (Q4 2027 → 2027-10-01, не 2028-01-01).
+    /// </summary>
+    internal static bool TryConvertFmPeriodToDate(
+        string fmPeriod, out DateTime periodStart)
+    {
+        periodStart = default;
+        if (string.IsNullOrWhiteSpace(fmPeriod)) return false;
+        var match = System.Text.RegularExpressions.Regex.Match(
+            fmPeriod, @"^(?<y>\d{4})Q(?<q>[1-4])$");
+        if (!match.Success) return false;
+        var year = int.Parse(match.Groups["y"].Value, CultureInfo.InvariantCulture);
+        var quarter = int.Parse(match.Groups["q"].Value, CultureInfo.InvariantCulture);
+        var startMonth = (quarter - 1) * 3 + 1;
+        periodStart = new DateTime(year, startMonth, 1);
+        return true;
     }
 
     /// <summary>
@@ -1588,6 +2181,7 @@ public sealed class FinModelImportMapper : IImportMapper
         FmCodeSchoolFact          => FallbackTitleSchoolFact,
         FmCodeClinicFact          => FallbackTitleClinicFact,
         FmCodeSportFact           => FallbackTitleSportFact,
+        FmCodeEquityInvestment    => FallbackTitleEquityInvestment,
         _                         => fmCode,
     };
 
@@ -1705,6 +2299,13 @@ public sealed class FinModelImportMapper : IImportMapper
     internal const string FmCodeClinicFact         = "231";
     internal const string FmCodeSportFact          = "051";
 
+    // «Вложение собственных средств» — отдельный fmcode справочника Visary,
+    // источник: раздел «Финансирование: Этап 1» листа Inputs основного файла,
+    // строка «Вложение собственных средств». На каждый непустой квартал создаём
+    // одну inputdata-запись (Summ = значение × множитель единицы измерения,
+    // Amount=Cost=Percent=0). См. doc 146.
+    internal const string FmCodeEquityInvestment   = "604";
+
     // Fallback-Title (используется ТОЛЬКО при подстановке в `Code.Title` payload
     // POST /crud/inputdata, если Visary в ответе вернул пустой Title — например,
     // при неполном DTO). В нормальном случае Title идёт из ответа Visary
@@ -1728,6 +2329,7 @@ public sealed class FinModelImportMapper : IImportMapper
     private const string FallbackTitleSchoolFact         = "Продажа СОШ (факт)";
     private const string FallbackTitleClinicFact         = "Продажа Поликлиника (факт)";
     private const string FallbackTitleSportFact          = "Продажа ФОК (факт)";
+    private const string FallbackTitleEquityInvestment   = "Вложение собственных средств";
 
     internal sealed record FinModelPlanPeriods(string PeriodStart, string PeriodEnd);
 
@@ -3394,6 +3996,9 @@ public sealed class FinModelImportMapper : IImportMapper
     private static bool IsScheduleRow(ParsedRow row)
         => row.Sheet?.EndsWith(ScheduleSheetSuffix, StringComparison.Ordinal) == true;
 
+    private static bool IsEquityFundingRow(ParsedRow row)
+        => row.Sheet?.EndsWith(EquityFundingSheetSuffix, StringComparison.Ordinal) == true;
+
     private static string GetKind(MappedRow r)
     {
         var root = r.MappedValues.RootElement;
@@ -3592,6 +4197,140 @@ public sealed class FinModelImportMapper : IImportMapper
             "FinModelImportMapper: ГФ Главы 1 сборка → {Matched} matched / {Unknown} unknown (Этап 1, {Quarters} кварталов)",
             matched, skippedUnknown, quartersByLetter.Count);
         return mapped;
+    }
+
+    // ─── Equity Funding (Вложение собственных средств) flow ──────────────────
+
+    /// <summary>
+    /// Сборка mapped-строк блока «Вложение собственных средств» (раздел
+    /// «Финансирование: Этап 1» листа Inputs основного файла «Параметры»).
+    /// Парсер эмитит 2 ParsedRow с Sheet-суффиксом <see cref="EquityFundingSheetSuffix"/>:
+    /// header-row с sentinel <see cref="Parsers.XlsxParser.EquityFundingQuartersSentinel"/>
+    /// в C-колонке + data-row с KeyName в C, единицей в D и квартальными значениями
+    /// в колонках кварталов. Маппер собирает из них две <see cref="MappedRow"/>:
+    /// <list type="bullet">
+    /// <item><c>Kind="equity_funding_quarters"</c> — <c>Quarters: [{ Col, Date }]</c>.</item>
+    /// <item><c>Kind="equity_funding_data"</c> — <c>Unit</c>, <c>ScaleMultiplier</c>
+    /// (1/1000/1e6/1e9 по тексту единицы), <c>Points: [{ Col, ValueRaw, Value }]</c>
+    /// (только колонки с непустым численным значением, уже домноженным на множитель).</item>
+    /// </list>
+    /// Используется в <see cref="EnsureFmModelVersionAndInputDataAsync"/> для создания
+    /// inputdata-точек с fmcode «604» — на каждый непустой квартал по одной записи
+    /// (только поле <see cref="InputDataCreateRequest.Summ"/>; Amount=Cost=Percent=0).
+    /// См. doc 146.
+    /// </summary>
+    private List<MappedRow> ValidateEquityFunding(
+        IReadOnlyList<ParsedRow> equityRows, List<RowError> fileErrors)
+    {
+        var mapped = new List<MappedRow>();
+        if (equityRows.Count == 0) return mapped;
+
+        var ordered = equityRows.OrderBy(r => r.SourceRowNumber).ToList();
+        var equitySheet = ordered[0].Sheet ?? string.Empty;
+
+        // 1) Header-row с датами кварталов (sentinel "__equity_quarters__" в C).
+        var headerRow = ordered.FirstOrDefault(r =>
+            r.Cells.TryGetValue("C", out var c)
+            && string.Equals(c, XlsxParser.EquityFundingQuartersSentinel, StringComparison.Ordinal));
+        if (headerRow is null)
+        {
+            _log.LogInformation(
+                "FinModelImportMapper: equity-funding строки без header-row — Вложение собственных средств пропущено (rows={Count})",
+                ordered.Count);
+            return mapped;
+        }
+
+        var quartersJson = new List<object>();
+        var quartersByLetter = new Dictionary<string, DateTime>(StringComparer.Ordinal);
+        foreach (var kv in headerRow.Cells)
+        {
+            if (string.Equals(kv.Key, "C", StringComparison.Ordinal)) continue;
+            if (string.IsNullOrWhiteSpace(kv.Value)) continue;
+            if (!DateTime.TryParseExact(kv.Value, "yyyy-MM-dd",
+                    CultureInfo.InvariantCulture, DateTimeStyles.None, out var dt))
+            {
+                continue;
+            }
+            quartersByLetter[kv.Key] = dt;
+            quartersJson.Add(new { Col = kv.Key, Date = dt.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) });
+        }
+        if (quartersByLetter.Count == 0)
+        {
+            _log.LogWarning(
+                "FinModelImportMapper: equity-funding header-row без распарсенных дат — Вложение собственных средств пропущено.");
+            return mapped;
+        }
+
+        var quartersJsonStr = JsonSerializer.Serialize(new
+        {
+            Kind = "equity_funding_quarters",
+            Quarters = quartersJson,
+        });
+        mapped.Add(new MappedRow(
+            headerRow.SourceRowNumber, equitySheet, true,
+            JsonDocument.Parse(quartersJsonStr), Array.Empty<RowError>()));
+
+        // 2) Data-row (единственная) — берём первую не-header.
+        var dataRow = ordered.FirstOrDefault(r => r.SourceRowNumber != headerRow.SourceRowNumber);
+        if (dataRow is null)
+        {
+            _log.LogInformation(
+                "FinModelImportMapper: equity-funding без data-row — Вложение собственных средств пропущено.");
+            return mapped;
+        }
+
+        var unitRaw = dataRow.Cells.GetValueOrDefault("D")?.Trim() ?? string.Empty;
+        var scale = ResolveUnitMultiplier(unitRaw);
+        var points = new List<object>();
+        foreach (var (colLetter, _) in quartersByLetter)
+        {
+            if (!dataRow.Cells.TryGetValue(colLetter, out var raw)) continue;
+            if (string.IsNullOrWhiteSpace(raw)) continue;
+            if (!TryParseFlexibleDouble(raw, out var value)) continue;
+            // 0-значения тоже пропускаем — для собственных средств план = ноль означает
+            // «не вкладываем», заказчик не хочет лишних inputdata на пустых кварталах
+            // (в отличие от Plan-блока «Общий график», где явный 0 — валидная точка).
+            if (Math.Abs(value) < 1e-9d) continue;
+            points.Add(new
+            {
+                Col = colLetter,
+                ValueRaw = value,
+                Value = value * scale,
+            });
+        }
+
+        var dataJsonStr = JsonSerializer.Serialize(new
+        {
+            Kind = "equity_funding_data",
+            Unit = unitRaw,
+            ScaleMultiplier = scale,
+            Points = points,
+        });
+        mapped.Add(new MappedRow(
+            dataRow.SourceRowNumber, equitySheet, true,
+            JsonDocument.Parse(dataJsonStr), Array.Empty<RowError>()));
+
+        _log.LogInformation(
+            "FinModelImportMapper: equity-funding сборка → unit='{Unit}' scale={Scale} points={Points} (quarters={Quarters})",
+            unitRaw, scale, points.Count, quartersByLetter.Count);
+        return mapped;
+    }
+
+    /// <summary>
+    /// Определяет множитель единицы измерения по тексту из колонки справа от
+    /// «Вложение собственных средств». Регистро- и пробел-нечувствительно;
+    /// неизвестная единица (или пустая) → 1 (с предупреждением в логе вызывающей
+    /// стороны).
+    /// </summary>
+    internal static double ResolveUnitMultiplier(string? unitText)
+    {
+        if (string.IsNullOrWhiteSpace(unitText)) return 1d;
+        var u = unitText.ToLowerInvariant();
+        // Порядок важен: «млрд» проверяем ДО «млн», иначе «млрд руб.» матчился бы на «м».
+        if (u.Contains("млрд")) return 1_000_000_000d;
+        if (u.Contains("млн")) return 1_000_000d;
+        if (u.Contains("тыс")) return 1_000d;
+        return 1d;
     }
 
     /// <summary>

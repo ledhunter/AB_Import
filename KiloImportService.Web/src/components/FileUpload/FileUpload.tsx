@@ -128,7 +128,7 @@ export const FileUpload = ({
             <Button view="secondary" size={40} onClick={handleRemove}>
               Удалить файл
             </Button>
-            <Button view="tertiary" size={40} onClick={handleClick}>
+            <Button view="text" size={40} onClick={handleClick}>
               Выбрать другой
             </Button>
           </div>
@@ -174,7 +174,7 @@ export const FileUpload = ({
                 <Button view="secondary" size={40} onClick={handleSecondaryRemove}>
                   Удалить файл
                 </Button>
-                <Button view="tertiary" size={40} onClick={handleSecondaryClick}>
+                <Button view="text" size={40} onClick={handleSecondaryClick}>
                   Выбрать другой
                 </Button>
               </div>

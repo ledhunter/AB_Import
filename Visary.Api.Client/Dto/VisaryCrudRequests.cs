@@ -478,6 +478,13 @@ public sealed class FmModelCreateRequest
     public int ABConstructionSiteID { get; set; }
     public string PeriodStart { get; set; } = null!;
     public string PeriodEnd { get; set; } = null!;
+    /// <summary>
+    /// Квартал ввода в эксплуатацию (формат <c>"{Year}Q{N}"</c>). Опционально:
+    /// если в основном файле строка «Этап 1.» / колонка «Ввод в эксплуатацию»
+    /// не нашлись — отправляется null, остальные поля POST работают как раньше.
+    /// См. <see cref="FmModelRaw.CommisioningPeriod"/> и doc 139 v1.3.
+    /// </summary>
+    public string? CommisioningPeriod { get; set; }
 }
 
 /// <summary>
@@ -521,4 +528,173 @@ public sealed class InputDataCreateRequest
     public double Amount { get; set; }
     public double Cost { get; set; }
     public double Percent { get; set; }
+}
+
+/// <summary>
+/// POST <c>/api/visary/crud/clientdata</c> — создание записи «Данные клиента»:
+/// поквартальная стоимость 1 кв.м (<see cref="Cost"/>) и площадь 1 кв.м
+/// (<see cref="Rates"/>) для одного вида помещения на объекте строительства.
+/// Импорт «Финмодель» создаёт по одной такой записи на каждый непустой
+/// (Quarter × RoomKind) из листа «Общий график» второго файла.
+/// <para/>
+/// Тело (Q2 2026, пример):
+/// <code>{"Cost":1,"Rates":2,"RoomKind":{"Title":"Квартира","ID":3},
+/// "ODCountParking":3,"ODCountOtherNonRes":4,"ODCountNonRes":5,"ODCount":1,"ODCountRes":6,
+/// "Site":{"Title":"Маньчжурский орех рнс0706 1","ID":8030},"Date":"2026-04-01",
+/// "ParkingCost":7,"ParkingRates":8,"OtherNonresidentialCost":9,"OthernonresidentialRates":10,
+/// "NonresidentialCost":11,"NonresidentialRates":12,"ResidentialCost":13,"ResidentialRates":14,
+/// "PeriodStartDate":"2026-04-01"}</code>
+/// <para/>
+/// • <see cref="RoomKind"/> резолвится через <c>listview/roomkind</c> по каноничному Title
+///   (Квартира / Нежилое помещение / Кладовая / Машиноместо). <c>RoomCategory</c> в payload
+///   мы НЕ отправляем — Visary вычисляет её сам по <c>RoomKind</c>.
+/// • Для одного вида помещения проставляются ОДНОВРЕМЕННО общие <see cref="Cost"/>/<see cref="Rates"/>
+///   и префиксированные поля (<c>ResidentialCost/ResidentialRates</c> для квартир и т.д.);
+///   остальные prefixed-поля = 0.
+/// • <see cref="PeriodStartDate"/> и <see cref="Date"/> = первый день УКАЗАННОГО квартала
+///   (формат ISO <c>yyyy-MM-dd</c>); Q4 2027 → 2027-10-01 (НЕ 2028-01-01).
+/// • <see cref="ODCount"/>* — из файла не берутся, отправляются как 0 (контракт inputdata-стиля:
+///   Visary не допускает null в числовых полях, требование заказчика).
+/// См. doc_project/150-finmodel-clientdata.md.
+/// </summary>
+public sealed class ClientDataCreateRequest
+{
+    public double Cost { get; set; }
+    public double Rates { get; set; }
+    public VisaryRef RoomKind { get; set; } = null!;
+    public double ODCountParking { get; set; }
+    public double ODCountOtherNonRes { get; set; }
+    public double ODCountNonRes { get; set; }
+    public double ODCount { get; set; }
+    public double ODCountRes { get; set; }
+    public VisaryRef Site { get; set; } = null!;
+    public string Date { get; set; } = null!;
+    public double ParkingCost { get; set; }
+    public double ParkingRates { get; set; }
+    public double OtherNonresidentialCost { get; set; }
+    public double OthernonresidentialRates { get; set; }
+    public double NonresidentialCost { get; set; }
+    public double NonresidentialRates { get; set; }
+    public double ResidentialCost { get; set; }
+    public double ResidentialRates { get; set; }
+    public string PeriodStartDate { get; set; } = null!;
+}
+
+/// <summary>
+/// POST <c>/api/visary/crud/projectaudit</c> — создание «Заключения». Тело по HAR:
+/// <code>{"Date":"2026-06-17T08:41:39Z","Status":10,"Project":{"ID":4653},
+///        "ProjectID":4653,"Stage":110}</code>
+/// • <see cref="Stage"/>=110 — «Итоговое заключение КА БП7» (единственный тип,
+///   с которым работает импорт). • <see cref="Status"/>=10 — начальный статус.
+/// • <see cref="ConstructionSite"/> опционален: HAR сервер сам подцепил Site
+///   по проекту, но если нужно зафиксировать конкретный объект — передаём его.
+///   Импорт всегда явно передаёт <see cref="ConstructionSite"/>, чтобы исключить
+///   попадание Заключения на чужой Site проекта.
+/// См. doc_project/139-finmodel-installments-and-conclusion.md.
+/// </summary>
+public sealed class ProjectAuditCreateRequest
+{
+    public string Date { get; set; } = null!;
+    public int Status { get; set; } = 10;
+    public int Stage { get; set; } = 110;
+    public int ProjectID { get; set; }
+    public VisaryRef Project { get; set; } = null!;
+    public VisaryRef? ConstructionSite { get; set; }
+}
+
+/// <summary>
+/// POST <c>/api/visary/crud/dataforfm</c> — одна «строка ФМ» на (RoomKind × DataSet).
+/// Тело по HAR:
+/// <code>{"DataSetForFMID":8030,"DataSetForFM":{"ID":8030},
+///        "Title":"Данные по Квартирам",
+///        "RoomKind":{"Title":"Квартира","ID":3}}</code>
+/// Indicator не передаём (заказчик: «не надо заполнять поле Indicator
+/// и искать для него значения»). См. doc 141.
+/// </summary>
+public sealed class DataForFmCreateRequest
+{
+    public int DataSetForFMID { get; set; }
+    public VisaryRef DataSetForFM { get; set; } = null!;
+    public string Title { get; set; } = null!;
+    public VisaryRef RoomKind { get; set; } = null!;
+}
+
+/// <summary>
+/// PATCH <c>/api/visary/crud/datasetforfm/{id}?forceUpdate=false</c> — запись долей
+/// рассрочек по одной схеме (равномерная / единовременная / ДКП).
+/// Один PATCH = одна схема (одна тройка полей <c>{Prefix}OwnShare</c>,
+/// <c>{Prefix}PostpShare</c>, <c>{Prefix}RoomKinds</c>). Если в файле включены
+/// сразу несколько схем — мапер делает несколько PATCH-ов подряд, всякий раз
+/// перечитывая <see cref="RowVersion"/>.
+/// <para/>
+/// Тело гибкое: точные имена полей зависят от схемы (см. HAR;
+/// <see cref="OwnSharePropertyName"/>/<see cref="PostpSharePropertyName"/>/
+/// <see cref="RoomKindsPropertyName"/> определяются caller-ом). Из-за этого
+/// сериализатор делает payload вручную, а не через сильно типизированный объект.
+/// См. doc_project/139-finmodel-installments-and-conclusion.md.
+/// </summary>
+public sealed class DataSetForFmInstallmentsPatchRequest
+{
+    public int ID { get; set; }
+    public long RowVersion { get; set; }
+    public string OwnSharePropertyName { get; set; } = null!;
+    public string PostpSharePropertyName { get; set; } = null!;
+    public string RoomKindsPropertyName { get; set; } = null!;
+    public double? OwnShare { get; set; }
+    public double? PostpShare { get; set; }
+    public IReadOnlyList<VisaryRef> RoomKinds { get; set; } = Array.Empty<VisaryRef>();
+}
+
+/// <summary>
+/// POST <c>/api/visary/crud/dealpercentbet</c> — создание процентной ставки по сделке.
+/// Тело по примеру заказчика (см. doc 139 v1.4 + doc 144 v1.1 — `PercentKind`
+/// не отправляем, `Rate` отправляем как раньше):
+/// <code>{"DealID":91,"Deal":{"ID":91},"LmID":"18-09-2025-15-50-51",
+///        "Rate":100,"PercentBetType":{"Title":"Фиксированная (базовая)","ID":7}}</code>
+/// <para/>
+/// • <see cref="LmID"/> — строковый идентификатор формата
+///   <c>"dd-MM-yyyy-HH-mm-ss-fff-{Code}-{idx}"</c> (момент импорта + код + индекс
+///   для UNIQUE-индекса `UX_DealPercentBet_LmID`).
+/// • <see cref="Rate"/> — значение в процентах (число > 1 = «как есть»,
+///   ≤ 1 = доля → парсер ×100).
+/// • <see cref="PercentBetType"/> — ссылка на справочник <c>percentbettype</c>
+///   (резолвится по <c>Code</c> через
+///   <see cref="ListView.IListViewClient.FindPercentBetTypeByCodeAsync"/>).
+/// <para/>
+/// Поле <c>PercentKind</c> сознательно убрано (doc 144 v1.1): «Вид ставки»
+/// (Floating/Fixed) Visary определяет сам по типу ставки <see cref="PercentBetType"/>;
+/// импорт не должен его проставлять.
+/// </summary>
+public sealed class DealPercentBetCreateRequest
+{
+    public int DealID { get; set; }
+    public VisaryRef Deal { get; set; } = null!;
+    public string LmID { get; set; } = null!;
+    public double Rate { get; set; }
+    public VisaryRef PercentBetType { get; set; } = null!;
+}
+
+/// <summary>
+/// POST <c>/api/visary/crud/dealmonthlydata</c> — помесячные данные по сделке
+/// (раздел «Инвестиционный кредит: Этап 1» листа Outputs).
+/// <para/>
+/// Тело по примеру заказчика (см. doc 142):
+/// <code>{"Deal":{"ID":91},"Year":2025,"Month":4,"PrincipalDebtAmount":1,
+///        "SimpleInterestAmount":2,"CapitalizedInterestAmount":3,
+///        "PrincipalRepaymentAmount":4,"InterestRepaymentAmount":5}</code>
+/// <para/>
+/// Значения — суммы в рублях (после умножения парсером на единицу измерения
+/// строки: тыс.руб → ×1 000, млн руб → ×1 000 000, руб → ×1). Пустая ячейка,
+/// прочерк или 0 — отправляются как 0.
+/// </summary>
+public sealed class DealMonthlyDataCreateRequest
+{
+    public VisaryRef Deal { get; set; } = null!;
+    public int Year { get; set; }
+    public int Month { get; set; }
+    public double PrincipalDebtAmount { get; set; }
+    public double SimpleInterestAmount { get; set; }
+    public double CapitalizedInterestAmount { get; set; }
+    public double PrincipalRepaymentAmount { get; set; }
+    public double InterestRepaymentAmount { get; set; }
 }

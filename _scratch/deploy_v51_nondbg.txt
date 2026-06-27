@@ -1,0 +1,487 @@
+﻿12:31:21.273 | [12:31:21.273 INF]  ════════════════════════════════════════════════════════════
+12:31:21.366 | [12:31:21.366 INF]  KiloImportService.Api запускается. PID=1 Machine=alfa-building-fm-import-94d79f8fc-xvrf2 .NET=10.0.9
+12:31:21.375 | [12:31:21.375 INF]  CWD=/app  ASPNETCORE_ENVIRONMENT=Test
+12:31:21.375 | [12:31:21.375 INF]  ════════════════════════════════════════════════════════════
+12:31:21.611 | [12:31:21.611 INF]  Incoming JWT auth ENABLED. Authority=http://identity:8080 Audience=visary
+12:31:21.700 | [12:31:21.700 INF]  PathBase активен: /api/ab-fm-import (все маршруты будут доступны под этим префиксом)
+12:31:22.043 | [12:31:22.043 INF]  Applying ImportServiceDb migrations (schema=import)…
+12:31:24.157 | [12:31:24.157 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (51ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+12:31:24.904 | [12:31:24.904 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (43ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+12:31:24.957 | [12:31:24.957 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+12:31:24.970 | [12:31:24.970 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (12ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+12:31:24.975 | [12:31:24.975 INF] Microsoft.EntityFrameworkCore.Migrations No migrations were applied. The database is already up to date.
+12:31:25.000 | [12:31:25.000 INF]  Applying VisaryDb migrations (schema=Data)…
+12:31:25.153 | [12:31:25.153 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+12:31:25.243 | [12:31:25.243 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+12:31:25.256 | [12:31:25.256 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+12:31:25.268 | [12:31:25.268 INF] Microsoft.EntityFrameworkCore.Migrations No migrations were applied. The database is already up to date.
+12:31:25.268 | [12:31:25.268 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+12:31:25.529 | [12:31:25.529 INF]  │ PathBase    : /api/ab-fm-import
+12:31:25.529 | [12:31:25.529 INF]  │ Visary API  : http://webapi:8080/api
+12:31:25.529 | [12:31:25.529 INF]  │ CORS        : https://localhost:44466
+12:31:25.529 | [12:31:25.529 INF]  │ Swagger     : ENABLED
+12:31:25.529 | [12:31:25.529 INF]  ┌── Конфигурация сервиса ─────────────────────────────────────
+12:31:25.529 | [12:31:25.529 INF]  └─────────────────────────────────────────────────────────────
+12:31:25.529 | [12:31:25.529 INF]  │ DB conn-str : Database=ab_fm_import;Host=ab-test-pg-1.ci28823727.cloud.alfaintra.net;Port=5432;Username=ab_fm_import_user;Password=***;Application Name=ab-fm-import;Pooling=true
+12:31:25.529 | [12:31:25.529 INF]  │ JWT auth    : ENABLED
+12:31:25.529 | [12:31:25.529 INF]  │ URLs        : http://0.0.0.0:5000
+12:31:25.530 | [12:31:25.530 INF]  KiloImportService.Api готов принимать запросы на http://0.0.0.0:5000
+12:31:25.551 | [12:31:25.551 WRN] Microsoft.AspNetCore.DataProtection.Repositories.EphemeralXmlRepository Using an in-memory repository. Keys will not be persisted to storage.
+12:31:25.551 | [12:31:25.551 WRN] Microsoft.AspNetCore.DataProtection.KeyManagement.XmlKeyManager Neither user profile nor HKLM registry available. Using an ephemeral key repository. Protected data will be unavailable when application exits.
+12:31:25.604 | [12:31:25.604 INF] Microsoft.AspNetCore.DataProtection.KeyManagement.XmlKeyManager Creating key {2cdb81eb-cbcb-432d-97f7-b7b8b1b27114} with creation date 2026-06-25 12:31:25Z, activation date 2026-06-25 12:31:25Z, and expiration date 2026-09-23 12:31:25Z.
+12:31:25.613 | [12:31:25.613 WRN] Microsoft.AspNetCore.DataProtection.KeyManagement.XmlKeyManager No XML encryptor configured. Key {2cdb81eb-cbcb-432d-97f7-b7b8b1b27114} may be persisted to storage in unencrypted form.
+12:31:25.625 | [12:31:25.625 WRN] Microsoft.AspNetCore.Hosting.Diagnostics Overriding HTTP_PORTS '8080' and HTTPS_PORTS ''. Binding to values defined by URLS instead 'http://0.0.0.0:5000'.
+12:31:25.751 | [12:31:25.751 INF] Microsoft.Hosting.Lifetime Now listening on: http://0.0.0.0:5000
+99:99:99.999 | FROM import.__ef_migrations_history
+99:99:99.999 | SELECT "MigrationId", "ProductVersion"
+99:99:99.999 | ORDER BY "MigrationId";
+99:99:99.999 | FROM "Data".__ef_migrations_history
+99:99:99.999 | FROM "Data".__ef_migrations_history
+99:99:99.999 | SELECT "MigrationId", "ProductVersion"
+99:99:99.999 | ORDER BY "MigrationId";
+99:99:99.999 | LOCK TABLE "Data".__ef_migrations_history IN ACCESS EXCLUSIVE MODE
+99:99:99.999 | ORDER BY "MigrationId";
+99:99:99.999 | ORDER BY "MigrationId";
+99:99:99.999 | FROM "Data".__ef_migrations_history
+99:99:99.999 | DO $EF$
+99:99:99.999 | END $EF$;
+99:99:99.999 |     END IF;
+99:99:99.999 |     IF NOT EXISTS(SELECT 1 FROM pg_namespace WHERE nspname = 'import') THEN
+99:99:99.999 | BEGIN
+99:99:99.999 | ORDER BY "MigrationId";
+99:99:99.999 |         CREATE SCHEMA import;
+99:99:99.999 | END $EF$;
+99:99:99.999 | );
+99:99:99.999 | BEGIN
+99:99:99.999 | BEGIN
+99:99:99.999 | CREATE TABLE IF NOT EXISTS import.__ef_migrations_history (
+99:99:99.999 | DO $EF$
+99:99:99.999 |     CONSTRAINT "PK___ef_migrations_history" PRIMARY KEY ("MigrationId")
+99:99:99.999 | CREATE TABLE IF NOT EXISTS import.__ef_migrations_history (
+99:99:99.999 | SELECT "MigrationId", "ProductVersion"
+99:99:99.999 | FROM "Data".__ef_migrations_history
+99:99:99.999 | LOCK TABLE import.__ef_migrations_history IN ACCESS EXCLUSIVE MODE
+99:99:99.999 | FROM import.__ef_migrations_history
+99:99:99.999 | FROM import.__ef_migrations_history
+99:99:99.999 | SELECT "MigrationId", "ProductVersion"
+99:99:99.999 | ORDER BY "MigrationId";
+99:99:99.999 | LOCK TABLE import.__ef_migrations_history IN ACCESS EXCLUSIVE MODE
+99:99:99.999 | );
+99:99:99.999 |     "ProductVersion" character varying(32) NOT NULL,
+99:99:99.999 | SELECT "MigrationId", "ProductVersion"
+99:99:99.999 | ORDER BY "MigrationId";
+99:99:99.999 |     "MigrationId" character varying(150) NOT NULL,
+99:99:99.999 | SELECT "MigrationId", "ProductVersion"
+99:99:99.999 |     CONSTRAINT "PK___ef_migrations_history" PRIMARY KEY ("MigrationId")
+99:99:99.999 |         CREATE SCHEMA "Data";
+99:99:99.999 | CREATE TABLE IF NOT EXISTS "Data".__ef_migrations_history (
+99:99:99.999 |     "ProductVersion" character varying(32) NOT NULL,
+99:99:99.999 | );
+99:99:99.999 |     END IF;
+99:99:99.999 |     IF NOT EXISTS(SELECT 1 FROM pg_namespace WHERE nspname = 'import') THEN
+99:99:99.999 |     CONSTRAINT "PK___ef_migrations_history" PRIMARY KEY ("MigrationId")
+99:99:99.999 | DO $EF$
+99:99:99.999 | FROM import.__ef_migrations_history
+99:99:99.999 | ORDER BY "MigrationId";
+99:99:99.999 | SELECT "MigrationId", "ProductVersion"
+99:99:99.999 | LOCK TABLE "Data".__ef_migrations_history IN ACCESS EXCLUSIVE MODE
+99:99:99.999 |     "MigrationId" character varying(150) NOT NULL,
+99:99:99.999 | BEGIN
+99:99:99.999 | SELECT "MigrationId", "ProductVersion"
+99:99:99.999 |     IF NOT EXISTS(SELECT 1 FROM pg_namespace WHERE nspname = 'Data') THEN
+99:99:99.999 |     IF NOT EXISTS(SELECT 1 FROM pg_namespace WHERE nspname = 'Data') THEN
+99:99:99.999 | DO $EF$
+99:99:99.999 | );
+99:99:99.999 |     "ProductVersion" character varying(32) NOT NULL,
+99:99:99.999 | END $EF$;
+99:99:99.999 | CREATE TABLE IF NOT EXISTS "Data".__ef_migrations_history (
+99:99:99.999 |     "ProductVersion" character varying(32) NOT NULL,
+99:99:99.999 |     END IF;
+99:99:99.999 |         CREATE SCHEMA "Data";
+99:99:99.999 |     "MigrationId" character varying(150) NOT NULL,
+99:99:99.999 | END $EF$;
+99:99:99.999 |         CREATE SCHEMA import;
+99:99:99.999 |     "MigrationId" character varying(150) NOT NULL,
+99:99:99.999 |     END IF;
+99:99:99.999 |     CONSTRAINT "PK___ef_migrations_history" PRIMARY KEY ("MigrationId")
+12:31:25.751 | [12:31:25.751 INF] Microsoft.Hosting.Lifetime Application started. Press Ctrl+C to shut down.
+12:31:25.751 | [12:31:25.751 INF] Microsoft.Hosting.Lifetime Hosting environment: Test
+12:31:25.751 | [12:31:25.751 INF] Microsoft.Hosting.Lifetime Content root path: /app
+12:31:25.755 | [12:31:25.755 INF]      *      api/imports/{id:guid}/report
+12:31:25.755 | [12:31:25.755 INF]      *      api/imports
+12:31:25.755 | [12:31:25.755 INF]      *      api/projects/search
+12:31:25.755 | [12:31:25.755 INF]      *      api/visary/organizations/{id:int}
+12:31:25.755 | [12:31:25.755 INF]      *      api/visary/constructionsiteindicatorvalues/{id:int}
+12:31:25.755 | [12:31:25.755 INF]      *      api/projects/sync
+12:31:25.755 | [12:31:25.755 INF]      *      api/visary/constructionsites
+12:31:25.755 | [12:31:25.755 INF]      *      api/visary/constructionprojects
+12:31:25.755 | [12:31:25.755 INF]      *      api/imports/{id:guid}/cancel
+12:31:25.755 | [12:31:25.755 INF]      *      api/import-types
+12:31:25.755 | [12:31:25.755 INF]      *      api/visary/shareagreements
+12:31:25.755 | [12:31:25.755 INF]      *      api/visary/percentbets/{id:int}
+12:31:25.755 | [12:31:25.755 INF]      *      api/visary/organizations
+12:31:25.755 | [12:31:25.755 INF]      *      health
+12:31:25.755 | [12:31:25.755 INF]      *      api/visary/{name}/{id:int}
+12:31:25.755 | [12:31:25.755 INF]      *      api/visary/shareagreements/{id:int}
+12:31:25.755 | [12:31:25.755 INF]      *      api/visary/rooms/{id:int}
+12:31:25.755 | [12:31:25.755 INF]      *      api/visary/rooms
+12:31:25.755 | [12:31:25.755 INF]      *      api/visary/{name}
+12:31:25.755 | [12:31:25.755 INF]      *      api/visary/percentbets
+12:31:25.755 | [12:31:25.755 INF]      *      api/imports/export-pdf
+12:31:25.755 | [12:31:25.755 INF]      *      api/imports/{id:guid}/budget-xlsx
+12:31:25.755 | [12:31:25.755 INF]      *      api/visary/constructionsections/{id:int}
+12:31:25.755 | [12:31:25.755 INF]      *      api/visary/deals/{id:int}
+12:31:25.755 | [12:31:25.755 INF]      *      api/visary/constructionsiteindicators/{id:int}
+12:31:25.755 | [12:31:25.755 INF]      *      api/visary/constructionsiteindicators
+12:31:25.755 | [12:31:25.755 INF]      *      api/visary/constructionprojects/{id:int}
+12:31:25.755 | [12:31:25.755 INF]      *      api/visary/constructionsiteindicatorvalues
+12:31:25.755 | [12:31:25.755 INF]      *      api/visary/cadastralareas/{id:int}
+12:31:25.755 | [12:31:25.755 INF]      *      /hubs/imports/negotiate
+12:31:25.755 | [12:31:25.755 INF]      *      /hubs/imports
+12:31:25.755 | [12:31:25.755 INF]      *      /diag
+12:31:25.755 | [12:31:25.755 INF]      *      api/visary/constructionsites/{id:int}
+12:31:25.755 | [12:31:25.755 INF]      *      api/visary/cadastralareas
+12:31:25.755 | [12:31:25.755 INF]  Зарегистрировано 39 HTTP-маршрутов:
+12:31:25.755 | [12:31:25.755 INF]      *      api/imports/{id:guid}/apply
+12:31:25.755 | [12:31:25.755 INF]      *      api/imports/{id:guid}
+12:31:25.755 | [12:31:25.755 INF]      *      api/sites/sync/{id:int}
+12:31:25.755 | [12:31:25.755 INF]      *      api/visary/deals
+12:31:25.755 | [12:31:25.755 INF]      *      api/visary/constructionsections
+12:32:24.604 | [12:32:24.604 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/ready - null null
+12:32:24.809 | [12:32:24.809 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/ready → 404 за 56 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:32:24.813 | [12:32:24.813 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/ready - 404 0 null 210.2032ms
+12:32:24.841 | [12:32:24.841 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/ready, Response status code: 404
+12:32:31.942 | [12:32:31.942 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/ready - null null
+12:32:31.947 | [12:32:31.947 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/ready - 404 0 null 5.4657ms
+12:32:31.947 | [12:32:31.947 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/ready → 404 за 3 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:32:31.948 | [12:32:31.948 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/ready, Response status code: 404
+12:32:34.569 | [12:32:34.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/ready - null null
+12:32:34.573 | [12:32:34.573 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/ready, Response status code: 404
+12:32:34.573 | [12:32:34.573 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/ready → 404 за 3 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:32:34.573 | [12:32:34.573 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/ready - 404 0 null 4.2787ms
+12:32:44.570 | [12:32:44.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/ready - 404 0 null 0.7475ms
+12:32:44.570 | [12:32:44.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/ready, Response status code: 404
+12:32:44.570 | [12:32:44.570 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/ready → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:32:44.570 | [12:32:44.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/ready - null null
+12:32:54.570 | [12:32:54.570 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/ready → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:32:54.570 | [12:32:54.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/ready - null null
+12:32:54.571 | [12:32:54.571 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/ready, Response status code: 404
+12:32:54.571 | [12:32:54.571 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/ready - 404 0 null 0.944ms
+12:33:04.570 | [12:33:04.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/ready - null null
+12:33:04.571 | [12:33:04.571 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/ready, Response status code: 404
+12:33:04.571 | [12:33:04.571 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/ready → 404 за 1 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:33:04.571 | [12:33:04.571 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/ready - 404 0 null 1.6595ms
+12:33:14.569 | [12:33:14.569 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/ready → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:33:14.569 | [12:33:14.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/ready - null null
+12:33:14.570 | [12:33:14.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/ready - 404 0 null 0.8573ms
+12:33:14.570 | [12:33:14.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/ready, Response status code: 404
+12:33:24.569 | [12:33:24.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/ready - null null
+12:33:24.570 | [12:33:24.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/ready - 404 0 null 0.8408ms
+12:33:24.570 | [12:33:24.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/ready, Response status code: 404
+12:33:24.570 | [12:33:24.570 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/ready → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:33:34.569 | [12:33:34.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/ready - null null
+12:33:34.570 | [12:33:34.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/ready - 404 0 null 0.6118ms
+12:33:34.570 | [12:33:34.570 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/ready → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:33:34.570 | [12:33:34.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/ready, Response status code: 404
+12:33:34.941 | [12:33:34.941 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/ready - null null
+12:33:34.942 | [12:33:34.942 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/ready → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:33:34.942 | [12:33:34.942 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/ready - 404 0 null 1.1498ms
+12:33:34.943 | [12:33:34.943 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/ready, Response status code: 404
+12:33:44.569 | [12:33:44.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/ready - null null
+12:33:44.569 | [12:33:44.569 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/ready → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:33:44.569 | [12:33:44.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/ready, Response status code: 404
+12:33:44.569 | [12:33:44.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/ready - 404 0 null 0.6417ms
+12:33:54.569 | [12:33:54.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/ready - null null
+12:33:54.569 | [12:33:54.569 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/ready → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:33:54.570 | [12:33:54.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/ready, Response status code: 404
+12:33:54.570 | [12:33:54.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/ready - 404 0 null 0.58ms
+12:34:04.569 | [12:34:04.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/ready - null null
+12:34:04.570 | [12:34:04.570 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/ready → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:34:04.570 | [12:34:04.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/ready - 404 0 null 0.8204ms
+12:34:04.570 | [12:34:04.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/ready, Response status code: 404
+12:34:14.569 | [12:34:14.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/ready - null null
+12:34:14.570 | [12:34:14.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/ready, Response status code: 404
+12:34:14.570 | [12:34:14.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/ready - 404 0 null 0.5896ms
+12:34:14.570 | [12:34:14.570 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/ready → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:34:24.569 | [12:34:24.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/ready, Response status code: 404
+12:34:24.569 | [12:34:24.569 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/ready → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:34:24.569 | [12:34:24.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/ready - 404 0 null 0.5043ms
+12:34:24.569 | [12:34:24.569 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/live → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:34:24.569 | [12:34:24.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/live - 404 0 null 0.445ms
+12:34:24.569 | [12:34:24.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/live - null null
+12:34:24.569 | [12:34:24.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/ready - null null
+12:34:24.570 | [12:34:24.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/live, Response status code: 404
+12:34:34.569 | [12:34:34.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/live - null null
+12:34:34.569 | [12:34:34.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/ready - null null
+12:34:34.570 | [12:34:34.570 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/live → 404 за 1 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:34:34.570 | [12:34:34.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/ready - 404 0 null 1.4427ms
+12:34:34.570 | [12:34:34.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/live - 404 0 null 1.2819ms
+12:34:34.570 | [12:34:34.570 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/ready → 404 за 1 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:34:34.571 | [12:34:34.571 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/ready, Response status code: 404
+12:34:34.571 | [12:34:34.571 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/live, Response status code: 404
+12:34:44.570 | [12:34:44.570 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/live → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:34:44.570 | [12:34:44.570 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/ready → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:34:44.570 | [12:34:44.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/live - null null
+12:34:44.570 | [12:34:44.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/ready - null null
+12:34:44.571 | [12:34:44.571 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/ready - 404 0 null 0.6728ms
+12:34:44.571 | [12:34:44.571 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/live, Response status code: 404
+12:34:44.571 | [12:34:44.571 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/live - 404 0 null 0.952ms
+12:34:44.571 | [12:34:44.571 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/ready, Response status code: 404
+12:34:54.569 | [12:34:54.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/live - null null
+12:34:54.569 | [12:34:54.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/ready - null null
+12:34:54.570 | [12:34:54.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/live - 404 0 null 1.3001ms
+12:34:54.570 | [12:34:54.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/ready - 404 0 null 1.0446ms
+12:34:54.570 | [12:34:54.570 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/live → 404 за 1 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:34:54.570 | [12:34:54.570 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/ready → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:34:54.570 | [12:34:54.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/ready, Response status code: 404
+12:34:54.570 | [12:34:54.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/live, Response status code: 404
+12:34:55.941 | [12:34:55.941 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/ready → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:34:55.941 | [12:34:55.941 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/ready - null null
+12:34:55.942 | [12:34:55.942 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/ready, Response status code: 404
+12:34:55.942 | [12:34:55.942 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/ready - 404 0 null 0.502ms
+12:35:04.569 | [12:35:04.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/live - null null
+12:35:04.569 | [12:35:04.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/live, Response status code: 404
+12:35:04.569 | [12:35:04.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/live - 404 0 null 0.5329ms
+12:35:04.569 | [12:35:04.569 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/live → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:35:04.570 | [12:35:04.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/ready - null null
+12:35:04.570 | [12:35:04.570 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/ready → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:35:04.571 | [12:35:04.571 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/ready, Response status code: 404
+12:35:04.571 | [12:35:04.571 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/ready - 404 0 null 0.9405ms
+12:35:14.569 | [12:35:14.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/ready - null null
+12:35:14.570 | [12:35:14.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/ready - 404 0 null 0.5626ms
+12:35:14.570 | [12:35:14.570 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/live → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:35:14.570 | [12:35:14.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/live - null null
+12:35:14.570 | [12:35:14.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/ready, Response status code: 404
+12:35:14.570 | [12:35:14.570 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/ready → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:35:14.570 | [12:35:14.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/live, Response status code: 404
+12:35:14.570 | [12:35:14.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/live - 404 0 null 0.1997ms
+12:35:24.569 | [12:35:24.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/live - null null
+12:35:24.570 | [12:35:24.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/ready - null null
+12:35:24.571 | [12:35:24.571 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/live, Response status code: 404
+12:35:24.571 | [12:35:24.571 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/ready, Response status code: 404
+12:35:24.571 | [12:35:24.571 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/ready → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:35:24.571 | [12:35:24.571 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/live → 404 за 1 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:35:24.571 | [12:35:24.571 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/ready - 404 0 null 0.3232ms
+12:35:24.571 | [12:35:24.571 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/live - 404 0 null 1.4429ms
+12:35:34.569 | [12:35:34.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/ready - null null
+12:35:34.569 | [12:35:34.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/live - null null
+12:35:34.570 | [12:35:34.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/live - 404 0 null 0.4893ms
+12:35:34.570 | [12:35:34.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/live, Response status code: 404
+12:35:34.570 | [12:35:34.570 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/ready → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:35:34.570 | [12:35:34.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/ready, Response status code: 404
+12:35:34.570 | [12:35:34.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/ready - 404 0 null 0.9461ms
+12:35:34.570 | [12:35:34.570 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/live → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:35:44.569 | [12:35:44.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/live - null null
+12:35:44.569 | [12:35:44.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/ready - null null
+12:35:44.570 | [12:35:44.570 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/ready → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:35:44.570 | [12:35:44.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/live, Response status code: 404
+12:35:44.570 | [12:35:44.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/ready, Response status code: 404
+12:35:44.570 | [12:35:44.570 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/live → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:35:44.570 | [12:35:44.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/ready - 404 0 null 0.9065ms
+12:35:44.570 | [12:35:44.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/live - 404 0 null 0.9052ms
+12:35:54.568 | [12:35:54.568 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/ready - null null
+12:35:54.568 | [12:35:54.568 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/live - null null
+12:35:54.570 | [12:35:54.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/live, Response status code: 404
+12:35:54.570 | [12:35:54.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/live - 404 0 null 1.7957ms
+12:35:54.570 | [12:35:54.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/ready, Response status code: 404
+12:35:54.570 | [12:35:54.570 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/ready → 404 за 2 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:35:54.570 | [12:35:54.570 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/live → 404 за 1 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:35:54.570 | [12:35:54.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/ready - 404 0 null 1.8324ms
+12:36:00.941 | [12:36:00.941 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/ready - 404 0 null 0.3701ms
+12:36:00.941 | [12:36:00.941 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/ready → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:36:00.941 | [12:36:00.941 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/ready, Response status code: 404
+12:36:00.941 | [12:36:00.941 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/ready - null null
+12:36:04.569 | [12:36:04.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/live - null null
+12:36:04.569 | [12:36:04.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/ready - null null
+12:36:04.570 | [12:36:04.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/ready - 404 0 null 0.9599ms
+12:36:04.570 | [12:36:04.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/live, Response status code: 404
+12:36:04.570 | [12:36:04.570 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/live → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:36:04.570 | [12:36:04.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/ready, Response status code: 404
+12:36:04.570 | [12:36:04.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/live - 404 0 null 0.967ms
+12:36:04.570 | [12:36:04.570 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/ready → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:36:14.569 | [12:36:14.569 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/live → 404 за 1 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:36:14.569 | [12:36:14.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/live, Response status code: 404
+12:36:14.569 | [12:36:14.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/live - 404 0 null 0.8901ms
+12:36:14.569 | [12:36:14.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/ready, Response status code: 404
+12:36:14.569 | [12:36:14.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/live - null null
+12:36:14.569 | [12:36:14.569 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/ready → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:36:14.569 | [12:36:14.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/ready - 404 0 null 0.2867ms
+12:36:14.569 | [12:36:14.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/ready - null null
+12:36:24.569 | [12:36:24.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/ready - null null
+12:36:24.569 | [12:36:24.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/live - null null
+12:36:24.570 | [12:36:24.570 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/ready → 404 за 1 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:36:24.570 | [12:36:24.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/ready - 404 0 null 1.2825ms
+12:36:24.570 | [12:36:24.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/live - 404 0 null 0.7247ms
+12:36:24.570 | [12:36:24.570 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/live → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:36:24.570 | [12:36:24.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/live, Response status code: 404
+12:36:24.570 | [12:36:24.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/ready, Response status code: 404
+12:36:34.569 | [12:36:34.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/live - null null
+12:36:34.570 | [12:36:34.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/ready - null null
+12:36:34.570 | [12:36:34.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/ready - 404 0 null 0.5999ms
+12:36:34.570 | [12:36:34.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/live, Response status code: 404
+12:36:34.570 | [12:36:34.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/live - 404 0 null 0.6578ms
+12:36:34.570 | [12:36:34.570 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/live → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:36:34.570 | [12:36:34.570 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/ready → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:36:34.571 | [12:36:34.571 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/ready, Response status code: 404
+12:36:44.569 | [12:36:44.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/ready - 404 0 null 0.3706ms
+12:36:44.569 | [12:36:44.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/ready, Response status code: 404
+12:36:44.569 | [12:36:44.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/live - null null
+12:36:44.569 | [12:36:44.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/ready - null null
+12:36:44.569 | [12:36:44.569 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/ready → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:36:44.570 | [12:36:44.570 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/live → 404 за 1 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:36:44.570 | [12:36:44.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/live - 404 0 null 1.4405ms
+12:36:44.570 | [12:36:44.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/live, Response status code: 404
+12:36:44.572 | [12:36:44.572 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/ready - 404 0 null 0.3515ms
+12:36:44.572 | [12:36:44.572 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/ready → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:36:44.572 | [12:36:44.572 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/ready, Response status code: 404
+12:36:44.572 | [12:36:44.572 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/ready - null null
+12:36:44.580 | [12:36:44.580 INF] Microsoft.Hosting.Lifetime Application is shutting down...
+12:36:45.160 | [12:36:45.160 INF]  ════════════════════════════════════════════════════════════
+12:36:45.215 | [12:36:45.215 INF]  KiloImportService.Api запускается. PID=1 Machine=alfa-building-fm-import-94d79f8fc-xvrf2 .NET=10.0.9
+12:36:45.222 | [12:36:45.222 INF]  CWD=/app  ASPNETCORE_ENVIRONMENT=Test
+12:36:45.223 | [12:36:45.223 INF]  ════════════════════════════════════════════════════════════
+12:36:45.426 | [12:36:45.426 INF]  Incoming JWT auth ENABLED. Authority=http://identity:8080 Audience=visary
+12:36:45.517 | [12:36:45.517 INF]  PathBase активен: /api/ab-fm-import (все маршруты будут доступны под этим префиксом)
+12:36:45.798 | [12:36:45.798 INF]  Applying ImportServiceDb migrations (schema=import)…
+12:36:47.845 | [12:36:47.845 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (35ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+12:36:48.535 | [12:36:48.535 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (16ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+12:36:48.561 | [12:36:48.561 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (10ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+12:36:48.611 | [12:36:48.611 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (10ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+12:36:48.617 | [12:36:48.617 INF] Microsoft.EntityFrameworkCore.Migrations No migrations were applied. The database is already up to date.
+12:36:48.644 | [12:36:48.644 INF]  Applying VisaryDb migrations (schema=Data)…
+12:36:48.757 | [12:36:48.757 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (10ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+12:36:48.880 | [12:36:48.880 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (10ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+12:36:48.891 | [12:36:48.891 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (9ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+12:36:48.901 | [12:36:48.901 INF] Microsoft.EntityFrameworkCore.Migrations No migrations were applied. The database is already up to date.
+12:36:48.901 | [12:36:48.901 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (9ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+12:36:49.202 | [12:36:49.202 INF]  │ PathBase    : /api/ab-fm-import
+12:36:49.202 | [12:36:49.202 INF]  │ DB conn-str : Database=ab_fm_import;Host=ab-test-pg-1.ci28823727.cloud.alfaintra.net;Port=5432;Username=ab_fm_import_user;Password=***;Application Name=ab-fm-import;Pooling=true
+12:36:49.202 | [12:36:49.202 INF]  │ JWT auth    : ENABLED
+12:36:49.202 | [12:36:49.202 INF]  └─────────────────────────────────────────────────────────────
+12:36:49.202 | [12:36:49.202 INF]  │ CORS        : https://localhost:44466
+12:36:49.202 | [12:36:49.202 INF]  │ URLs        : http://0.0.0.0:5000
+12:36:49.202 | [12:36:49.202 INF]  ┌── Конфигурация сервиса ─────────────────────────────────────
+12:36:49.202 | [12:36:49.202 INF]  │ Visary API  : http://webapi:8080/api
+12:36:49.202 | [12:36:49.202 INF]  │ Swagger     : ENABLED
+12:36:49.203 | [12:36:49.203 INF]  KiloImportService.Api готов принимать запросы на http://0.0.0.0:5000
+12:36:49.214 | [12:36:49.214 WRN] Microsoft.AspNetCore.DataProtection.KeyManagement.XmlKeyManager Neither user profile nor HKLM registry available. Using an ephemeral key repository. Protected data will be unavailable when application exits.
+12:36:49.214 | [12:36:49.214 WRN] Microsoft.AspNetCore.DataProtection.Repositories.EphemeralXmlRepository Using an in-memory repository. Keys will not be persisted to storage.
+12:36:49.228 | [12:36:49.228 INF] Microsoft.AspNetCore.DataProtection.KeyManagement.XmlKeyManager Creating key {9a936945-d800-4379-b8e9-561a3136b98b} with creation date 2026-06-25 12:36:49Z, activation date 2026-06-25 12:36:49Z, and expiration date 2026-09-23 12:36:49Z.
+12:36:49.239 | [12:36:49.239 WRN] Microsoft.AspNetCore.DataProtection.KeyManagement.XmlKeyManager No XML encryptor configured. Key {9a936945-d800-4379-b8e9-561a3136b98b} may be persisted to storage in unencrypted form.
+12:36:49.250 | [12:36:49.250 WRN] Microsoft.AspNetCore.Hosting.Diagnostics Overriding HTTP_PORTS '8080' and HTTPS_PORTS ''. Binding to values defined by URLS instead 'http://0.0.0.0:5000'.
+12:36:49.408 | [12:36:49.408 INF] Microsoft.Hosting.Lifetime Hosting environment: Test
+12:36:49.408 | [12:36:49.408 INF] Microsoft.Hosting.Lifetime Now listening on: http://0.0.0.0:5000
+12:36:49.408 | [12:36:49.408 INF] Microsoft.Hosting.Lifetime Content root path: /app
+12:36:49.408 | [12:36:49.408 INF] Microsoft.Hosting.Lifetime Application started. Press Ctrl+C to shut down.
+12:36:49.410 | [12:36:49.410 INF]      *      api/imports/export-pdf
+12:36:49.410 | [12:36:49.410 INF]      *      api/imports/{id:guid}
+12:36:49.410 | [12:36:49.410 INF]      *      api/imports/{id:guid}/cancel
+12:36:49.410 | [12:36:49.410 INF]      *      api/visary/cadastralareas/{id:int}
+12:36:49.410 | [12:36:49.410 INF]      *      api/visary/constructionprojects/{id:int}
+12:36:49.410 | [12:36:49.410 INF]      *      api/visary/constructionsiteindicatorvalues
+12:36:49.410 | [12:36:49.410 INF]      *      api/visary/constructionsiteindicatorvalues/{id:int}
+12:36:49.410 | [12:36:49.410 INF]      *      api/visary/constructionsiteindicators/{id:int}
+12:36:49.410 | [12:36:49.410 INF]      *      api/projects/sync
+12:36:49.410 | [12:36:49.410 INF]      *      api/visary/constructionsiteindicators
+12:36:49.410 | [12:36:49.410 INF]      *      /hubs/imports
+12:36:49.410 | [12:36:49.410 INF]      *      api/imports/{id:guid}/report
+12:36:49.410 | [12:36:49.410 INF]      *      api/imports/{id:guid}/apply
+12:36:49.410 | [12:36:49.410 INF]  Зарегистрировано 39 HTTP-маршрутов:
+12:36:49.410 | [12:36:49.410 INF]      *      api/import-types
+12:36:49.410 | [12:36:49.410 INF]      *      api/imports
+12:36:49.410 | [12:36:49.410 INF]      *      api/sites/sync/{id:int}
+12:36:49.410 | [12:36:49.410 INF]      *      api/visary/constructionsections
+12:36:49.410 | [12:36:49.410 INF]      *      /diag
+12:36:49.410 | [12:36:49.410 INF]      *      api/imports/{id:guid}/budget-xlsx
+12:36:49.410 | [12:36:49.410 INF]      *      api/visary/constructionprojects
+12:36:49.410 | [12:36:49.410 INF]      *      api/projects/search
+12:36:49.410 | [12:36:49.410 INF]      *      api/visary/constructionsections/{id:int}
+12:36:49.410 | [12:36:49.410 INF]      *      /hubs/imports/negotiate
+12:36:49.410 | [12:36:49.410 INF]      *      api/visary/cadastralareas
+12:36:49.411 | [12:36:49.411 INF]      *      health
+12:36:49.411 | [12:36:49.411 INF]      *      api/visary/{name}
+12:36:49.411 | [12:36:49.411 INF]      *      api/visary/deals
+12:36:49.411 | [12:36:49.411 INF]      *      api/visary/deals/{id:int}
+12:36:49.411 | [12:36:49.411 INF]      *      api/visary/shareagreements/{id:int}
+12:36:49.411 | [12:36:49.411 INF]      *      api/visary/percentbets/{id:int}
+12:36:49.411 | [12:36:49.411 INF]      *      api/visary/organizations/{id:int}
+12:36:49.411 | [12:36:49.411 INF]      *      api/visary/rooms
+12:36:49.411 | [12:36:49.411 INF]      *      api/visary/organizations
+12:36:49.411 | [12:36:49.411 INF]      *      api/visary/constructionsites/{id:int}
+12:36:49.411 | [12:36:49.411 INF]      *      api/visary/rooms/{id:int}
+12:36:49.411 | [12:36:49.411 INF]      *      api/visary/percentbets
+12:36:49.411 | [12:36:49.411 INF]      *      api/visary/shareagreements
+12:36:49.411 | [12:36:49.411 INF]      *      api/visary/constructionsites
+12:36:49.411 | [12:36:49.411 INF]      *      api/visary/{name}/{id:int}
+99:99:99.999 |         CREATE SCHEMA import;
+99:99:99.999 | DO $EF$
+99:99:99.999 |     END IF;
+99:99:99.999 |     "MigrationId" character varying(150) NOT NULL,
+99:99:99.999 |     IF NOT EXISTS(SELECT 1 FROM pg_namespace WHERE nspname = 'import') THEN
+99:99:99.999 |     "ProductVersion" character varying(32) NOT NULL,
+99:99:99.999 | END $EF$;
+99:99:99.999 | BEGIN
+99:99:99.999 |     CONSTRAINT "PK___ef_migrations_history" PRIMARY KEY ("MigrationId")
+99:99:99.999 | FROM "Data".__ef_migrations_history
+99:99:99.999 | FROM import.__ef_migrations_history
+99:99:99.999 | FROM "Data".__ef_migrations_history
+99:99:99.999 | SELECT "MigrationId", "ProductVersion"
+99:99:99.999 | );
+99:99:99.999 | CREATE TABLE IF NOT EXISTS import.__ef_migrations_history (
+99:99:99.999 | SELECT "MigrationId", "ProductVersion"
+99:99:99.999 | ORDER BY "MigrationId";
+99:99:99.999 | END $EF$;
+99:99:99.999 | BEGIN
+99:99:99.999 | ORDER BY "MigrationId";
+99:99:99.999 | SELECT "MigrationId", "ProductVersion"
+99:99:99.999 | FROM import.__ef_migrations_history
+99:99:99.999 |     IF NOT EXISTS(SELECT 1 FROM pg_namespace WHERE nspname = 'import') THEN
+99:99:99.999 | LOCK TABLE import.__ef_migrations_history IN ACCESS EXCLUSIVE MODE
+99:99:99.999 | LOCK TABLE import.__ef_migrations_history IN ACCESS EXCLUSIVE MODE
+99:99:99.999 | CREATE TABLE IF NOT EXISTS import.__ef_migrations_history (
+99:99:99.999 |     END IF;
+99:99:99.999 |     CONSTRAINT "PK___ef_migrations_history" PRIMARY KEY ("MigrationId")
+99:99:99.999 |     "ProductVersion" character varying(32) NOT NULL,
+99:99:99.999 |     "MigrationId" character varying(150) NOT NULL,
+99:99:99.999 | );
+99:99:99.999 | ORDER BY "MigrationId";
+99:99:99.999 | SELECT "MigrationId", "ProductVersion"
+99:99:99.999 | DO $EF$
+99:99:99.999 |         CREATE SCHEMA import;
+99:99:99.999 | FROM import.__ef_migrations_history
+99:99:99.999 | );
+99:99:99.999 |     END IF;
+99:99:99.999 |     "ProductVersion" character varying(32) NOT NULL,
+99:99:99.999 | BEGIN
+99:99:99.999 |         CREATE SCHEMA "Data";
+99:99:99.999 | CREATE TABLE IF NOT EXISTS "Data".__ef_migrations_history (
+99:99:99.999 | END $EF$;
+99:99:99.999 |     IF NOT EXISTS(SELECT 1 FROM pg_namespace WHERE nspname = 'Data') THEN
+99:99:99.999 | DO $EF$
+99:99:99.999 | SELECT "MigrationId", "ProductVersion"
+99:99:99.999 | FROM "Data".__ef_migrations_history
+99:99:99.999 | ORDER BY "MigrationId";
+99:99:99.999 | FROM "Data".__ef_migrations_history
+99:99:99.999 | LOCK TABLE "Data".__ef_migrations_history IN ACCESS EXCLUSIVE MODE
+99:99:99.999 | LOCK TABLE "Data".__ef_migrations_history IN ACCESS EXCLUSIVE MODE
+99:99:99.999 |     CONSTRAINT "PK___ef_migrations_history" PRIMARY KEY ("MigrationId")
+99:99:99.999 | ORDER BY "MigrationId";
+99:99:99.999 | SELECT "MigrationId", "ProductVersion"
+99:99:99.999 |         CREATE SCHEMA "Data";
+99:99:99.999 | FROM import.__ef_migrations_history
+99:99:99.999 |     "ProductVersion" character varying(32) NOT NULL,
+99:99:99.999 | CREATE TABLE IF NOT EXISTS "Data".__ef_migrations_history (
+99:99:99.999 | SELECT "MigrationId", "ProductVersion"
+99:99:99.999 | ORDER BY "MigrationId";
+99:99:99.999 | SELECT "MigrationId", "ProductVersion"
+99:99:99.999 | ORDER BY "MigrationId";
+99:99:99.999 | ORDER BY "MigrationId";
+99:99:99.999 |     "MigrationId" character varying(150) NOT NULL,
+99:99:99.999 |     END IF;
+99:99:99.999 |     "MigrationId" character varying(150) NOT NULL,
+99:99:99.999 |     CONSTRAINT "PK___ef_migrations_history" PRIMARY KEY ("MigrationId")
+99:99:99.999 | );
+99:99:99.999 | BEGIN
+99:99:99.999 | DO $EF$
+99:99:99.999 | END $EF$;
+99:99:99.999 |     IF NOT EXISTS(SELECT 1 FROM pg_namespace WHERE nspname = 'Data') THEN

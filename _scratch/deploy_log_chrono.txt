@@ -1,0 +1,852 @@
+Jun 25, 2026 @ 13:46:53.730 || [06:46:53.667 INF]  ════════════════════════════════════════════════════════════
+Jun 25, 2026 @ 13:46:53.753 || [06:46:53.753 INF]  ════════════════════════════════════════════════════════════
+Jun 25, 2026 @ 13:46:53.753 || [06:46:53.753 INF]  CWD=/app  ASPNETCORE_ENVIRONMENT=Test
+Jun 25, 2026 @ 13:46:53.753 || [06:46:53.731 INF]  KiloImportService.Api запускается. PID=1 Machine=alfa-building-fm-import-84946b76cb-k9xt9 .NET=10.0.9
+Jun 25, 2026 @ 13:46:53.929 || [06:46:53.929 INF]  Incoming JWT auth ENABLED. Authority=http://identity:8080 Audience=visary
+Jun 25, 2026 @ 13:46:53.983 || [06:46:53.983 INF]  PathBase НЕ задан (Features:PathBase пусто) — маршруты обслуживаются от корня '/'
+Jun 25, 2026 @ 13:46:54.258 || [06:46:54.257 DBG] Microsoft.EntityFrameworkCore.Infrastructure An 'IServiceProvider' was created for internal use by Entity Framework.
+Jun 25, 2026 @ 13:46:54.271 || [06:46:54.271 INF]  Applying ImportServiceDb migrations (schema=import)…
+Jun 25, 2026 @ 13:46:55.317 || [06:46:55.317 DBG] Microsoft.EntityFrameworkCore.Model The index {'ImportSessionId'} was not created on entity type 'ImportError' as the properties are already covered by the index {'ImportSessionId', 'Sheet', 'SourceRowNumber'}.
+Jun 25, 2026 @ 13:46:55.318 || [06:46:55.318 DBG] Microsoft.EntityFrameworkCore.Model The index {'ImportSessionId'} was not created on entity type 'StagedRow' as the properties are already covered by the index {'ImportSessionId', 'Status'}.
+Jun 25, 2026 @ 13:46:55.318 || [06:46:55.318 DBG] Microsoft.EntityFrameworkCore.Model The index {'ImportSessionId'} was not created on entity type 'StagedRow' as the properties are already covered by the index {'ImportSessionId', 'Sheet', 'SourceRowNumber'}.
+Jun 25, 2026 @ 13:46:55.776 || [06:46:55.776 DBG] Microsoft.EntityFrameworkCore.Infrastructure Entity Framework Core 9.0.4 initialized 'ImportServiceDbContext' using provider 'Npgsql.EntityFrameworkCore.PostgreSQL:9.0.4+fd2380957bee5cd86f336466af36b08c0163f1a5' with options: MigrationsHistoryTable=import.__ef_migrations_history 
+Jun 25, 2026 @ 13:46:55.851 || [06:46:55.851 DBG] Microsoft.EntityFrameworkCore.Database.Connection Creating DbConnection.
+Jun 25, 2026 @ 13:46:55.916 || [06:46:55.916 DBG] Microsoft.EntityFrameworkCore.Database.Connection Created DbConnection. (29ms).
+Jun 25, 2026 @ 13:46:55.922 || [06:46:55.922 DBG] Microsoft.EntityFrameworkCore.Database.Connection Opening connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+Jun 25, 2026 @ 13:46:56.236 || [06:46:56.236 DBG] Microsoft.EntityFrameworkCore.Database.Connection Opened connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+Jun 25, 2026 @ 13:46:56.242 || [06:46:56.241 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteReader'.
+Jun 25, 2026 @ 13:46:56.248 || [06:46:56.248 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteReader' (5ms).
+Jun 25, 2026 @ 13:46:56.249 || [06:46:56.249 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteReader' (9ms).
+Jun 25, 2026 @ 13:46:56.256 || ORDER BY "MigrationId";
+Jun 25, 2026 @ 13:46:56.256 || [06:46:56.256 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:56.256 || FROM import.__ef_migrations_history
+Jun 25, 2026 @ 13:46:56.256 || SELECT "MigrationId", "ProductVersion"
+Jun 25, 2026 @ 13:46:56.343 || FROM import.__ef_migrations_history
+Jun 25, 2026 @ 13:46:56.343 || [06:46:56.342 ERR] Microsoft.EntityFrameworkCore.Database.Command Failed executing DbCommand (87ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:56.343 || ORDER BY "MigrationId";
+Jun 25, 2026 @ 13:46:56.343 || SELECT "MigrationId", "ProductVersion"
+Jun 25, 2026 @ 13:46:56.346 || [06:46:56.346 DBG] Microsoft.EntityFrameworkCore.Database.Connection Closing connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+Jun 25, 2026 @ 13:46:56.353 || [06:46:56.353 DBG] Microsoft.EntityFrameworkCore.Database.Connection Closed connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432' (3ms).
+Jun 25, 2026 @ 13:46:56.666 || [06:46:56.665 DBG] Microsoft.EntityFrameworkCore.Migrations Migrating using database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+Jun 25, 2026 @ 13:46:56.668 || [06:46:56.668 DBG] Microsoft.EntityFrameworkCore.Database.Connection Opening connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+Jun 25, 2026 @ 13:46:56.717 || [06:46:56.716 DBG] Microsoft.EntityFrameworkCore.Database.Connection Opening connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+Jun 25, 2026 @ 13:46:56.796 || [06:46:56.795 DBG] Microsoft.EntityFrameworkCore.Database.Connection Opened connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+Jun 25, 2026 @ 13:46:56.797 || [06:46:56.796 DBG] Microsoft.EntityFrameworkCore.Database.Connection Closing connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+Jun 25, 2026 @ 13:46:56.803 || [06:46:56.803 DBG] Microsoft.EntityFrameworkCore.Database.Connection Closed connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432' (7ms).
+Jun 25, 2026 @ 13:46:56.805 || [06:46:56.805 DBG] Microsoft.EntityFrameworkCore.Database.Connection Opening connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+Jun 25, 2026 @ 13:46:56.805 || [06:46:56.805 DBG] Microsoft.EntityFrameworkCore.Database.Connection Opened connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+Jun 25, 2026 @ 13:46:56.869 || [06:46:56.869 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+Jun 25, 2026 @ 13:46:56.869 || [06:46:56.869 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:56.869 || [06:46:56.869 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:56.870 || );
+Jun 25, 2026 @ 13:46:56.870 ||         CREATE SCHEMA import;
+Jun 25, 2026 @ 13:46:56.870 || BEGIN
+Jun 25, 2026 @ 13:46:56.870 ||     "ProductVersion" character varying(32) NOT NULL,
+Jun 25, 2026 @ 13:46:56.870 || CREATE TABLE IF NOT EXISTS import.__ef_migrations_history (
+Jun 25, 2026 @ 13:46:56.870 ||     IF NOT EXISTS(SELECT 1 FROM pg_namespace WHERE nspname = 'import') THEN
+Jun 25, 2026 @ 13:46:56.870 ||     CONSTRAINT "PK___ef_migrations_history" PRIMARY KEY ("MigrationId")
+Jun 25, 2026 @ 13:46:56.870 || END $EF$;
+Jun 25, 2026 @ 13:46:56.870 ||     END IF;
+Jun 25, 2026 @ 13:46:56.870 || [06:46:56.870 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:56.870 ||     "MigrationId" character varying(150) NOT NULL,
+Jun 25, 2026 @ 13:46:56.870 || DO $EF$
+Jun 25, 2026 @ 13:46:56.936 || CREATE TABLE IF NOT EXISTS import.__ef_migrations_history (
+Jun 25, 2026 @ 13:46:56.936 || BEGIN
+Jun 25, 2026 @ 13:46:56.936 ||         CREATE SCHEMA import;
+Jun 25, 2026 @ 13:46:56.936 || );
+Jun 25, 2026 @ 13:46:56.936 ||     END IF;
+Jun 25, 2026 @ 13:46:56.936 || [06:46:56.936 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (65ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:56.936 ||     CONSTRAINT "PK___ef_migrations_history" PRIMARY KEY ("MigrationId")
+Jun 25, 2026 @ 13:46:56.936 ||     "ProductVersion" character varying(32) NOT NULL,
+Jun 25, 2026 @ 13:46:56.936 ||     "MigrationId" character varying(150) NOT NULL,
+Jun 25, 2026 @ 13:46:56.936 || END $EF$;
+Jun 25, 2026 @ 13:46:56.936 ||     IF NOT EXISTS(SELECT 1 FROM pg_namespace WHERE nspname = 'import') THEN
+Jun 25, 2026 @ 13:46:56.936 || DO $EF$
+Jun 25, 2026 @ 13:46:56.947 || [06:46:56.947 DBG] Microsoft.EntityFrameworkCore.Database.Transaction Beginning transaction with isolation level 'Unspecified'.
+Jun 25, 2026 @ 13:46:56.950 || [06:46:56.950 DBG] Microsoft.EntityFrameworkCore.Database.Transaction Began transaction with isolation level 'ReadCommitted'.
+Jun 25, 2026 @ 13:46:56.952 || [06:46:56.952 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:56.952 || [06:46:56.952 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:56.952 || [06:46:56.952 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:56.952 || [06:46:56.952 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+Jun 25, 2026 @ 13:46:56.952 || LOCK TABLE import.__ef_migrations_history IN ACCESS EXCLUSIVE MODE
+Jun 25, 2026 @ 13:46:56.964 || LOCK TABLE import.__ef_migrations_history IN ACCESS EXCLUSIVE MODE
+Jun 25, 2026 @ 13:46:56.964 || [06:46:56.964 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:56.965 || SELECT "MigrationId", "ProductVersion"
+Jun 25, 2026 @ 13:46:56.965 || [06:46:56.965 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteReader' (0ms).
+Jun 25, 2026 @ 13:46:56.965 || [06:46:56.965 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteReader' (0ms).
+Jun 25, 2026 @ 13:46:56.965 || [06:46:56.965 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:56.965 || ORDER BY "MigrationId";
+Jun 25, 2026 @ 13:46:56.965 || FROM import.__ef_migrations_history
+Jun 25, 2026 @ 13:46:56.965 || [06:46:56.965 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteReader'.
+Jun 25, 2026 @ 13:46:56.978 || FROM import.__ef_migrations_history
+Jun 25, 2026 @ 13:46:56.978 || SELECT "MigrationId", "ProductVersion"
+Jun 25, 2026 @ 13:46:56.978 || [06:46:56.978 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (12ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:56.978 || ORDER BY "MigrationId";
+Jun 25, 2026 @ 13:46:56.982 || [06:46:56.982 DBG] Microsoft.EntityFrameworkCore.Database.Command Closing data reader to 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+Jun 25, 2026 @ 13:46:56.985 || [06:46:56.985 DBG] Microsoft.EntityFrameworkCore.Database.Command A data reader for 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432' is being disposed after spending 5ms reading results.
+Jun 25, 2026 @ 13:46:56.990 || [06:46:56.990 INF] Microsoft.EntityFrameworkCore.Migrations Applying migration '20260429084812_Initial'.
+Jun 25, 2026 @ 13:46:57.034 ||     END IF;
+Jun 25, 2026 @ 13:46:57.034 || BEGIN
+Jun 25, 2026 @ 13:46:57.034 || DO $EF$
+Jun 25, 2026 @ 13:46:57.034 || [06:46:57.034 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.034 || [06:46:57.034 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+Jun 25, 2026 @ 13:46:57.034 || [06:46:57.034 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.034 ||     IF NOT EXISTS(SELECT 1 FROM pg_namespace WHERE nspname = 'import') THEN
+Jun 25, 2026 @ 13:46:57.034 ||         CREATE SCHEMA import;
+Jun 25, 2026 @ 13:46:57.034 || [06:46:57.034 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.034 || END $EF$;
+Jun 25, 2026 @ 13:46:57.045 || BEGIN
+Jun 25, 2026 @ 13:46:57.045 || DO $EF$
+Jun 25, 2026 @ 13:46:57.045 || [06:46:57.045 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.045 ||         CREATE SCHEMA import;
+Jun 25, 2026 @ 13:46:57.045 ||     IF NOT EXISTS(SELECT 1 FROM pg_namespace WHERE nspname = 'import') THEN
+Jun 25, 2026 @ 13:46:57.045 || [06:46:57.045 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+Jun 25, 2026 @ 13:46:57.045 ||     END IF;
+Jun 25, 2026 @ 13:46:57.045 || END $EF$;
+Jun 25, 2026 @ 13:46:57.046 || );
+Jun 25, 2026 @ 13:46:57.046 ||     "ErrorMessage" character varying(4000),
+Jun 25, 2026 @ 13:46:57.046 ||     "FileSha256" character varying(64) NOT NULL,
+Jun 25, 2026 @ 13:46:57.046 ||     "StartedAt" timestamp with time zone NOT NULL,
+Jun 25, 2026 @ 13:46:57.046 ||     "VisarySiteId" integer,
+Jun 25, 2026 @ 13:46:57.046 || [06:46:57.045 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.046 ||     "Status" character varying(16) NOT NULL,
+Jun 25, 2026 @ 13:46:57.046 ||     "FileFormat" character varying(8) NOT NULL,
+Jun 25, 2026 @ 13:46:57.046 ||     "ImportTypeCode" character varying(64) NOT NULL,
+Jun 25, 2026 @ 13:46:57.046 ||     "TotalRows" integer NOT NULL,
+Jun 25, 2026 @ 13:46:57.046 ||     "UserId" character varying(128),
+Jun 25, 2026 @ 13:46:57.046 ||     "FileSize" bigint NOT NULL,
+Jun 25, 2026 @ 13:46:57.046 ||     "SuccessRows" integer NOT NULL,
+Jun 25, 2026 @ 13:46:57.046 || [06:46:57.046 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.046 || [06:46:57.045 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.046 ||     "CompletedAt" timestamp with time zone,
+Jun 25, 2026 @ 13:46:57.046 ||     "Id" uuid NOT NULL,
+Jun 25, 2026 @ 13:46:57.046 || CREATE TABLE import.import_sessions (
+Jun 25, 2026 @ 13:46:57.046 ||     "ErrorRows" integer NOT NULL,
+Jun 25, 2026 @ 13:46:57.046 ||     CONSTRAINT "PK_import_sessions" PRIMARY KEY ("Id")
+Jun 25, 2026 @ 13:46:57.046 ||     "VisaryProjectId" integer,
+Jun 25, 2026 @ 13:46:57.046 ||     "FileName" character varying(500) NOT NULL,
+Jun 25, 2026 @ 13:46:57.059 || [06:46:57.059 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (14ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.060 ||     CONSTRAINT "PK_import_sessions" PRIMARY KEY ("Id")
+Jun 25, 2026 @ 13:46:57.060 ||     "VisarySiteId" integer,
+Jun 25, 2026 @ 13:46:57.060 ||     "SourceRowNumber" integer NOT NULL,
+Jun 25, 2026 @ 13:46:57.060 ||     "Id" uuid NOT NULL,
+Jun 25, 2026 @ 13:46:57.060 ||     CONSTRAINT "PK_import_errors" PRIMARY KEY ("Id"),
+Jun 25, 2026 @ 13:46:57.060 || [06:46:57.060 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.060 ||     "CompletedAt" timestamp with time zone,
+Jun 25, 2026 @ 13:46:57.060 ||     "FileSha256" character varying(64) NOT NULL,
+Jun 25, 2026 @ 13:46:57.060 ||     "FileFormat" character varying(8) NOT NULL,
+Jun 25, 2026 @ 13:46:57.060 ||     "ImportTypeCode" character varying(64) NOT NULL,
+Jun 25, 2026 @ 13:46:57.060 ||     "ImportSessionId" uuid NOT NULL,
+Jun 25, 2026 @ 13:46:57.060 ||     "Id" bigint GENERATED BY DEFAULT AS IDENTITY,
+Jun 25, 2026 @ 13:46:57.060 ||     "UserId" character varying(128),
+Jun 25, 2026 @ 13:46:57.060 || CREATE TABLE import.import_sessions (
+Jun 25, 2026 @ 13:46:57.060 || [06:46:57.059 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+Jun 25, 2026 @ 13:46:57.060 ||     "StartedAt" timestamp with time zone NOT NULL,
+Jun 25, 2026 @ 13:46:57.060 ||     "FileSize" bigint NOT NULL,
+Jun 25, 2026 @ 13:46:57.060 ||     "CreatedAt" timestamp with time zone NOT NULL,
+Jun 25, 2026 @ 13:46:57.060 || );
+Jun 25, 2026 @ 13:46:57.060 ||     "ErrorMessage" character varying(4000),
+Jun 25, 2026 @ 13:46:57.060 ||     "ErrorRows" integer NOT NULL,
+Jun 25, 2026 @ 13:46:57.060 ||     "Status" character varying(16) NOT NULL,
+Jun 25, 2026 @ 13:46:57.060 ||     "FileName" character varying(500) NOT NULL,
+Jun 25, 2026 @ 13:46:57.060 ||     CONSTRAINT "FK_import_errors_import_sessions_ImportSessionId" FOREIGN KEY ("ImportSessionId") REFERENCES import.import_sessions ("Id") ON DELETE CASCADE
+Jun 25, 2026 @ 13:46:57.060 ||     "Message" character varying(2000) NOT NULL,
+Jun 25, 2026 @ 13:46:57.060 ||     "ErrorCode" character varying(64) NOT NULL,
+Jun 25, 2026 @ 13:46:57.060 || CREATE TABLE import.import_errors (
+Jun 25, 2026 @ 13:46:57.060 ||     "TotalRows" integer NOT NULL,
+Jun 25, 2026 @ 13:46:57.060 ||     "VisaryProjectId" integer,
+Jun 25, 2026 @ 13:46:57.060 ||     "SuccessRows" integer NOT NULL,
+Jun 25, 2026 @ 13:46:57.060 || );
+Jun 25, 2026 @ 13:46:57.060 ||     "ColumnName" character varying(255),
+Jun 25, 2026 @ 13:46:57.060 || [06:46:57.060 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.060 || [06:46:57.059 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.080 ||     "RelativePath" character varying(500) NOT NULL,
+Jun 25, 2026 @ 13:46:57.080 ||     "ImportSessionId" uuid NOT NULL,
+Jun 25, 2026 @ 13:46:57.080 || [06:46:57.080 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.080 || [06:46:57.080 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.080 ||     CONSTRAINT "PK_import_file_snapshots" PRIMARY KEY ("Id"),
+Jun 25, 2026 @ 13:46:57.080 || );
+Jun 25, 2026 @ 13:46:57.080 || );
+Jun 25, 2026 @ 13:46:57.080 ||     "CreatedAt" timestamp with time zone NOT NULL,
+Jun 25, 2026 @ 13:46:57.080 ||     "Id" uuid NOT NULL,
+Jun 25, 2026 @ 13:46:57.080 ||     "Id" bigint GENERATED BY DEFAULT AS IDENTITY,
+Jun 25, 2026 @ 13:46:57.080 ||     CONSTRAINT "PK_import_errors" PRIMARY KEY ("Id"),
+Jun 25, 2026 @ 13:46:57.080 ||     "SourceRowNumber" integer NOT NULL,
+Jun 25, 2026 @ 13:46:57.080 ||     "ImportSessionId" uuid NOT NULL,
+Jun 25, 2026 @ 13:46:57.080 || [06:46:57.080 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (20ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.080 ||     "Message" character varying(2000) NOT NULL,
+Jun 25, 2026 @ 13:46:57.080 ||     "ColumnName" character varying(255),
+Jun 25, 2026 @ 13:46:57.080 || [06:46:57.080 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.080 ||     "CreatedAt" timestamp with time zone NOT NULL,
+Jun 25, 2026 @ 13:46:57.080 ||     "ContentType" character varying(128) NOT NULL,
+Jun 25, 2026 @ 13:46:57.080 || [06:46:57.080 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+Jun 25, 2026 @ 13:46:57.080 ||     "ErrorCode" character varying(64) NOT NULL,
+Jun 25, 2026 @ 13:46:57.080 ||     CONSTRAINT "FK_import_file_snapshots_import_sessions_ImportSessionId" FOREIGN KEY ("ImportSessionId") REFERENCES import.import_sessions ("Id") ON DELETE CASCADE
+Jun 25, 2026 @ 13:46:57.080 ||     "SizeBytes" bigint NOT NULL,
+Jun 25, 2026 @ 13:46:57.080 || CREATE TABLE import.import_file_snapshots (
+Jun 25, 2026 @ 13:46:57.080 ||     CONSTRAINT "FK_import_errors_import_sessions_ImportSessionId" FOREIGN KEY ("ImportSessionId") REFERENCES import.import_sessions ("Id") ON DELETE CASCADE
+Jun 25, 2026 @ 13:46:57.080 || CREATE TABLE import.import_errors (
+Jun 25, 2026 @ 13:46:57.093 ||     "CreatedAt" timestamp with time zone NOT NULL,
+Jun 25, 2026 @ 13:46:57.093 ||     "Id" uuid NOT NULL,
+Jun 25, 2026 @ 13:46:57.093 || CREATE TABLE import.import_session_stages (
+Jun 25, 2026 @ 13:46:57.093 || [06:46:57.093 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.093 ||     "RelativePath" character varying(500) NOT NULL,
+Jun 25, 2026 @ 13:46:57.093 ||     "Message" character varying(500),
+Jun 25, 2026 @ 13:46:57.093 ||     "ImportSessionId" uuid NOT NULL,
+Jun 25, 2026 @ 13:46:57.093 ||     CONSTRAINT "PK_import_file_snapshots" PRIMARY KEY ("Id"),
+Jun 25, 2026 @ 13:46:57.093 ||     "IsSuccess" boolean NOT NULL,
+Jun 25, 2026 @ 13:46:57.093 ||     "CompletedAt" timestamp with time zone,
+Jun 25, 2026 @ 13:46:57.093 || [06:46:57.093 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.093 || [06:46:57.093 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (13ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.093 || );
+Jun 25, 2026 @ 13:46:57.093 ||     "StartedAt" timestamp with time zone NOT NULL,
+Jun 25, 2026 @ 13:46:57.093 || [06:46:57.093 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.093 ||     "ProgressPercent" integer NOT NULL,
+Jun 25, 2026 @ 13:46:57.093 || [06:46:57.093 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+Jun 25, 2026 @ 13:46:57.093 || );
+Jun 25, 2026 @ 13:46:57.093 ||     CONSTRAINT "FK_import_file_snapshots_import_sessions_ImportSessionId" FOREIGN KEY ("ImportSessionId") REFERENCES import.import_sessions ("Id") ON DELETE CASCADE
+Jun 25, 2026 @ 13:46:57.093 ||     "ContentType" character varying(128) NOT NULL,
+Jun 25, 2026 @ 13:46:57.093 ||     "SizeBytes" bigint NOT NULL,
+Jun 25, 2026 @ 13:46:57.093 || CREATE TABLE import.import_file_snapshots (
+Jun 25, 2026 @ 13:46:57.093 ||     CONSTRAINT "FK_import_session_stages_import_sessions_ImportSessionId" FOREIGN KEY ("ImportSessionId") REFERENCES import.import_sessions ("Id") ON DELETE CASCADE
+Jun 25, 2026 @ 13:46:57.093 ||     CONSTRAINT "PK_import_session_stages" PRIMARY KEY ("Id"),
+Jun 25, 2026 @ 13:46:57.093 ||     "Kind" character varying(16) NOT NULL,
+Jun 25, 2026 @ 13:46:57.093 ||     "ImportSessionId" uuid NOT NULL,
+Jun 25, 2026 @ 13:46:57.093 ||     "Id" bigint GENERATED BY DEFAULT AS IDENTITY,
+Jun 25, 2026 @ 13:46:57.107 || );
+Jun 25, 2026 @ 13:46:57.107 ||     CONSTRAINT "PK_import_session_stages" PRIMARY KEY ("Id"),
+Jun 25, 2026 @ 13:46:57.107 ||     CONSTRAINT "PK_staged_rows" PRIMARY KEY ("Id"),
+Jun 25, 2026 @ 13:46:57.107 || [06:46:57.106 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (13ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.107 ||     "Id" bigint GENERATED BY DEFAULT AS IDENTITY,
+Jun 25, 2026 @ 13:46:57.107 || CREATE TABLE import.staged_rows (
+Jun 25, 2026 @ 13:46:57.107 ||     "IsSuccess" boolean NOT NULL,
+Jun 25, 2026 @ 13:46:57.107 ||     "ProgressPercent" integer NOT NULL,
+Jun 25, 2026 @ 13:46:57.107 || );
+Jun 25, 2026 @ 13:46:57.107 ||     "Status" character varying(16) NOT NULL,
+Jun 25, 2026 @ 13:46:57.107 ||     "SourceRowNumber" integer NOT NULL,
+Jun 25, 2026 @ 13:46:57.107 ||     "MappedValues" jsonb,
+Jun 25, 2026 @ 13:46:57.107 ||     "CompletedAt" timestamp with time zone,
+Jun 25, 2026 @ 13:46:57.107 ||     "ImportSessionId" uuid NOT NULL,
+Jun 25, 2026 @ 13:46:57.107 ||     CONSTRAINT "FK_staged_rows_import_sessions_ImportSessionId" FOREIGN KEY ("ImportSessionId") REFERENCES import.import_sessions ("Id") ON DELETE CASCADE
+Jun 25, 2026 @ 13:46:57.107 ||     "AppliedTargetId" integer,
+Jun 25, 2026 @ 13:46:57.107 ||     "RawValues" jsonb NOT NULL,
+Jun 25, 2026 @ 13:46:57.107 || [06:46:57.106 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.107 || [06:46:57.106 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.107 || [06:46:57.106 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.107 ||     "Message" character varying(500),
+Jun 25, 2026 @ 13:46:57.107 ||     "Kind" character varying(16) NOT NULL,
+Jun 25, 2026 @ 13:46:57.107 ||     "ImportSessionId" uuid NOT NULL,
+Jun 25, 2026 @ 13:46:57.107 ||     "Id" bigint GENERATED BY DEFAULT AS IDENTITY,
+Jun 25, 2026 @ 13:46:57.107 ||     CONSTRAINT "FK_import_session_stages_import_sessions_ImportSessionId" FOREIGN KEY ("ImportSessionId") REFERENCES import.import_sessions ("Id") ON DELETE CASCADE
+Jun 25, 2026 @ 13:46:57.107 || [06:46:57.106 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+Jun 25, 2026 @ 13:46:57.107 ||     "StartedAt" timestamp with time zone NOT NULL,
+Jun 25, 2026 @ 13:46:57.107 || CREATE TABLE import.import_session_stages (
+Jun 25, 2026 @ 13:46:57.120 || [06:46:57.120 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+Jun 25, 2026 @ 13:46:57.120 ||     CONSTRAINT "PK_staged_rows" PRIMARY KEY ("Id"),
+Jun 25, 2026 @ 13:46:57.120 ||     "Status" character varying(16) NOT NULL,
+Jun 25, 2026 @ 13:46:57.120 ||     "ImportSessionId" uuid NOT NULL,
+Jun 25, 2026 @ 13:46:57.120 || CREATE INDEX "IX_import_errors_ImportSessionId_SourceRowNumber" ON import.import_errors ("ImportSessionId", "SourceRowNumber");
+Jun 25, 2026 @ 13:46:57.120 || [06:46:57.120 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.120 ||     "Id" bigint GENERATED BY DEFAULT AS IDENTITY,
+Jun 25, 2026 @ 13:46:57.120 ||     "AppliedTargetId" integer,
+Jun 25, 2026 @ 13:46:57.120 ||     "SourceRowNumber" integer NOT NULL,
+Jun 25, 2026 @ 13:46:57.120 ||     CONSTRAINT "FK_staged_rows_import_sessions_ImportSessionId" FOREIGN KEY ("ImportSessionId") REFERENCES import.import_sessions ("Id") ON DELETE CASCADE
+Jun 25, 2026 @ 13:46:57.120 || [06:46:57.120 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.120 || [06:46:57.120 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (13ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.120 || );
+Jun 25, 2026 @ 13:46:57.120 || CREATE TABLE import.staged_rows (
+Jun 25, 2026 @ 13:46:57.120 || [06:46:57.120 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.120 ||     "MappedValues" jsonb,
+Jun 25, 2026 @ 13:46:57.120 ||     "RawValues" jsonb NOT NULL,
+Jun 25, 2026 @ 13:46:57.132 || [06:46:57.132 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.132 || CREATE UNIQUE INDEX "IX_import_file_snapshots_ImportSessionId" ON import.import_file_snapshots ("ImportSessionId");
+Jun 25, 2026 @ 13:46:57.132 || [06:46:57.132 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+Jun 25, 2026 @ 13:46:57.132 || CREATE INDEX "IX_import_errors_ImportSessionId_SourceRowNumber" ON import.import_errors ("ImportSessionId", "SourceRowNumber");
+Jun 25, 2026 @ 13:46:57.132 || [06:46:57.132 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.132 || [06:46:57.131 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.132 || [06:46:57.132 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.143 || CREATE INDEX "IX_import_session_stages_ImportSessionId" ON import.import_session_stages ("ImportSessionId");
+Jun 25, 2026 @ 13:46:57.143 || [06:46:57.143 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.143 || [06:46:57.143 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.143 || [06:46:57.143 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.143 || [06:46:57.143 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+Jun 25, 2026 @ 13:46:57.143 || [06:46:57.143 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.143 || CREATE UNIQUE INDEX "IX_import_file_snapshots_ImportSessionId" ON import.import_file_snapshots ("ImportSessionId");
+Jun 25, 2026 @ 13:46:57.154 || [06:46:57.154 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.154 || CREATE INDEX "IX_import_sessions_StartedAt" ON import.import_sessions ("StartedAt");
+Jun 25, 2026 @ 13:46:57.154 || [06:46:57.154 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.154 || [06:46:57.154 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.154 || CREATE INDEX "IX_import_session_stages_ImportSessionId" ON import.import_session_stages ("ImportSessionId");
+Jun 25, 2026 @ 13:46:57.154 || [06:46:57.154 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+Jun 25, 2026 @ 13:46:57.154 || [06:46:57.154 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.166 || [06:46:57.166 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.166 || [06:46:57.166 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.166 || CREATE INDEX "IX_import_sessions_Status" ON import.import_sessions ("Status");
+Jun 25, 2026 @ 13:46:57.166 || [06:46:57.166 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.166 || [06:46:57.166 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+Jun 25, 2026 @ 13:46:57.166 || [06:46:57.166 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.166 || CREATE INDEX "IX_import_sessions_StartedAt" ON import.import_sessions ("StartedAt");
+Jun 25, 2026 @ 13:46:57.177 || [06:46:57.177 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+Jun 25, 2026 @ 13:46:57.177 || [06:46:57.177 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.177 || CREATE UNIQUE INDEX "UX_ImportSession_TypeAndSha" ON import.import_sessions ("ImportTypeCode", "FileSha256") WHERE "Status" NOT IN ('Failed','Cancelled');
+Jun 25, 2026 @ 13:46:57.177 || [06:46:57.177 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.177 || CREATE INDEX "IX_import_sessions_Status" ON import.import_sessions ("Status");
+Jun 25, 2026 @ 13:46:57.177 || [06:46:57.177 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.177 || [06:46:57.177 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.189 || [06:46:57.189 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+Jun 25, 2026 @ 13:46:57.189 || [06:46:57.189 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.189 || [06:46:57.189 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.189 || [06:46:57.189 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (12ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.189 || [06:46:57.189 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.189 || CREATE UNIQUE INDEX "UX_ImportSession_TypeAndSha" ON import.import_sessions ("ImportTypeCode", "FileSha256") WHERE "Status" NOT IN ('Failed','Cancelled');
+Jun 25, 2026 @ 13:46:57.189 || CREATE UNIQUE INDEX "IX_staged_rows_ImportSessionId_SourceRowNumber" ON import.staged_rows ("ImportSessionId", "SourceRowNumber");
+Jun 25, 2026 @ 13:46:57.201 || [06:46:57.201 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+Jun 25, 2026 @ 13:46:57.201 || CREATE UNIQUE INDEX "IX_staged_rows_ImportSessionId_SourceRowNumber" ON import.staged_rows ("ImportSessionId", "SourceRowNumber");
+Jun 25, 2026 @ 13:46:57.201 || [06:46:57.201 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.201 || [06:46:57.201 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.201 || [06:46:57.201 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.201 || CREATE INDEX "IX_staged_rows_ImportSessionId_Status" ON import.staged_rows ("ImportSessionId", "Status");
+Jun 25, 2026 @ 13:46:57.201 || [06:46:57.201 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (12ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.212 || [06:46:57.212 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.213 || [06:46:57.212 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+Jun 25, 2026 @ 13:46:57.213 || VALUES ('20260429084812_Initial', '9.0.4');
+Jun 25, 2026 @ 13:46:57.213 || INSERT INTO import.__ef_migrations_history ("MigrationId", "ProductVersion")
+Jun 25, 2026 @ 13:46:57.213 || [06:46:57.213 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.213 || [06:46:57.212 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.213 || [06:46:57.212 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.213 || CREATE INDEX "IX_staged_rows_ImportSessionId_Status" ON import.staged_rows ("ImportSessionId", "Status");
+Jun 25, 2026 @ 13:46:57.224 || VALUES ('20260429084812_Initial', '9.0.4');
+Jun 25, 2026 @ 13:46:57.224 || INSERT INTO import.__ef_migrations_history ("MigrationId", "ProductVersion")
+Jun 25, 2026 @ 13:46:57.224 || [06:46:57.224 INF] Microsoft.EntityFrameworkCore.Migrations Applying migration '20260429170000_AddCachedProjects'.
+Jun 25, 2026 @ 13:46:57.224 || [06:46:57.224 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.231 || [06:46:57.231 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+Jun 25, 2026 @ 13:46:57.232 || [06:46:57.231 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.232 ||     CONSTRAINT "PK_cached_projects" PRIMARY KEY ("Id")
+Jun 25, 2026 @ 13:46:57.232 || );
+Jun 25, 2026 @ 13:46:57.232 ||     "LastSyncedAt" timestamp with time zone NOT NULL,
+Jun 25, 2026 @ 13:46:57.232 ||     "Id" integer NOT NULL,
+Jun 25, 2026 @ 13:46:57.232 || [06:46:57.232 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.232 ||     "IdentifierKK" character varying(255),
+Jun 25, 2026 @ 13:46:57.232 || [06:46:57.231 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.232 ||     "Title" character varying(500) NOT NULL,
+Jun 25, 2026 @ 13:46:57.232 || CREATE TABLE import.cached_projects (
+Jun 25, 2026 @ 13:46:57.232 ||     "IdentifierZPLM" character varying(255),
+Jun 25, 2026 @ 13:46:57.244 || CREATE INDEX "IX_CachedProject_Title" ON import.cached_projects ("Title");
+Jun 25, 2026 @ 13:46:57.244 || [06:46:57.244 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.244 || [06:46:57.244 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.244 || [06:46:57.244 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+Jun 25, 2026 @ 13:46:57.244 || );
+Jun 25, 2026 @ 13:46:57.244 || [06:46:57.244 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (12ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.244 ||     "LastSyncedAt" timestamp with time zone NOT NULL,
+Jun 25, 2026 @ 13:46:57.244 ||     "IdentifierZPLM" character varying(255),
+Jun 25, 2026 @ 13:46:57.244 ||     "Title" character varying(500) NOT NULL,
+Jun 25, 2026 @ 13:46:57.244 ||     "Id" integer NOT NULL,
+Jun 25, 2026 @ 13:46:57.244 ||     CONSTRAINT "PK_cached_projects" PRIMARY KEY ("Id")
+Jun 25, 2026 @ 13:46:57.244 || [06:46:57.244 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.244 ||     "IdentifierKK" character varying(255),
+Jun 25, 2026 @ 13:46:57.244 || CREATE TABLE import.cached_projects (
+Jun 25, 2026 @ 13:46:57.256 || [06:46:57.256 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (12ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.256 || [06:46:57.256 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.256 || [06:46:57.256 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.256 || [06:46:57.256 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.256 || CREATE INDEX "IX_CachedProject_Title" ON import.cached_projects ("Title");
+Jun 25, 2026 @ 13:46:57.256 || CREATE INDEX "IX_CachedProject_IdentifierKK" ON import.cached_projects ("IdentifierKK");
+Jun 25, 2026 @ 13:46:57.256 || [06:46:57.256 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+Jun 25, 2026 @ 13:46:57.267 || [06:46:57.267 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.267 || [06:46:57.267 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+Jun 25, 2026 @ 13:46:57.267 || [06:46:57.267 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.267 || CREATE INDEX "IX_CachedProject_IdentifierKK" ON import.cached_projects ("IdentifierKK");
+Jun 25, 2026 @ 13:46:57.267 || INSERT INTO import.__ef_migrations_history ("MigrationId", "ProductVersion")
+Jun 25, 2026 @ 13:46:57.267 || VALUES ('20260429170000_AddCachedProjects', '9.0.4');
+Jun 25, 2026 @ 13:46:57.267 || [06:46:57.267 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.267 || [06:46:57.267 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.278 || [06:46:57.278 INF] Microsoft.EntityFrameworkCore.Migrations Applying migration '20260430213808_RemoveFileSha256Constraint'.
+Jun 25, 2026 @ 13:46:57.278 || VALUES ('20260429170000_AddCachedProjects', '9.0.4');
+Jun 25, 2026 @ 13:46:57.278 || INSERT INTO import.__ef_migrations_history ("MigrationId", "ProductVersion")
+Jun 25, 2026 @ 13:46:57.278 || [06:46:57.278 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.285 || [06:46:57.285 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.285 || [06:46:57.285 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+Jun 25, 2026 @ 13:46:57.285 || [06:46:57.285 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.285 || [06:46:57.285 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.285 || DROP INDEX import."UX_ImportSession_TypeAndSha";
+Jun 25, 2026 @ 13:46:57.304 || [06:46:57.304 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.304 || ALTER TABLE import.import_sessions DROP COLUMN "FileSha256";
+Jun 25, 2026 @ 13:46:57.304 || [06:46:57.304 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+Jun 25, 2026 @ 13:46:57.304 || [06:46:57.304 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.304 || DROP INDEX import."UX_ImportSession_TypeAndSha";
+Jun 25, 2026 @ 13:46:57.304 || [06:46:57.304 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (18ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.304 || [06:46:57.304 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.315 || [06:46:57.315 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.315 || [06:46:57.315 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.315 || ALTER TABLE import.import_sessions DROP COLUMN "FileSha256";
+Jun 25, 2026 @ 13:46:57.315 || [06:46:57.315 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.315 || [06:46:57.315 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.315 || [06:46:57.315 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+Jun 25, 2026 @ 13:46:57.315 || CREATE INDEX "IX_ImportSession_Type" ON import.import_sessions ("ImportTypeCode");
+Jun 25, 2026 @ 13:46:57.327 || [06:46:57.327 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+Jun 25, 2026 @ 13:46:57.327 || CREATE INDEX "IX_ImportSession_Type" ON import.import_sessions ("ImportTypeCode");
+Jun 25, 2026 @ 13:46:57.327 || INSERT INTO import.__ef_migrations_history ("MigrationId", "ProductVersion")
+Jun 25, 2026 @ 13:46:57.327 || [06:46:57.327 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.327 || VALUES ('20260430213808_RemoveFileSha256Constraint', '9.0.4');
+Jun 25, 2026 @ 13:46:57.327 || [06:46:57.327 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.327 || [06:46:57.327 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.327 || [06:46:57.327 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.338 || VALUES ('20260430213808_RemoveFileSha256Constraint', '9.0.4');
+Jun 25, 2026 @ 13:46:57.338 || [06:46:57.338 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.338 || [06:46:57.338 INF] Microsoft.EntityFrameworkCore.Migrations Applying migration '20260512095902_AddSheetToStagedRowAndError'.
+Jun 25, 2026 @ 13:46:57.338 || INSERT INTO import.__ef_migrations_history ("MigrationId", "ProductVersion")
+Jun 25, 2026 @ 13:46:57.345 || [06:46:57.345 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.345 || DROP INDEX import."IX_staged_rows_ImportSessionId_SourceRowNumber";
+Jun 25, 2026 @ 13:46:57.345 || [06:46:57.345 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.345 || [06:46:57.345 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+Jun 25, 2026 @ 13:46:57.345 || [06:46:57.345 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.356 || DROP INDEX import."IX_staged_rows_ImportSessionId_SourceRowNumber";
+Jun 25, 2026 @ 13:46:57.356 || [06:46:57.356 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.357 || [06:46:57.356 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.357 || [06:46:57.356 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.357 || [06:46:57.356 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.357 || DROP INDEX import."IX_import_errors_ImportSessionId_SourceRowNumber";
+Jun 25, 2026 @ 13:46:57.357 || [06:46:57.356 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+Jun 25, 2026 @ 13:46:57.368 || [06:46:57.368 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.368 || [06:46:57.368 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.368 || [06:46:57.368 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+Jun 25, 2026 @ 13:46:57.368 || ALTER TABLE import.staged_rows ADD "Sheet" character varying(255) NOT NULL DEFAULT '';
+Jun 25, 2026 @ 13:46:57.368 || DROP INDEX import."IX_import_errors_ImportSessionId_SourceRowNumber";
+Jun 25, 2026 @ 13:46:57.368 || [06:46:57.367 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.368 || [06:46:57.368 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.381 || [06:46:57.381 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+Jun 25, 2026 @ 13:46:57.381 || [06:46:57.381 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (14ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.381 || ALTER TABLE import.staged_rows ADD "Sheet" character varying(255) NOT NULL DEFAULT '';
+Jun 25, 2026 @ 13:46:57.382 || [06:46:57.381 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.382 || ALTER TABLE import.import_errors ADD "Sheet" character varying(255) NOT NULL DEFAULT '';
+Jun 25, 2026 @ 13:46:57.382 || [06:46:57.381 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.382 || [06:46:57.381 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.393 || [06:46:57.393 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.393 || [06:46:57.393 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.393 || [06:46:57.393 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.393 || CREATE UNIQUE INDEX "IX_staged_rows_ImportSessionId_Sheet_SourceRowNumber" ON import.staged_rows ("ImportSessionId", "Sheet", "SourceRowNumber");
+Jun 25, 2026 @ 13:46:57.393 || ALTER TABLE import.import_errors ADD "Sheet" character varying(255) NOT NULL DEFAULT '';
+Jun 25, 2026 @ 13:46:57.393 || [06:46:57.393 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.393 || [06:46:57.393 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+Jun 25, 2026 @ 13:46:57.405 || CREATE INDEX "IX_import_errors_ImportSessionId_Sheet_SourceRowNumber" ON import.import_errors ("ImportSessionId", "Sheet", "SourceRowNumber");
+Jun 25, 2026 @ 13:46:57.405 || [06:46:57.405 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.405 || [06:46:57.405 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.405 || [06:46:57.405 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (12ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.405 || [06:46:57.405 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.405 || [06:46:57.405 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+Jun 25, 2026 @ 13:46:57.405 || CREATE UNIQUE INDEX "IX_staged_rows_ImportSessionId_Sheet_SourceRowNumber" ON import.staged_rows ("ImportSessionId", "Sheet", "SourceRowNumber");
+Jun 25, 2026 @ 13:46:57.417 || INSERT INTO import.__ef_migrations_history ("MigrationId", "ProductVersion")
+Jun 25, 2026 @ 13:46:57.417 || [06:46:57.417 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.417 || [06:46:57.417 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+Jun 25, 2026 @ 13:46:57.417 || [06:46:57.417 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.417 || VALUES ('20260512095902_AddSheetToStagedRowAndError', '9.0.4');
+Jun 25, 2026 @ 13:46:57.417 || CREATE INDEX "IX_import_errors_ImportSessionId_Sheet_SourceRowNumber" ON import.import_errors ("ImportSessionId", "Sheet", "SourceRowNumber");
+Jun 25, 2026 @ 13:46:57.417 || [06:46:57.417 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (12ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.417 || [06:46:57.417 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.428 || INSERT INTO import.__ef_migrations_history ("MigrationId", "ProductVersion")
+Jun 25, 2026 @ 13:46:57.428 || VALUES ('20260512095902_AddSheetToStagedRowAndError', '9.0.4');
+Jun 25, 2026 @ 13:46:57.428 || [06:46:57.428 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.428 || [06:46:57.428 INF] Microsoft.EntityFrameworkCore.Migrations Applying migration '20260518085520_AddActionsToStagedRow'.
+Jun 25, 2026 @ 13:46:57.434 || [06:46:57.434 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+Jun 25, 2026 @ 13:46:57.434 || [06:46:57.434 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.435 || [06:46:57.434 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.435 || ALTER TABLE import.staged_rows ADD "Actions" jsonb;
+Jun 25, 2026 @ 13:46:57.435 || [06:46:57.434 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.446 || [06:46:57.446 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.446 || VALUES ('20260518085520_AddActionsToStagedRow', '9.0.4');
+Jun 25, 2026 @ 13:46:57.446 || INSERT INTO import.__ef_migrations_history ("MigrationId", "ProductVersion")
+Jun 25, 2026 @ 13:46:57.446 || ALTER TABLE import.staged_rows ADD "Actions" jsonb;
+Jun 25, 2026 @ 13:46:57.446 || [06:46:57.445 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.446 || [06:46:57.446 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+Jun 25, 2026 @ 13:46:57.446 || [06:46:57.446 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.446 || [06:46:57.446 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.457 || [06:46:57.457 INF] Microsoft.EntityFrameworkCore.Migrations Applying migration '20260520072742_AddRoomApplySnapshots'.
+Jun 25, 2026 @ 13:46:57.457 || [06:46:57.457 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.457 || INSERT INTO import.__ef_migrations_history ("MigrationId", "ProductVersion")
+Jun 25, 2026 @ 13:46:57.457 || VALUES ('20260518085520_AddActionsToStagedRow', '9.0.4');
+Jun 25, 2026 @ 13:46:57.466 ||     "LastAppliedSessionId" uuid NOT NULL,
+Jun 25, 2026 @ 13:46:57.466 ||     "ShareAgreementNumber" character varying(255),
+Jun 25, 2026 @ 13:46:57.466 || [06:46:57.466 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.466 || );
+Jun 25, 2026 @ 13:46:57.466 ||     "Sheet" character varying(255) NOT NULL,
+Jun 25, 2026 @ 13:46:57.466 || [06:46:57.466 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.466 ||     "RoomNumber" character varying(255) NOT NULL,
+Jun 25, 2026 @ 13:46:57.466 ||     "VisarySiteId" integer NOT NULL,
+Jun 25, 2026 @ 13:46:57.466 || CREATE TABLE import.room_apply_snapshots (
+Jun 25, 2026 @ 13:46:57.466 ||     "VisarySectionId" integer,
+Jun 25, 2026 @ 13:46:57.466 ||     "Id" bigint GENERATED BY DEFAULT AS IDENTITY,
+Jun 25, 2026 @ 13:46:57.466 || [06:46:57.466 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.466 ||     CONSTRAINT "PK_room_apply_snapshots" PRIMARY KEY ("Id")
+Jun 25, 2026 @ 13:46:57.466 ||     "BuildingSection" character varying(255) NOT NULL,
+Jun 25, 2026 @ 13:46:57.466 ||     "SectionTitle" character varying(255) NOT NULL,
+Jun 25, 2026 @ 13:46:57.466 || [06:46:57.466 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+Jun 25, 2026 @ 13:46:57.466 ||     "VisaryShareAgreementId" integer,
+Jun 25, 2026 @ 13:46:57.466 ||     "VisaryRoomId" integer,
+Jun 25, 2026 @ 13:46:57.466 ||     "RoomKindId" integer,
+Jun 25, 2026 @ 13:46:57.466 ||     "LastAppliedAt" timestamp with time zone NOT NULL,
+Jun 25, 2026 @ 13:46:57.466 ||     "MappedSnapshot" jsonb NOT NULL,
+Jun 25, 2026 @ 13:46:57.466 ||     "MappedHash" character varying(64) NOT NULL,
+Jun 25, 2026 @ 13:46:57.480 ||     "RoomKindId" integer,
+Jun 25, 2026 @ 13:46:57.480 ||     "MappedSnapshot" jsonb NOT NULL,
+Jun 25, 2026 @ 13:46:57.480 ||     "MappedHash" character varying(64) NOT NULL,
+Jun 25, 2026 @ 13:46:57.480 ||     "LastAppliedSessionId" uuid NOT NULL,
+Jun 25, 2026 @ 13:46:57.480 ||     "VisarySectionId" integer,
+Jun 25, 2026 @ 13:46:57.480 || [06:46:57.480 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.480 || );
+Jun 25, 2026 @ 13:46:57.480 ||     "ShareAgreementNumber" character varying(255),
+Jun 25, 2026 @ 13:46:57.480 ||     "RoomNumber" character varying(255) NOT NULL,
+Jun 25, 2026 @ 13:46:57.480 || [06:46:57.480 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.480 || [06:46:57.480 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.480 || [06:46:57.480 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+Jun 25, 2026 @ 13:46:57.480 ||     "VisaryShareAgreementId" integer,
+Jun 25, 2026 @ 13:46:57.480 ||     "VisarySiteId" integer NOT NULL,
+Jun 25, 2026 @ 13:46:57.480 || [06:46:57.480 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (14ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.480 || CREATE UNIQUE INDEX "IX_RoomApplySnapshot_BusinessKey" ON import.room_apply_snapshots ("VisarySiteId", "Sheet", "SectionTitle", "RoomKindId", "RoomNumber", "BuildingSection");
+Jun 25, 2026 @ 13:46:57.480 ||     "Id" bigint GENERATED BY DEFAULT AS IDENTITY,
+Jun 25, 2026 @ 13:46:57.480 || CREATE TABLE import.room_apply_snapshots (
+Jun 25, 2026 @ 13:46:57.480 ||     CONSTRAINT "PK_room_apply_snapshots" PRIMARY KEY ("Id")
+Jun 25, 2026 @ 13:46:57.480 ||     "LastAppliedAt" timestamp with time zone NOT NULL,
+Jun 25, 2026 @ 13:46:57.480 ||     "SectionTitle" character varying(255) NOT NULL,
+Jun 25, 2026 @ 13:46:57.480 ||     "VisaryRoomId" integer,
+Jun 25, 2026 @ 13:46:57.480 ||     "BuildingSection" character varying(255) NOT NULL,
+Jun 25, 2026 @ 13:46:57.480 ||     "Sheet" character varying(255) NOT NULL,
+Jun 25, 2026 @ 13:46:57.492 || CREATE INDEX "IX_RoomApplySnapshot_Site" ON import.room_apply_snapshots ("VisarySiteId");
+Jun 25, 2026 @ 13:46:57.492 || [06:46:57.492 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.492 || CREATE UNIQUE INDEX "IX_RoomApplySnapshot_BusinessKey" ON import.room_apply_snapshots ("VisarySiteId", "Sheet", "SectionTitle", "RoomKindId", "RoomNumber", "BuildingSection");
+Jun 25, 2026 @ 13:46:57.492 || [06:46:57.492 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+Jun 25, 2026 @ 13:46:57.492 || [06:46:57.492 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.492 || [06:46:57.492 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (12ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.492 || [06:46:57.492 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.504 || [06:46:57.504 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.504 || [06:46:57.503 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+Jun 25, 2026 @ 13:46:57.504 || INSERT INTO import.__ef_migrations_history ("MigrationId", "ProductVersion")
+Jun 25, 2026 @ 13:46:57.504 || VALUES ('20260520072742_AddRoomApplySnapshots', '9.0.4');
+Jun 25, 2026 @ 13:46:57.504 || CREATE INDEX "IX_RoomApplySnapshot_Site" ON import.room_apply_snapshots ("VisarySiteId");
+Jun 25, 2026 @ 13:46:57.504 || [06:46:57.503 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (12ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.504 || [06:46:57.504 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.504 || [06:46:57.504 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.515 || [06:46:57.515 INF] Microsoft.EntityFrameworkCore.Migrations Applying migration '20260525115407_AddSecondaryFileToSnapshot'.
+Jun 25, 2026 @ 13:46:57.515 || VALUES ('20260520072742_AddRoomApplySnapshots', '9.0.4');
+Jun 25, 2026 @ 13:46:57.515 || INSERT INTO import.__ef_migrations_history ("MigrationId", "ProductVersion")
+Jun 25, 2026 @ 13:46:57.515 || [06:46:57.515 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.522 || [06:46:57.522 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.522 || [06:46:57.522 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.522 || [06:46:57.522 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.522 || ALTER TABLE import.import_file_snapshots ADD "SecondaryFileName" text;
+Jun 25, 2026 @ 13:46:57.522 || [06:46:57.522 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+Jun 25, 2026 @ 13:46:57.534 || ALTER TABLE import.import_file_snapshots ADD "SecondaryRelativePath" text;
+Jun 25, 2026 @ 13:46:57.534 || [06:46:57.534 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.534 || [06:46:57.534 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.534 || [06:46:57.534 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+Jun 25, 2026 @ 13:46:57.534 || [06:46:57.534 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.534 || ALTER TABLE import.import_file_snapshots ADD "SecondaryFileName" text;
+Jun 25, 2026 @ 13:46:57.534 || [06:46:57.534 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.545 || [06:46:57.545 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.545 || [06:46:57.545 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.545 || ALTER TABLE import.import_file_snapshots ADD "SecondarySizeBytes" bigint;
+Jun 25, 2026 @ 13:46:57.545 || [06:46:57.545 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+Jun 25, 2026 @ 13:46:57.545 || [06:46:57.545 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.545 || ALTER TABLE import.import_file_snapshots ADD "SecondaryRelativePath" text;
+Jun 25, 2026 @ 13:46:57.545 || [06:46:57.545 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.556 || [06:46:57.556 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.556 || [06:46:57.556 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+Jun 25, 2026 @ 13:46:57.556 || [06:46:57.556 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.556 || [06:46:57.556 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.556 || ALTER TABLE import.import_file_snapshots ADD "SecondarySizeBytes" bigint;
+Jun 25, 2026 @ 13:46:57.557 || INSERT INTO import.__ef_migrations_history ("MigrationId", "ProductVersion")
+Jun 25, 2026 @ 13:46:57.557 || [06:46:57.556 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.557 || VALUES ('20260525115407_AddSecondaryFileToSnapshot', '9.0.4');
+Jun 25, 2026 @ 13:46:57.567 || INSERT INTO import.__ef_migrations_history ("MigrationId", "ProductVersion")
+Jun 25, 2026 @ 13:46:57.567 || [06:46:57.567 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.567 || VALUES ('20260525115407_AddSecondaryFileToSnapshot', '9.0.4');
+Jun 25, 2026 @ 13:46:57.570 || [06:46:57.570 DBG] Microsoft.EntityFrameworkCore.Database.Transaction Committing transaction.
+Jun 25, 2026 @ 13:46:57.588 || [06:46:57.588 DBG] Microsoft.EntityFrameworkCore.Database.Transaction Committed transaction.
+Jun 25, 2026 @ 13:46:57.592 || [06:46:57.592 DBG] Microsoft.EntityFrameworkCore.Database.Transaction Disposing transaction.
+Jun 25, 2026 @ 13:46:57.593 || [06:46:57.593 DBG] Microsoft.EntityFrameworkCore.Database.Connection Closing connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+Jun 25, 2026 @ 13:46:57.593 || [06:46:57.593 DBG] Microsoft.EntityFrameworkCore.Database.Connection Closed connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432' (0ms).
+Jun 25, 2026 @ 13:46:57.599 || [06:46:57.599 INF]  Applying VisaryDb migrations (schema=Data)…
+Jun 25, 2026 @ 13:46:57.679 || [06:46:57.679 DBG] Microsoft.EntityFrameworkCore.Infrastructure Entity Framework Core 9.0.4 initialized 'VisaryDbContext' using provider 'Npgsql.EntityFrameworkCore.PostgreSQL:9.0.4+fd2380957bee5cd86f336466af36b08c0163f1a5' with options: MigrationsHistoryTable=Data.__ef_migrations_history 
+Jun 25, 2026 @ 13:46:57.719 || SELECT "MigrationId", "ProductVersion"
+Jun 25, 2026 @ 13:46:57.719 || ORDER BY "MigrationId";
+Jun 25, 2026 @ 13:46:57.719 || [06:46:57.719 DBG] Microsoft.EntityFrameworkCore.Database.Connection Opened connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+Jun 25, 2026 @ 13:46:57.719 || [06:46:57.719 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteReader' (0ms).
+Jun 25, 2026 @ 13:46:57.719 || [06:46:57.719 DBG] Microsoft.EntityFrameworkCore.Database.Connection Creating DbConnection.
+Jun 25, 2026 @ 13:46:57.719 || [06:46:57.719 DBG] Microsoft.EntityFrameworkCore.Database.Connection Opening connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+Jun 25, 2026 @ 13:46:57.719 || FROM "Data".__ef_migrations_history
+Jun 25, 2026 @ 13:46:57.719 || [06:46:57.719 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.719 || [06:46:57.719 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteReader' (0ms).
+Jun 25, 2026 @ 13:46:57.719 || [06:46:57.719 DBG] Microsoft.EntityFrameworkCore.Database.Connection Created DbConnection. (0ms).
+Jun 25, 2026 @ 13:46:57.719 || [06:46:57.719 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteReader'.
+Jun 25, 2026 @ 13:46:57.731 || SELECT "MigrationId", "ProductVersion"
+Jun 25, 2026 @ 13:46:57.731 || FROM "Data".__ef_migrations_history
+Jun 25, 2026 @ 13:46:57.731 || [06:46:57.731 DBG] Microsoft.EntityFrameworkCore.Database.Connection Closing connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+Jun 25, 2026 @ 13:46:57.731 || ORDER BY "MigrationId";
+Jun 25, 2026 @ 13:46:57.731 || [06:46:57.731 DBG] Microsoft.EntityFrameworkCore.Database.Connection Closed connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432' (0ms).
+Jun 25, 2026 @ 13:46:57.731 || [06:46:57.731 ERR] Microsoft.EntityFrameworkCore.Database.Command Failed executing DbCommand (12ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.752 || [06:46:57.752 DBG] Microsoft.EntityFrameworkCore.Migrations Migrating using database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+Jun 25, 2026 @ 13:46:57.752 || [06:46:57.752 DBG] Microsoft.EntityFrameworkCore.Database.Connection Opening connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+Jun 25, 2026 @ 13:46:57.753 || [06:46:57.752 DBG] Microsoft.EntityFrameworkCore.Database.Connection Opening connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+Jun 25, 2026 @ 13:46:57.810 || [06:46:57.810 DBG] Microsoft.EntityFrameworkCore.Database.Connection Opened connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+Jun 25, 2026 @ 13:46:57.810 || [06:46:57.810 DBG] Microsoft.EntityFrameworkCore.Database.Connection Closing connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+Jun 25, 2026 @ 13:46:57.811 || [06:46:57.811 DBG] Microsoft.EntityFrameworkCore.Database.Connection Opening connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+Jun 25, 2026 @ 13:46:57.811 || [06:46:57.811 DBG] Microsoft.EntityFrameworkCore.Database.Connection Opened connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+Jun 25, 2026 @ 13:46:57.811 || [06:46:57.811 DBG] Microsoft.EntityFrameworkCore.Database.Connection Closed connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432' (0ms).
+Jun 25, 2026 @ 13:46:57.814 || [06:46:57.814 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+Jun 25, 2026 @ 13:46:57.824 || [06:46:57.814 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.824 || [06:46:57.824 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (10ms).
+Jun 25, 2026 @ 13:46:57.825 ||         CREATE SCHEMA "Data";
+Jun 25, 2026 @ 13:46:57.825 || BEGIN
+Jun 25, 2026 @ 13:46:57.825 ||     "MigrationId" character varying(150) NOT NULL,
+Jun 25, 2026 @ 13:46:57.825 ||     IF NOT EXISTS(SELECT 1 FROM pg_namespace WHERE nspname = 'Data') THEN
+Jun 25, 2026 @ 13:46:57.825 || [06:46:57.824 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.825 || );
+Jun 25, 2026 @ 13:46:57.825 ||     "ProductVersion" character varying(32) NOT NULL,
+Jun 25, 2026 @ 13:46:57.825 || DO $EF$
+Jun 25, 2026 @ 13:46:57.825 || CREATE TABLE IF NOT EXISTS "Data".__ef_migrations_history (
+Jun 25, 2026 @ 13:46:57.825 ||     CONSTRAINT "PK___ef_migrations_history" PRIMARY KEY ("MigrationId")
+Jun 25, 2026 @ 13:46:57.825 || END $EF$;
+Jun 25, 2026 @ 13:46:57.825 ||     END IF;
+Jun 25, 2026 @ 13:46:57.839 ||     IF NOT EXISTS(SELECT 1 FROM pg_namespace WHERE nspname = 'Data') THEN
+Jun 25, 2026 @ 13:46:57.839 || CREATE TABLE IF NOT EXISTS "Data".__ef_migrations_history (
+Jun 25, 2026 @ 13:46:57.839 || END $EF$;
+Jun 25, 2026 @ 13:46:57.839 || BEGIN
+Jun 25, 2026 @ 13:46:57.839 ||     END IF;
+Jun 25, 2026 @ 13:46:57.839 ||     "ProductVersion" character varying(32) NOT NULL,
+Jun 25, 2026 @ 13:46:57.839 ||     "MigrationId" character varying(150) NOT NULL,
+Jun 25, 2026 @ 13:46:57.839 ||         CREATE SCHEMA "Data";
+Jun 25, 2026 @ 13:46:57.839 || DO $EF$
+Jun 25, 2026 @ 13:46:57.839 || [06:46:57.839 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (14ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.839 || );
+Jun 25, 2026 @ 13:46:57.839 ||     CONSTRAINT "PK___ef_migrations_history" PRIMARY KEY ("MigrationId")
+Jun 25, 2026 @ 13:46:57.841 || [06:46:57.841 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+Jun 25, 2026 @ 13:46:57.841 || [06:46:57.841 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.841 || [06:46:57.841 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.841 || [06:46:57.841 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.841 || LOCK TABLE "Data".__ef_migrations_history IN ACCESS EXCLUSIVE MODE
+Jun 25, 2026 @ 13:46:57.841 || [06:46:57.841 DBG] Microsoft.EntityFrameworkCore.Database.Transaction Began transaction with isolation level 'ReadCommitted'.
+Jun 25, 2026 @ 13:46:57.841 || [06:46:57.841 DBG] Microsoft.EntityFrameworkCore.Database.Transaction Beginning transaction with isolation level 'Unspecified'.
+Jun 25, 2026 @ 13:46:57.853 || [06:46:57.853 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteReader' (0ms).
+Jun 25, 2026 @ 13:46:57.853 || [06:46:57.852 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.853 || [06:46:57.853 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteReader'.
+Jun 25, 2026 @ 13:46:57.853 || ORDER BY "MigrationId";
+Jun 25, 2026 @ 13:46:57.853 || FROM "Data".__ef_migrations_history
+Jun 25, 2026 @ 13:46:57.853 || SELECT "MigrationId", "ProductVersion"
+Jun 25, 2026 @ 13:46:57.853 || [06:46:57.853 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.853 || [06:46:57.853 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteReader' (0ms).
+Jun 25, 2026 @ 13:46:57.853 || LOCK TABLE "Data".__ef_migrations_history IN ACCESS EXCLUSIVE MODE
+Jun 25, 2026 @ 13:46:57.864 || FROM "Data".__ef_migrations_history
+Jun 25, 2026 @ 13:46:57.864 || [06:46:57.864 INF] Microsoft.EntityFrameworkCore.Migrations Applying migration '20260623053617_InitialDataSchema'.
+Jun 25, 2026 @ 13:46:57.864 || [06:46:57.864 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.864 || ORDER BY "MigrationId";
+Jun 25, 2026 @ 13:46:57.864 || SELECT "MigrationId", "ProductVersion"
+Jun 25, 2026 @ 13:46:57.864 || [06:46:57.864 DBG] Microsoft.EntityFrameworkCore.Database.Command A data reader for 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432' is being disposed after spending 0ms reading results.
+Jun 25, 2026 @ 13:46:57.864 || [06:46:57.864 DBG] Microsoft.EntityFrameworkCore.Database.Command Closing data reader to 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+Jun 25, 2026 @ 13:46:57.876 ||     END IF;
+Jun 25, 2026 @ 13:46:57.876 || DO $EF$
+Jun 25, 2026 @ 13:46:57.876 || END $EF$;
+Jun 25, 2026 @ 13:46:57.876 || [06:46:57.876 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+Jun 25, 2026 @ 13:46:57.876 ||     IF NOT EXISTS(SELECT 1 FROM pg_namespace WHERE nspname = 'Data') THEN
+Jun 25, 2026 @ 13:46:57.876 || [06:46:57.876 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.876 || [06:46:57.876 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.876 || [06:46:57.876 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.876 ||         CREATE SCHEMA "Data";
+Jun 25, 2026 @ 13:46:57.876 || BEGIN
+Jun 25, 2026 @ 13:46:57.888 ||     "Title" text,
+Jun 25, 2026 @ 13:46:57.888 || [06:46:57.888 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.888 ||     IF NOT EXISTS(SELECT 1 FROM pg_namespace WHERE nspname = 'Data') THEN
+Jun 25, 2026 @ 13:46:57.888 ||     "ID" integer GENERATED BY DEFAULT AS IDENTITY,
+Jun 25, 2026 @ 13:46:57.888 || CREATE TABLE "Data"."ConstructionProject" (
+Jun 25, 2026 @ 13:46:57.888 ||         CREATE SCHEMA "Data";
+Jun 25, 2026 @ 13:46:57.888 || [06:46:57.888 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+Jun 25, 2026 @ 13:46:57.888 || END $EF$;
+Jun 25, 2026 @ 13:46:57.888 ||     CONSTRAINT "PK_ConstructionProject" PRIMARY KEY ("ID")
+Jun 25, 2026 @ 13:46:57.888 || [06:46:57.888 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.888 || [06:46:57.888 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.888 ||     "IdentifierKK" text,
+Jun 25, 2026 @ 13:46:57.888 ||     END IF;
+Jun 25, 2026 @ 13:46:57.888 ||     "IdentifierZPLM" text,
+Jun 25, 2026 @ 13:46:57.888 || );
+Jun 25, 2026 @ 13:46:57.888 || [06:46:57.887 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.888 ||     "Hidden" boolean NOT NULL,
+Jun 25, 2026 @ 13:46:57.888 || DO $EF$
+Jun 25, 2026 @ 13:46:57.888 || BEGIN
+Jun 25, 2026 @ 13:46:57.901 ||     "Hidden" boolean NOT NULL,
+Jun 25, 2026 @ 13:46:57.901 || CREATE TABLE "Data"."ConstructionProject" (
+Jun 25, 2026 @ 13:46:57.901 ||     "Version" timestamp with time zone,
+Jun 25, 2026 @ 13:46:57.901 ||     "RegionID" integer,
+Jun 25, 2026 @ 13:46:57.901 || [06:46:57.901 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.901 ||     "IdentifierKK" text,
+Jun 25, 2026 @ 13:46:57.901 || CREATE TABLE "Data"."ConstructionSite" (
+Jun 25, 2026 @ 13:46:57.901 ||     "IdentifierZPLM" text,
+Jun 25, 2026 @ 13:46:57.901 || [06:46:57.901 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (13ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.901 ||     "Hidden" boolean NOT NULL,
+Jun 25, 2026 @ 13:46:57.901 ||     "TownID" integer,
+Jun 25, 2026 @ 13:46:57.901 || [06:46:57.901 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.901 || [06:46:57.901 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+Jun 25, 2026 @ 13:46:57.901 ||     "ConstructionProjectNumber" text,
+Jun 25, 2026 @ 13:46:57.901 ||     "Title" text,
+Jun 25, 2026 @ 13:46:57.901 ||     CONSTRAINT "PK_ConstructionSite" PRIMARY KEY ("ID")
+Jun 25, 2026 @ 13:46:57.901 ||     "ConstructionProjectID" integer,
+Jun 25, 2026 @ 13:46:57.901 || );
+Jun 25, 2026 @ 13:46:57.901 ||     CONSTRAINT "PK_ConstructionProject" PRIMARY KEY ("ID")
+Jun 25, 2026 @ 13:46:57.901 ||     "Title" text,
+Jun 25, 2026 @ 13:46:57.901 || [06:46:57.901 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.901 ||     "StageNumber" text,
+Jun 25, 2026 @ 13:46:57.901 ||     "ID" integer GENERATED BY DEFAULT AS IDENTITY,
+Jun 25, 2026 @ 13:46:57.901 ||     "FinishingMaterialId" integer,
+Jun 25, 2026 @ 13:46:57.901 ||     "ID" integer GENERATED BY DEFAULT AS IDENTITY,
+Jun 25, 2026 @ 13:46:57.901 || );
+Jun 25, 2026 @ 13:46:57.901 ||     "Address" text,
+Jun 25, 2026 @ 13:46:57.901 ||     "ConstructionPermissionNumber" text,
+Jun 25, 2026 @ 13:46:57.914 ||     "ExplicationNumber" text,
+Jun 25, 2026 @ 13:46:57.914 || [06:46:57.914 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.914 || );
+Jun 25, 2026 @ 13:46:57.914 ||     "CostForOne" numeric,
+Jun 25, 2026 @ 13:46:57.914 ||     "IsStudio" boolean NOT NULL,
+Jun 25, 2026 @ 13:46:57.914 ||     "StageNumber" text,
+Jun 25, 2026 @ 13:46:57.914 ||     "ParkingPlaceType" text,
+Jun 25, 2026 @ 13:46:57.914 ||     "Address" text,
+Jun 25, 2026 @ 13:46:57.914 ||     "Hidden" boolean NOT NULL,
+Jun 25, 2026 @ 13:46:57.914 ||     "IsShowcaseWindows" text,
+Jun 25, 2026 @ 13:46:57.914 ||     "LivingArea" double precision,
+Jun 25, 2026 @ 13:46:57.914 ||     "Title" text,
+Jun 25, 2026 @ 13:46:57.914 ||     CONSTRAINT "PK_ConstructionSite" PRIMARY KEY ("ID")
+Jun 25, 2026 @ 13:46:57.914 ||     "ConstructionPermissionNumber" text,
+Jun 25, 2026 @ 13:46:57.914 ||     "ConstructionProjectID" integer,
+Jun 25, 2026 @ 13:46:57.914 ||     "ProjectArea" double precision NOT NULL,
+Jun 25, 2026 @ 13:46:57.914 || [06:46:57.913 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+Jun 25, 2026 @ 13:46:57.914 ||     "Hidden" boolean NOT NULL,
+Jun 25, 2026 @ 13:46:57.914 ||     "RoomPurpose" text,
+Jun 25, 2026 @ 13:46:57.914 ||     "UniqueNumber" text,
+Jun 25, 2026 @ 13:46:57.914 ||     "SummerRoomArea" double precision,
+Jun 25, 2026 @ 13:46:57.914 || [06:46:57.913 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (13ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.914 ||     "TotalArea" double precision,
+Jun 25, 2026 @ 13:46:57.914 ||     "FinishingMaterialId" integer,
+Jun 25, 2026 @ 13:46:57.914 ||     "TownID" integer,
+Jun 25, 2026 @ 13:46:57.914 || CREATE TABLE "Data"."ConstructionSite" (
+Jun 25, 2026 @ 13:46:57.914 ||     "TotalAreaWithoutSummerRoom" double precision,
+Jun 25, 2026 @ 13:46:57.914 || );
+Jun 25, 2026 @ 13:46:57.914 ||     "RegionID" integer,
+Jun 25, 2026 @ 13:46:57.914 ||     "IsSeparateEntrance" text,
+Jun 25, 2026 @ 13:46:57.914 ||     "Cost" numeric,
+Jun 25, 2026 @ 13:46:57.914 ||     "Description" text,
+Jun 25, 2026 @ 13:46:57.914 ||     "KindID" integer NOT NULL,
+Jun 25, 2026 @ 13:46:57.914 ||     "Number" text,
+Jun 25, 2026 @ 13:46:57.914 ||     "Version" timestamp with time zone,
+Jun 25, 2026 @ 13:46:57.914 ||     "Title" text,
+Jun 25, 2026 @ 13:46:57.914 ||     "RoomsNumber" integer,
+Jun 25, 2026 @ 13:46:57.914 ||     "Floor" text,
+Jun 25, 2026 @ 13:46:57.914 ||     "SectionID" integer,
+Jun 25, 2026 @ 13:46:57.914 ||     "SiteID" integer NOT NULL,
+Jun 25, 2026 @ 13:46:57.914 ||     "ID" integer GENERATED BY DEFAULT AS IDENTITY,
+Jun 25, 2026 @ 13:46:57.914 || [06:46:57.914 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.914 || [06:46:57.914 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.914 ||     CONSTRAINT "PK_Room" PRIMARY KEY ("ID")
+Jun 25, 2026 @ 13:46:57.914 ||     "BuildingSection" text,
+Jun 25, 2026 @ 13:46:57.914 || CREATE TABLE "Data"."Room" (
+Jun 25, 2026 @ 13:46:57.914 ||     "ConstructionProjectNumber" text,
+Jun 25, 2026 @ 13:46:57.914 ||     "ID" integer GENERATED BY DEFAULT AS IDENTITY,
+Jun 25, 2026 @ 13:46:57.927 ||     "Cost" numeric,
+Jun 25, 2026 @ 13:46:57.927 ||     "ID" integer GENERATED BY DEFAULT AS IDENTITY,
+Jun 25, 2026 @ 13:46:57.927 ||     "SectionID" integer,
+Jun 25, 2026 @ 13:46:57.927 || [06:46:57.927 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.927 ||     "Hidden" boolean NOT NULL,
+Jun 25, 2026 @ 13:46:57.927 ||     "ExplicationNumber" text,
+Jun 25, 2026 @ 13:46:57.927 ||     "IsSeparateEntrance" text,
+Jun 25, 2026 @ 13:46:57.927 ||     "Floor" text,
+Jun 25, 2026 @ 13:46:57.927 ||     "Number" text,
+Jun 25, 2026 @ 13:46:57.927 ||     "ProjectArea" double precision NOT NULL,
+Jun 25, 2026 @ 13:46:57.927 ||     "BuildingSection" text,
+Jun 25, 2026 @ 13:46:57.927 ||     "SiteID" integer NOT NULL,
+Jun 25, 2026 @ 13:46:57.927 ||     CONSTRAINT "PK_RoomKind" PRIMARY KEY ("ID")
+Jun 25, 2026 @ 13:46:57.927 ||     "Hidden" boolean NOT NULL,
+Jun 25, 2026 @ 13:46:57.927 || [06:46:57.927 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.927 || );
+Jun 25, 2026 @ 13:46:57.927 ||     "ParkingPlaceType" text,
+Jun 25, 2026 @ 13:46:57.927 ||     "CostForOne" numeric,
+Jun 25, 2026 @ 13:46:57.927 ||     "KindID" integer NOT NULL,
+Jun 25, 2026 @ 13:46:57.927 ||     "Title" text,
+Jun 25, 2026 @ 13:46:57.927 || );
+Jun 25, 2026 @ 13:46:57.927 || CREATE TABLE "Data"."RoomKind" (
+Jun 25, 2026 @ 13:46:57.927 ||     CONSTRAINT "PK_Room" PRIMARY KEY ("ID")
+Jun 25, 2026 @ 13:46:57.927 ||     "RoomsNumber" integer,
+Jun 25, 2026 @ 13:46:57.927 || CREATE TABLE "Data"."Room" (
+Jun 25, 2026 @ 13:46:57.927 ||     "Title" text,
+Jun 25, 2026 @ 13:46:57.927 ||     "SummerRoomArea" double precision,
+Jun 25, 2026 @ 13:46:57.927 ||     "IsShowcaseWindows" text,
+Jun 25, 2026 @ 13:46:57.927 ||     "RoomPurpose" text,
+Jun 25, 2026 @ 13:46:57.927 ||     "UniqueNumber" text,
+Jun 25, 2026 @ 13:46:57.927 ||     "TotalAreaWithoutSummerRoom" double precision,
+Jun 25, 2026 @ 13:46:57.927 ||     "TotalArea" double precision,
+Jun 25, 2026 @ 13:46:57.927 ||     "IsStudio" boolean NOT NULL,
+Jun 25, 2026 @ 13:46:57.927 || [06:46:57.927 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+Jun 25, 2026 @ 13:46:57.927 || [06:46:57.927 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.927 ||     "Description" text,
+Jun 25, 2026 @ 13:46:57.927 ||     "LivingArea" double precision,
+Jun 25, 2026 @ 13:46:57.927 ||     "ID" integer GENERATED BY DEFAULT AS IDENTITY,
+Jun 25, 2026 @ 13:46:57.927 || [06:46:57.926 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (13ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.940 || [06:46:57.940 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.940 || );
+Jun 25, 2026 @ 13:46:57.940 ||     "ID" integer GENERATED BY DEFAULT AS IDENTITY,
+Jun 25, 2026 @ 13:46:57.940 || [06:46:57.940 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (13ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.940 || INSERT INTO "Data".__ef_migrations_history ("MigrationId", "ProductVersion")
+Jun 25, 2026 @ 13:46:57.940 || [06:46:57.940 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+Jun 25, 2026 @ 13:46:57.940 ||     "Title" text,
+Jun 25, 2026 @ 13:46:57.940 ||     CONSTRAINT "PK_RoomKind" PRIMARY KEY ("ID")
+Jun 25, 2026 @ 13:46:57.940 ||     "Hidden" boolean NOT NULL,
+Jun 25, 2026 @ 13:46:57.940 || VALUES ('20260623053617_InitialDataSchema', '9.0.4');
+Jun 25, 2026 @ 13:46:57.940 || [06:46:57.940 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+Jun 25, 2026 @ 13:46:57.940 || CREATE TABLE "Data"."RoomKind" (
+Jun 25, 2026 @ 13:46:57.940 || [06:46:57.940 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.951 || VALUES ('20260623053617_InitialDataSchema', '9.0.4');
+Jun 25, 2026 @ 13:46:57.951 || [06:46:57.951 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+Jun 25, 2026 @ 13:46:57.951 || [06:46:57.951 DBG] Microsoft.EntityFrameworkCore.Database.Transaction Committing transaction.
+Jun 25, 2026 @ 13:46:57.951 || INSERT INTO "Data".__ef_migrations_history ("MigrationId", "ProductVersion")
+Jun 25, 2026 @ 13:46:57.964 || [06:46:57.964 DBG] Microsoft.EntityFrameworkCore.Database.Connection Closing connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+Jun 25, 2026 @ 13:46:57.964 || [06:46:57.964 DBG] Microsoft.EntityFrameworkCore.Database.Transaction Committed transaction.
+Jun 25, 2026 @ 13:46:57.964 || [06:46:57.964 DBG] Microsoft.EntityFrameworkCore.Database.Connection Closed connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432' (0ms).
+Jun 25, 2026 @ 13:46:57.964 || [06:46:57.964 DBG] Microsoft.EntityFrameworkCore.Database.Transaction Disposing transaction.
+Jun 25, 2026 @ 13:46:57.970 || [06:46:57.970 DBG] Microsoft.EntityFrameworkCore.Infrastructure 'VisaryDbContext' disposed.
+Jun 25, 2026 @ 13:46:57.972 || [06:46:57.972 DBG] Microsoft.EntityFrameworkCore.Database.Connection Disposing connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+Jun 25, 2026 @ 13:46:57.973 || [06:46:57.973 DBG] Microsoft.EntityFrameworkCore.Infrastructure 'ImportServiceDbContext' disposed.
+Jun 25, 2026 @ 13:46:57.973 || [06:46:57.973 DBG] Microsoft.EntityFrameworkCore.Database.Connection Disposed connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432' (0ms).
+Jun 25, 2026 @ 13:46:57.974 || [06:46:57.974 DBG] Microsoft.EntityFrameworkCore.Database.Connection Disposed connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432' (0ms).
+Jun 25, 2026 @ 13:46:57.974 || [06:46:57.974 DBG] Microsoft.EntityFrameworkCore.Database.Connection Disposing connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+Jun 25, 2026 @ 13:46:58.008 || [06:46:58.006 DBG] Microsoft.AspNetCore.Mvc.ModelBinding.ModelBinderFactory Registered model binder providers, in the following order: ["Microsoft.AspNetCore.Mvc.ModelBinding.Binders.BinderTypeModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.ServicesModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.BodyModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.HeaderModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.FloatingPointTypeModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.EnumTypeModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.DateTimeModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.SimpleTypeModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.TryParseModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.CancellationTokenModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.ByteArrayModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.FormFileModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.FormCollectionModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.KeyValuePairModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.DictionaryModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.ArrayModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.CollectionModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.ComplexObjectModelBinderProvider"]
+Jun 25, 2026 @ 13:46:58.095 || [06:46:58.094 DBG] Microsoft.AspNetCore.SignalR.Internal.DefaultHubProtocolResolver Registered SignalR Protocol: json, implemented by Microsoft.AspNetCore.SignalR.Protocol.JsonHubProtocol.
+Jun 25, 2026 @ 13:46:58.183 || [06:46:58.183 INF]  ┌── Конфигурация сервиса ─────────────────────────────────────
+Jun 25, 2026 @ 13:46:58.184 || [06:46:58.184 INF]  │ Swagger     : ENABLED
+Jun 25, 2026 @ 13:46:58.184 || [06:46:58.184 INF]  │ Visary API  : http://webapi:8080/api
+Jun 25, 2026 @ 13:46:58.184 || [06:46:58.184 INF]  │ URLs        : http://0.0.0.0:5000
+Jun 25, 2026 @ 13:46:58.184 || [06:46:58.184 INF]  │ CORS        : $(UI_PUBLIC_URL)
+Jun 25, 2026 @ 13:46:58.184 || [06:46:58.184 INF]  │ PathBase    : (не задан)
+Jun 25, 2026 @ 13:46:58.184 || [06:46:58.184 INF]  │ JWT auth    : ENABLED
+Jun 25, 2026 @ 13:46:58.185 || [06:46:58.185 INF]  KiloImportService.Api готов принимать запросы на http://0.0.0.0:5000
+Jun 25, 2026 @ 13:46:58.185 || [06:46:58.184 INF]  └─────────────────────────────────────────────────────────────
+Jun 25, 2026 @ 13:46:58.185 || [06:46:58.184 INF]  │ DB conn-str : Database=ab_fm_import;Host=ab-test-pg-1.ci28823727.cloud.alfaintra.net;Port=5432;Username=ab_fm_import_user;Password=***;Application Name=ab-fm-import;Pooling=true
+Jun 25, 2026 @ 13:46:58.185 || [06:46:58.185 INF]  Зарегистрировано 0 HTTP-маршрутов:
+Jun 25, 2026 @ 13:46:58.188 || [06:46:58.188 DBG] Microsoft.Extensions.Hosting.Internal.Host Hosting starting
+Jun 25, 2026 @ 13:46:58.195 || [06:46:58.195 WRN] Microsoft.AspNetCore.DataProtection.Repositories.EphemeralXmlRepository Using an in-memory repository. Keys will not be persisted to storage.
+Jun 25, 2026 @ 13:46:58.196 || [06:46:58.196 WRN] Microsoft.AspNetCore.DataProtection.KeyManagement.XmlKeyManager Neither user profile nor HKLM registry available. Using an ephemeral key repository. Protected data will be unavailable when application exits.
+Jun 25, 2026 @ 13:46:58.258 || [06:46:58.258 DBG] Microsoft.AspNetCore.DataProtection.KeyManagement.KeyRingProvider Policy resolution states that a new key should be added to the key ring.
+Jun 25, 2026 @ 13:46:58.258 || [06:46:58.258 DBG] Microsoft.AspNetCore.DataProtection.KeyManagement.DefaultKeyResolver Repository contains no viable default key. Caller should generate a key with immediate activation.
+Jun 25, 2026 @ 13:46:58.262 || [06:46:58.262 INF] Microsoft.AspNetCore.DataProtection.KeyManagement.XmlKeyManager Creating key {bf4df4de-c595-4c72-b5a9-ce78e0cbb5fe} with creation date 2026-06-25 06:46:58Z, activation date 2026-06-25 06:46:58Z, and expiration date 2026-09-23 06:46:58Z.
+Jun 25, 2026 @ 13:46:58.267 || [06:46:58.267 DBG] Microsoft.AspNetCore.DataProtection.KeyManagement.XmlKeyManager Descriptor deserializer type for key {bf4df4de-c595-4c72-b5a9-ce78e0cbb5fe} is 'Microsoft.AspNetCore.DataProtection.AuthenticatedEncryption.ConfigurationModel.AuthenticatedEncryptorDescriptorDeserializer, Microsoft.AspNetCore.DataProtection, Version=10.0.0.0, Culture=neutral, PublicKeyToken=adb9793829ddae60'.
+Jun 25, 2026 @ 13:46:58.270 || [06:46:58.270 DBG] Microsoft.AspNetCore.DataProtection.KeyManagement.XmlKeyManager No key escrow sink found. Not writing key {bf4df4de-c595-4c72-b5a9-ce78e0cbb5fe} to escrow.
+Jun 25, 2026 @ 13:46:58.270 || [06:46:58.270 WRN] Microsoft.AspNetCore.DataProtection.KeyManagement.XmlKeyManager No XML encryptor configured. Key {bf4df4de-c595-4c72-b5a9-ce78e0cbb5fe} may be persisted to storage in unencrypted form.
+Jun 25, 2026 @ 13:46:58.271 || [06:46:58.271 DBG] Microsoft.AspNetCore.DataProtection.KeyManagement.XmlKeyManager Key cache expiration token triggered by 'CreateNewKey' operation.
+Jun 25, 2026 @ 13:46:58.272 || [06:46:58.272 DBG] Microsoft.AspNetCore.DataProtection.KeyManagement.XmlKeyManager Found key {bf4df4de-c595-4c72-b5a9-ce78e0cbb5fe}.
+Jun 25, 2026 @ 13:46:58.276 || [06:46:58.276 DBG] Microsoft.AspNetCore.DataProtection.KeyManagement.DefaultKeyResolver Considering key {bf4df4de-c595-4c72-b5a9-ce78e0cbb5fe} with expiration date 2026-09-23 06:46:58Z as default key.
+Jun 25, 2026 @ 13:46:58.277 || [06:46:58.277 DBG] Microsoft.AspNetCore.DataProtection.AuthenticatedEncryption.ManagedAuthenticatedEncryptorFactory Using managed symmetric algorithm 'System.Security.Cryptography.Aes'.
+Jun 25, 2026 @ 13:46:58.277 || [06:46:58.277 DBG] Microsoft.AspNetCore.DataProtection.AuthenticatedEncryption.ManagedAuthenticatedEncryptorFactory Using managed keyed hash algorithm 'System.Security.Cryptography.HMACSHA256'.
+Jun 25, 2026 @ 13:46:58.279 || [06:46:58.279 DBG] Microsoft.AspNetCore.DataProtection.KeyManagement.KeyRingProvider Using key {bf4df4de-c595-4c72-b5a9-ce78e0cbb5fe} as the default key.
+Jun 25, 2026 @ 13:46:58.280 || [06:46:58.280 DBG] Microsoft.AspNetCore.DataProtection.Internal.DataProtectionHostedService Key ring with default key {bf4df4de-c595-4c72-b5a9-ce78e0cbb5fe} was loaded during application startup.
+Jun 25, 2026 @ 13:46:58.281 || [06:46:58.281 WRN] Microsoft.AspNetCore.Hosting.Diagnostics Overriding HTTP_PORTS '8080' and HTTPS_PORTS ''. Binding to values defined by URLS instead 'http://0.0.0.0:5000'.
+Jun 25, 2026 @ 13:46:58.375 || [06:46:58.375 DBG] Microsoft.AspNetCore.HostFiltering.HostFilteringMiddleware Middleware configuration started with options: {AllowedHosts = *, AllowEmptyHosts = True, IncludeFailureMessage = True}
+Jun 25, 2026 @ 13:46:58.376 || [06:46:58.376 DBG] Microsoft.AspNetCore.HostFiltering.HostFilteringMiddleware Wildcard detected, all requests with hosts will be allowed.
+Jun 25, 2026 @ 13:46:58.390 || [06:46:58.390 DBG] Microsoft.AspNetCore.Hosting.Diagnostics Loaded hosting startup assembly KiloImportService.Api
+Jun 25, 2026 @ 13:46:58.390 || [06:46:58.389 INF] Microsoft.Hosting.Lifetime Now listening on: http://0.0.0.0:5000
+Jun 25, 2026 @ 13:46:58.390 || [06:46:58.390 INF] Microsoft.Hosting.Lifetime Hosting environment: Test
+Jun 25, 2026 @ 13:46:58.390 || [06:46:58.390 INF] Microsoft.Hosting.Lifetime Application started. Press Ctrl+C to shut down.
+Jun 25, 2026 @ 13:46:58.390 || [06:46:58.390 INF] Microsoft.Hosting.Lifetime Content root path: /app
+Jun 25, 2026 @ 13:46:58.392 || [06:46:58.392 DBG] Microsoft.Extensions.Hosting.Internal.Host Hosting started

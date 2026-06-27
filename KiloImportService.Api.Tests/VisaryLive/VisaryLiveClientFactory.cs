@@ -17,7 +17,7 @@ internal static class VisaryLiveClientFactory
         var http    = NewLiveClient(token!);
         var monitor = new TestOptionsMonitor<VisaryOptions>(new VisaryOptions
         {
-            BaseUrl     = baseUrl!,
+            Endpoint    = baseUrl!,
             BearerToken = token!,
             DefaultPageSize = 50,
             LargePageSize   = 500,
@@ -31,7 +31,7 @@ internal static class VisaryLiveClientFactory
         var http    = NewLiveClient(token!);
         var monitor = new TestOptionsMonitor<VisaryOptions>(new VisaryOptions
         {
-            BaseUrl     = baseUrl!,
+            Endpoint    = baseUrl!,
             BearerToken = token!,
             DefaultPageSize = 50,
             LargePageSize   = 500,

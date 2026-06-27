@@ -326,6 +326,18 @@ public sealed class FmModelRaw
     public int? ABConstructionSiteID { get; set; }
     public string? PeriodStart { get; set; }
     public string? PeriodEnd { get; set; }
+    /// <summary>
+    /// Квартал ввода в эксплуатацию (формат <c>"{Year}Q{N}"</c>, например
+    /// <c>"2029Q2"</c>). Берётся с листа Control основного файла «Параметры»:
+    /// раздел «Конфигурация этапов», колонка «Ввод в эксплуатацию (получение РнВ)»
+    /// в строке «Этап 1.»; дата преобразуется в квартал по правилу
+    /// <c>FinModelImportMapper.DateToFmPeriod</c> (последний день квартала → +1).
+    /// ⚠️ Имя поля сохранено в форме <c>CommisioningPeriod</c> (с одной «s»)
+    /// как у заказчика — если стенд использует грамматически корректное
+    /// <c>CommissioningPeriod</c>, поменять — одна строка.
+    /// См. doc_project/139-finmodel-installments-and-conclusion.md v1.3.
+    /// </summary>
+    public string? CommisioningPeriod { get; set; }
     public long RowVersion { get; set; }
 }
 
@@ -403,4 +415,146 @@ public sealed class InputDataRaw
     public double? Amount { get; set; }
     public double? Cost { get; set; }
     public double? Percent { get; set; }
+}
+
+/// <summary>
+/// Запись «Данные клиента» (<c>clientdata</c>) — поквартальный срез стоимости 1 кв.м
+/// и площади 1 кв.м для одного вида помещения на объекте строительства.
+/// Один объект × один RoomKind × один квартал = одна запись. Импорт «Финмодель»
+/// создаёт по одной записи на каждый непустой (Quarter × RoomKind) из листа
+/// «Общий график» второго файла. См. doc_project/150-finmodel-clientdata.md.
+/// </summary>
+public sealed class ClientDataRaw
+{
+    public int ID { get; set; }
+    public string? Title { get; set; }
+    public double? Cost { get; set; }
+    public double? Rates { get; set; }
+    public int? RoomCategory { get; set; }
+    public VisaryRef? RoomKind { get; set; }
+    public VisaryRef? Site { get; set; }
+    /// <summary>ISO-дата <c>yyyy-MM-dd</c>; импорт пишет первый день того же квартала, что и <see cref="PeriodStartDate"/>.</summary>
+    public string? Date { get; set; }
+    /// <summary>Начало периода — ISO-дата <c>yyyy-MM-dd</c> первого дня квартала.</summary>
+    public string? PeriodStartDate { get; set; }
+    public double? ODCount { get; set; }
+    public double? ODCountRes { get; set; }
+    public double? ODCountNonRes { get; set; }
+    public double? ODCountOtherNonRes { get; set; }
+    public double? ODCountParking { get; set; }
+    public double? ParkingCost { get; set; }
+    public double? ParkingRates { get; set; }
+    public double? OtherNonresidentialCost { get; set; }
+    public double? OthernonresidentialRates { get; set; }
+    public double? NonresidentialCost { get; set; }
+    public double? NonresidentialRates { get; set; }
+    public double? ResidentialCost { get; set; }
+    public double? ResidentialRates { get; set; }
+}
+
+/// <summary>
+/// «Заключение» (<c>projectaudit</c>). Минимальный набор для импорта Финмодели:
+/// импортеру достаточно <see cref="ID"/>, чтобы знать, что POST прошёл.
+/// <see cref="Stage"/>=110 — «Итоговое заключение КА БП7», единственный поддерживаемый
+/// тип. <see cref="Status"/>=10 — рабочее «Создано» (см. HAR
+/// <c>Context/har заключ рассрочки равн.txt</c>).
+/// См. doc_project/139-finmodel-installments-and-conclusion.md.
+/// </summary>
+public sealed class ProjectAuditRaw
+{
+    public int ID { get; set; }
+    public string? Title { get; set; }
+    public VisaryRef? Project { get; set; }
+    public int? ProjectID { get; set; }
+    public VisaryRef? ConstructionSite { get; set; }
+    public int? Stage { get; set; }
+    public int? Status { get; set; }
+    public string? Date { get; set; }
+    public long? RowVersion { get; set; }
+}
+
+/// <summary>
+/// «Набор данных для ФМ» (<c>datasetforfm</c>). Родительская запись для
+/// <see cref="DataForFmRaw"/> — одна на пару (Site, Project). Создаётся сервером
+/// автоматически при POST <c>projectaudit</c>; импортер находит её через listview
+/// и PATCH-ит поля рассрочек (DDU*OwnShare/PostpShare/RoomKinds).
+/// <para/>
+/// <see cref="RowVersion"/> обязателен в PATCH (optimistic lock) — читаем GET
+/// <c>/crud/datasetforfm/{id}</c> ради него непосредственно перед PATCH.
+/// </summary>
+public sealed class DataSetForFmRaw
+{
+    public int ID { get; set; }
+    public string? Title { get; set; }
+    public VisaryRef? ConstructionSite { get; set; }
+    public VisaryRef? ConstructionProject { get; set; }
+    public long? RowVersion { get; set; }
+}
+
+/// <summary>
+/// «Данные для ФМ» (<c>dataforfm</c>) — строка под <see cref="DataSetForFmRaw"/>,
+/// одна на каждый вид помещения с признаком «1 - Да» из блока «Продажи»
+/// листа Control. Title формируется как «Данные по {RoomKind в дат.падеже}».
+/// </summary>
+public sealed class DataForFmRaw
+{
+    public int ID { get; set; }
+    public string? Title { get; set; }
+    public int? DataSetForFMID { get; set; }
+    public VisaryRef? DataSetForFM { get; set; }
+    public VisaryRef? RoomKind { get; set; }
+    // ⚠️ Indicator в listview Visary возвращает в variant-форме:
+    // иногда числом (битмаска при создании — `16445`), иногда строкой,
+    // иногда объектом `{Title, ID}` (см. инцидент 2026-06-18, doc 139 v1.1).
+    // Импортеру для pre-check нужны только (DataSetForFMID, RoomKind.ID), поэтому
+    // принимаем JsonElement — десериализация терпима к любому JSON-типу
+    // (паттерн doc 56).
+    public JsonElement? Indicator { get; set; }
+}
+
+/// <summary>
+/// «Тип процентной ставки» (<c>percentbettype</c>) — справочник с уникальным
+/// <see cref="Code"/> (LM10/LM20/LM30/LM40 и т.п.) и человекочитаемым
+/// <see cref="Title"/>. Импорт Финмодели находит запись по Code перед созданием
+/// <c>dealpercentbet</c> и подставляет (ID, Title) в payload.
+/// </summary>
+public sealed class PercentBetTypeRaw
+{
+    public int ID { get; set; }
+    public string? Title { get; set; }
+    public string? Code { get; set; }
+}
+
+/// <summary>
+/// «Процентная ставка по сделке» (<c>dealpercentbet</c>). Импорту достаточно ID
+/// после POST — остальные поля сохраняем в DTO ради единообразия и логов.
+/// </summary>
+public sealed class DealPercentBetRaw
+{
+    public int ID { get; set; }
+    public string? LmID { get; set; }
+    public int? PercentKind { get; set; }
+    public VisaryRef? Deal { get; set; }
+    public VisaryRef? PercentBetType { get; set; }
+    public double? Rate { get; set; }
+}
+
+/// <summary>
+/// «Помесячные данные по сделке» (<c>dealmonthlydata</c>) — связка
+/// (Deal × Year × Month) с 5 числовыми полями. Импорт Финмодели создаёт ОДНУ
+/// запись на (Deal, Текущий год, Текущий месяц) по данным раздела
+/// «Инвестиционный кредит: Этап 1» листа Outputs.
+/// См. doc 142.
+/// </summary>
+public sealed class DealMonthlyDataRaw
+{
+    public int ID { get; set; }
+    public VisaryRef? Deal { get; set; }
+    public int? Year { get; set; }
+    public int? Month { get; set; }
+    public double? PrincipalDebtAmount { get; set; }
+    public double? SimpleInterestAmount { get; set; }
+    public double? CapitalizedInterestAmount { get; set; }
+    public double? PrincipalRepaymentAmount { get; set; }
+    public double? InterestRepaymentAmount { get; set; }
 }

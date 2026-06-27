@@ -19,7 +19,7 @@ internal static class TestVisaryClientFactory
         var http    = NewClientWithAuthPipeline(handler, Token);
         var opt     = new VisaryOptions
         {
-            BaseUrl     = BaseUrl,
+            Endpoint    = BaseUrl,
             BearerToken = Token,
             DefaultPageSize = 50,
             LargePageSize   = 500,
@@ -32,7 +32,7 @@ internal static class TestVisaryClientFactory
     {
         var handler = new RecordingHttpHandler();
         var http    = NewClientWithAuthPipeline(handler, Token);
-        var opt     = new VisaryOptions { BaseUrl = BaseUrl, BearerToken = Token };
+        var opt     = new VisaryOptions { Endpoint = BaseUrl, BearerToken = Token };
         var monitor = new TestOptionsMonitor<VisaryOptions>(opt);
         return (new CrudClient(http, monitor, NullLogger<CrudClient>.Instance), handler);
     }

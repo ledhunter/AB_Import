@@ -10,7 +10,13 @@ namespace Visary.Api.Auth;
 /// </summary>
 public sealed class VisaryAuthOptions
 {
-    public const string SectionName = "Visary:Auth";
+    // Имя секции приведено к эталонной иерархии (см. doc 145 + doc 132):
+    // `EndpointsConfiguration:VisaryAuthApi`, env-маппинг
+    // `EndpointsConfiguration__VisaryAuthApi__TokenEndpoint` и т.п. У эталона
+    // SSVD внутри VisaryAuthApi лежат User/Password (Basic Auth → access_token),
+    // у нас — OIDC refresh_token flow, поэтому поля свои (TokenEndpoint, ClientId,
+    // RefreshTokenStore). См. doc 107 (почему именно refresh_token).
+    public const string SectionName = "EndpointsConfiguration:VisaryAuthApi";
 
     /// <summary>Полный URL token-endpoint'а, напр. <c>https://id-isup-alfa-test.k8s.npc.ba/oidc/connect/token</c>.</summary>
     public string TokenEndpoint { get; set; } = string.Empty;

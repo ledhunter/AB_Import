@@ -30,13 +30,18 @@ public abstract class VisaryHttpBase<T>
 
     protected VisaryOptions Options => _optionsMonitor.CurrentValue;
 
-    protected string BaseUrl => Options.BaseUrl.TrimEnd('/');
+    // Базовый URL Visary API — в эталонной иерархии (см. doc 145) лежит как
+    // `EndpointsConfiguration:VisaryApi:Endpoint`. Поле в VisaryOptions называется
+    // `Endpoint`; внутри клиентов оставляем алиас `BaseUrl` — это исторически
+    // удобное имя для строковой конкатенации с `/api/visary/...`.
+    protected string BaseUrl => Options.Endpoint.TrimEnd('/');
 
     protected void EnsureConfig()
     {
         var opt = Options;
-        if (string.IsNullOrWhiteSpace(opt.BaseUrl))
-            throw new InvalidOperationException("Visary:BaseUrl не задан.");
+        if (string.IsNullOrWhiteSpace(opt.Endpoint))
+            throw new InvalidOperationException(
+                "EndpointsConfiguration:VisaryApi:Endpoint не задан.");
         // Authorization теперь ставит VisaryAuthHandler через IVisaryTokenProvider — см. doc 107.
         // Здесь проверка BearerToken снята: при использовании StaticVisaryTokenProvider
         // он сам бросает InvalidOperationException при пустом токене.

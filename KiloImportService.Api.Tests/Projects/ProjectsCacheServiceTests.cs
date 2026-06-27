@@ -353,6 +353,29 @@ public class ProjectsCacheServiceTests
             string code, CancellationToken ct)
             => throw new NotImplementedException();
 
+        public Task<ListViewResponse<DataSetForFmRaw>> FindDataSetForFmAsync(
+            int siteId, int projectId, CancellationToken ct)
+            => throw new NotImplementedException();
+
+        public Task<ListViewResponse<ProjectAuditRaw>> FindProjectAuditsBySiteAsync(
+            int siteId, int stage, CancellationToken ct)
+            => throw new NotImplementedException();
+
+        public Task<ListViewResponse<DataForFmRaw>> GetDataForFmByDataSetAsync(
+            int dataSetId, CancellationToken ct)
+            => throw new NotImplementedException();
+
+        public Task<ListViewResponse<PercentBetTypeRaw>> FindPercentBetTypeByCodeAsync(
+            string code, CancellationToken ct)
+            => throw new NotImplementedException();
+
+        public Task<ListViewResponse<DealMonthlyDataRaw>> FindDealMonthlyDataAsync(
+            int dealId, int year, int month,
+            double principalDebt, double simpleInterest, double capitalizedInterest,
+            double principalRepayment, double interestRepayment,
+            CancellationToken ct)
+            => throw new NotImplementedException();
+
         public Task<ListViewResponse<TownRaw>>                ListTownsAsync(string? titleFilter, CancellationToken ct) => throw new NotImplementedException();
         public Task<ListViewResponse<RegionRaw>>              ListRegionsAsync(string? titleFilter, CancellationToken ct) => throw new NotImplementedException();
         public Task<ListViewResponse<ProjectTypeRaw>>         ListProjectTypesAsync(CancellationToken ct) => throw new NotImplementedException();

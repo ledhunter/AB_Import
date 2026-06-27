@@ -561,6 +561,16 @@ public sealed class XlsxParser : IFileParser
             ExtractChapterSchedule(sheet, sheetName, schedule, rows, errors, ct);
         }
 
+        // ─── Секция «Вложение собственных средств» (опционально) ────────────
+        // Параметр из раздела «Финансирование: Этап 1» с квартальными значениями
+        // (тот же квартальный header, что у ChapterSchedule, но другая data-строка
+        // и колонка единицы измерения). См. EquityFundingHint и doc-комментарий
+        // парсера ExtractEquityFunding.
+        if (layout.EquityFunding is { } equityFunding)
+        {
+            ExtractEquityFunding(sheet, sheetName, equityFunding, rows, errors, ct);
+        }
+
         return new ParseResult(headers, rows, errors);
     }
 
@@ -643,6 +653,13 @@ public sealed class XlsxParser : IFileParser
     /// Маппер по нему отличает шапку с датами кварталов от обычной строки статьи.
     /// </summary>
     public const string ChapterScheduleQuartersSentinel = "__quarters__";
+
+    /// <summary>
+    /// Sentinel-маркер в <c>Cells[MarkerColumn]</c> «датовой» (header) строки
+    /// секции <see cref="EquityFundingHint"/>. Отличается от ChapterSchedule-маркера,
+    /// чтобы Sheet-суффикс однозначно различал блоки на стороне маппера.
+    /// </summary>
+    public const string EquityFundingQuartersSentinel = "__equity_quarters__";
 
     /// <summary>
     /// Извлекает «горизонтальный» квартальный блок ГФ — см. <see cref="ChapterScheduleHint"/>.
@@ -766,6 +783,142 @@ public sealed class XlsxParser : IFileParser
             if (string.IsNullOrWhiteSpace(marker) && !anyAmount) continue;
             rows.Add(new ParsedRow(r, scheduleSheetTag, cells));
         }
+    }
+
+    /// <summary>
+    /// Извлекает блок «Вложение собственных средств» (раздел «Финансирование: Этап 1»):
+    /// шапка кварталов (даты в <see cref="EquityFundingHint.QuarterHeaderRow"/>) + одна
+    /// data-строка с единицей измерения в <see cref="EquityFundingHint.UnitColumn"/> и
+    /// квартальными значениями в H..CU. Не падает при отсутствии StartMarker / KeyName —
+    /// блок опционален; маппер сам решает, что делать.
+    /// </summary>
+    private static void ExtractEquityFunding(
+        IXLWorksheet sheet, string sheetName, EquityFundingHint hint,
+        List<ParsedRow> rows, List<ParseError> errors, CancellationToken ct)
+    {
+        if (!TryParseColumnLetter(hint.MarkerColumn, out var markerCol))
+        {
+            errors.Add(new ParseError(null,
+                $"EquityFundingHint: некорректная колонка-маркер '{hint.MarkerColumn}'."));
+            return;
+        }
+        if (!TryParseColumnLetter(hint.UnitColumn, out var unitCol))
+        {
+            errors.Add(new ParseError(null,
+                $"EquityFundingHint: некорректная UnitColumn '{hint.UnitColumn}'."));
+            return;
+        }
+        if (!TryParseColumnLetter(hint.FirstQuarterColumn, out var firstQCol))
+        {
+            errors.Add(new ParseError(null,
+                $"EquityFundingHint: некорректная FirstQuarterColumn '{hint.FirstQuarterColumn}'."));
+            return;
+        }
+        if (!TryParseColumnLetter(hint.LastQuarterColumn, out var lastQCol))
+        {
+            errors.Add(new ParseError(null,
+                $"EquityFundingHint: некорректная LastQuarterColumn '{hint.LastQuarterColumn}'."));
+            return;
+        }
+        if (firstQCol > lastQCol)
+        {
+            errors.Add(new ParseError(null,
+                $"EquityFundingHint: FirstQuarterColumn '{hint.FirstQuarterColumn}' правее LastQuarterColumn '{hint.LastQuarterColumn}'."));
+            return;
+        }
+        if (hint.QuarterHeaderRow <= 0)
+        {
+            errors.Add(new ParseError(null,
+                $"EquityFundingHint: QuarterHeaderRow должно быть >= 1, получено {hint.QuarterHeaderRow}."));
+            return;
+        }
+
+        var range = sheet.RangeUsed();
+        if (range is null) return;
+        var lastRow = range.LastRow().RowNumber();
+
+        // 1) Найти строку StartMarker (точное равенство, trim, case-insensitive).
+        //    «Финансирование: Этап 1» в файле существует ровно один раз; substring-поиск
+        //    как у ChapterSchedule здесь опасен — «Финансирование» (без двоеточия) тоже
+        //    встречается выше.
+        int? startRow = null;
+        for (int r = 1; r <= lastRow; r++)
+        {
+            ct.ThrowIfCancellationRequested();
+            var text = sheet.Cell(r, markerCol).GetString().Trim();
+            if (!string.IsNullOrWhiteSpace(text)
+                && string.Equals(text, hint.StartMarker, StringComparison.OrdinalIgnoreCase))
+            {
+                startRow = r;
+                break;
+            }
+        }
+        if (startRow is null)
+        {
+            // Блок опционален: молча выходим. Маппер увидит отсутствие equity-funding
+            // mapped-row и пропустит шаг (с info-логом).
+            return;
+        }
+
+        // 2) Найти data-row: точное равенство KeyName в MarkerColumn И непустая единица
+        //    в UnitColumn (это отличает заголовок параметра от собственно строки данных,
+        //    в файле они дублируются).
+        int searchEnd = Math.Min(startRow.Value + hint.ScanLimitRows, lastRow);
+        int? dataRow = null;
+        for (int r = startRow.Value + 1; r <= searchEnd; r++)
+        {
+            ct.ThrowIfCancellationRequested();
+            var marker = sheet.Cell(r, markerCol).GetString().Trim();
+            if (!string.Equals(marker, hint.KeyName, StringComparison.OrdinalIgnoreCase))
+                continue;
+            var unit = sheet.Cell(r, unitCol).GetString().Trim();
+            if (string.IsNullOrWhiteSpace(unit)) continue;
+            dataRow = r;
+            break;
+        }
+        if (dataRow is null)
+        {
+            // KeyName с непустой единицей не нашёлся — молча выходим (как и при
+            // отсутствии StartMarker). Маппер залогирует info.
+            return;
+        }
+
+        var equitySheetTag = $"{sheetName} {hint.SheetMarker}";
+
+        // 3) Header-row с датами кварталов (та же логика, что у ChapterSchedule).
+        var headerCells = new Dictionary<string, string>(lastQCol - firstQCol + 2, StringComparer.Ordinal)
+        {
+            [hint.MarkerColumn] = EquityFundingQuartersSentinel,
+        };
+        for (int c = firstQCol; c <= lastQCol; c++)
+        {
+            ct.ThrowIfCancellationRequested();
+            var cell = sheet.Cell(hint.QuarterHeaderRow, c);
+            var letter = ColumnLetter(c);
+            if (cell.TryGetValue<DateTime>(out var dt))
+            {
+                headerCells[letter] = dt.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+            }
+            else
+            {
+                headerCells[letter] = cell.GetString() ?? string.Empty;
+            }
+        }
+        rows.Add(new ParsedRow(hint.QuarterHeaderRow, equitySheetTag, headerCells));
+
+        // 4) Data-row: KeyName + единица + квартальные значения.
+        var dataCells = new Dictionary<string, string>(lastQCol - firstQCol + 3, StringComparer.Ordinal)
+        {
+            [hint.MarkerColumn] = sheet.Cell(dataRow.Value, markerCol).GetString() ?? string.Empty,
+            [hint.UnitColumn] = sheet.Cell(dataRow.Value, unitCol).GetString() ?? string.Empty,
+        };
+        for (int c = firstQCol; c <= lastQCol; c++)
+        {
+            ct.ThrowIfCancellationRequested();
+            var v = sheet.Cell(dataRow.Value, c).GetString() ?? string.Empty;
+            dataCells[ColumnLetter(c)] = v;
+        }
+        rows.Add(new ParsedRow(dataRow.Value, equitySheetTag, dataCells));
     }
 
     /// <summary>

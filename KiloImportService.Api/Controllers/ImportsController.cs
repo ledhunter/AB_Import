@@ -65,9 +65,21 @@ public class ImportsController : ControllerBase
         [FromForm] IFormFile? secondaryFile,
         CancellationToken ct)
     {
-        if (file is null || file.Length == 0) return BadRequest(new { error = "Файл не передан или пустой." });
+        _log.LogInformation(
+            "POST /api/imports — Upload: type={Type} file='{File}' size={Size} project={Project} site={Site} secondary='{Secondary}'",
+            importTypeCode, file?.FileName ?? "(нет)", file?.Length ?? 0,
+            projectId, siteId, secondaryFile?.FileName ?? "(нет)");
+
+        if (file is null || file.Length == 0)
+        {
+            _log.LogWarning("Upload: BadRequest — пустой файл");
+            return BadRequest(new { error = "Файл не передан или пустой." });
+        }
         if (string.IsNullOrWhiteSpace(importTypeCode))
+        {
+            _log.LogWarning("Upload: BadRequest — пустой importTypeCode");
             return BadRequest(new { error = "Не указан importTypeCode." });
+        }
 
         ImportSession session;
         try
@@ -484,6 +496,9 @@ public class ImportsController : ControllerBase
             "budget_upload_skipped_wbs_exists" => "warning",
             // «Файла нет / шаг неприменим» — информативное сообщение, не проблема.
             "fmmodel_skipped_no_plan_file"     => "info",
+            // ГФ Главы 1 не запускался, потому что бюджета в файле нет (doc 144).
+            // Это не ошибка — пользователь сознательно не приложил бюджетные данные.
+            "schedule_skipped_no_budget"       => "info",
             _ => "error",
         };
     }

@@ -216,12 +216,21 @@ public class RoomsFormImportMapperTests
     [Fact]
     public void ResolveKindBySheetName_PluralSingleWord()
     {
-        var dict = MakeKindDict("Квартира", "Машиноместо", "Кладовая", "Апартамент");
+        var dict = MakeKindDict(
+            "Квартира", "Машиноместо", "Кладовая", "Апартамент",
+            "Офис", "Комната", "Студия", "Гараж");
 
+        // Старая логика (регрессии)
         Assert.Equal("Квартира",    ResolveTitle("Квартиры",     dict));
         Assert.Equal("Машиноместо", ResolveTitle("Машиноместа",  dict));
-        Assert.Equal("Кладовая",    ResolveTitle("Кладовые",     dict)); // ые → ая (новое)
+        Assert.Equal("Кладовая",    ResolveTitle("Кладовые",     dict)); // ые → ая (doc 116)
         Assert.Equal("Апартамент",  ResolveTitle("Апартаменты",  dict));
+
+        // Новые формы (doc 138): plural→singular для оставшихся видов
+        Assert.Equal("Офис",        ResolveTitle("Офисы",        dict)); // ы → '' (head1)
+        Assert.Equal("Комната",     ResolveTitle("Комнаты",      dict)); // ы → а
+        Assert.Equal("Студия",      ResolveTitle("Студии",       dict)); // и → я
+        Assert.Equal("Гараж",       ResolveTitle("Гаражи",       dict)); // и → '' (head1)
     }
 
     [Fact]
@@ -233,6 +242,60 @@ public class RoomsFormImportMapperTests
         Assert.Equal("Коммерческое помещение", ResolveTitle("Коммерческие помещения", dict));
         // Уже singular — direct match
         Assert.Equal("Нежилое помещение",      ResolveTitle("Нежилое помещение",     dict));
+        // Новый суффикс ые→ое: «Нежилые помещения» → «Нежилое помещение»
+        Assert.Equal("Нежилое помещение",      ResolveTitle("Нежилые помещения",     dict));
+    }
+
+    /// <summary>
+    /// Doc 138: алиасы развёрнутых/уточнённых наименований вида помещения.
+    /// Применяются и к имени листа, и к значению колонки «Тип/Название/Вид».
+    /// Case-insensitive. Если канонического Title нет в живом справочнике —
+    /// алиас не срабатывает (откат к plural-trim → null).
+    /// </summary>
+    [Fact]
+    public void ResolveKindByTitle_SynonymAliases_Doc138()
+    {
+        var dict = MakeKindDict(
+            "Квартира", "Нежилое помещение", "Машиноместо", "Апартаменты");
+
+        // Квартира-студия → Квартира
+        Assert.Equal("Квартира", ResolveByTitle("Квартира-студия", dict));
+        Assert.Equal("Квартира", ResolveByTitle("квартира-студия", dict));
+
+        // Нежилое помещение для коммерческого использования → Нежилое помещение
+        Assert.Equal("Нежилое помещение",
+            ResolveByTitle("Нежилое помещение для коммерческого использования", dict));
+
+        // Машино-место (с дефисом) → Машиноместо
+        Assert.Equal("Машиноместо", ResolveByTitle("Машино-место",     dict));
+        Assert.Equal("Машиноместо", ResolveByTitle("Машино-место МГН", dict));
+
+        // singular «Апартамент» → plural-Title «Апартаменты» (обратное направление)
+        Assert.Equal("Апартаменты", ResolveByTitle("Апартамент", dict));
+    }
+
+    /// <summary>
+    /// Doc 138: plural→singular должен работать и для «Офисы», «Комнаты», «Студии»,
+    /// «Гаражи», «Нежилые помещения» — всех видов помещений в справочнике.
+    /// </summary>
+    [Fact]
+    public void ResolveKindByTitle_PluralForms_Doc138()
+    {
+        var dict = MakeKindDict(
+            "Офис", "Комната", "Студия", "Гараж", "Нежилое помещение",
+            "Коммерческое помещение", "Кладовая", "Машиноместо", "Квартира", "Апартаменты");
+
+        Assert.Equal("Офис",                   ResolveByTitle("Офисы",                 dict));
+        Assert.Equal("Комната",                ResolveByTitle("Комнаты",               dict));
+        Assert.Equal("Нежилое помещение",      ResolveByTitle("Нежилые помещения",     dict));
+        Assert.Equal("Студия",                 ResolveByTitle("Студии",                dict));
+        Assert.Equal("Коммерческое помещение", ResolveByTitle("Коммерческие помещения",dict));
+        Assert.Equal("Кладовая",               ResolveByTitle("Кладовые",              dict));
+        Assert.Equal("Машиноместо",            ResolveByTitle("Машиноместа",           dict));
+        Assert.Equal("Квартира",               ResolveByTitle("Квартиры",              dict));
+        Assert.Equal("Гараж",                  ResolveByTitle("Гаражи",                dict));
+        // singular Апартамент → plural-Title — алиас (см. предыдущий тест)
+        Assert.Equal("Апартаменты",            ResolveByTitle("Апартамент",            dict));
     }
 
     /// <summary>
@@ -278,6 +341,9 @@ public class RoomsFormImportMapperTests
 
     private static string? ResolveTitle(string sheet, IDictionary<string, int> dict)
         => RoomsFormImportMapper.ResolveKindBySheetName(sheet, dict).Title;
+
+    private static string? ResolveByTitle(string raw, IDictionary<string, int> dict)
+        => RoomsFormImportMapper.ResolveKindByTitle(raw, dict).Title;
 
     [Theory]
     [InlineData("литер 1-1", "1-1")]
