@@ -23,9 +23,9 @@ public sealed class StaticVisaryTokenProvider : IVisaryTokenProvider
         var token = _options.CurrentValue.BearerToken;
         if (string.IsNullOrWhiteSpace(token))
             throw new InvalidOperationException(
-                "StaticVisaryTokenProvider: Visary:BearerToken не задан. " +
-                "Заполните .env (Visary__BearerToken) либо переключитесь на OidcVisaryTokenProvider " +
-                "(см. doc_project/107-visary-token-provider.md).");
+                "StaticVisaryTokenProvider: EndpointsConfiguration:VisaryApi:BearerToken не задан. " +
+                "Заполните .env (EndpointsConfiguration__VisaryApi__BearerToken) либо включите " +
+                "OidcVisaryTokenProvider (см. doc 107 + doc 145).");
         return Task.FromResult(token);
     }
 

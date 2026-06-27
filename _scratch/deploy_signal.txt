@@ -1,0 +1,452 @@
+﻿06:46:53.667 | [06:46:53.667 INF]  ════════════════════════════════════════════════════════════
+06:46:53.731 | [06:46:53.731 INF]  KiloImportService.Api запускается. PID=1 Machine=alfa-building-fm-import-84946b76cb-k9xt9 .NET=10.0.9
+06:46:53.753 | [06:46:53.753 INF]  ════════════════════════════════════════════════════════════
+06:46:53.753 | [06:46:53.753 INF]  CWD=/app  ASPNETCORE_ENVIRONMENT=Test
+06:46:53.929 | [06:46:53.929 INF]  Incoming JWT auth ENABLED. Authority=http://identity:8080 Audience=visary
+06:46:53.983 | [06:46:53.983 INF]  PathBase НЕ задан (Features:PathBase пусто) — маршруты обслуживаются от корня '/'
+06:46:54.257 | [06:46:54.257 DBG] Microsoft.EntityFrameworkCore.Infrastructure An 'IServiceProvider' was created for internal use by Entity Framework.
+06:46:54.271 | [06:46:54.271 INF]  Applying ImportServiceDb migrations (schema=import)…
+06:46:55.317 | [06:46:55.317 DBG] Microsoft.EntityFrameworkCore.Model The index {'ImportSessionId'} was not created on entity type 'ImportError' as the properties are already covered by the index {'ImportSessionId', 'Sheet', 'SourceRowNumber'}.
+06:46:55.318 | [06:46:55.318 DBG] Microsoft.EntityFrameworkCore.Model The index {'ImportSessionId'} was not created on entity type 'StagedRow' as the properties are already covered by the index {'ImportSessionId', 'Sheet', 'SourceRowNumber'}.
+06:46:55.318 | [06:46:55.318 DBG] Microsoft.EntityFrameworkCore.Model The index {'ImportSessionId'} was not created on entity type 'StagedRow' as the properties are already covered by the index {'ImportSessionId', 'Status'}.
+06:46:55.776 | [06:46:55.776 DBG] Microsoft.EntityFrameworkCore.Infrastructure Entity Framework Core 9.0.4 initialized 'ImportServiceDbContext' using provider 'Npgsql.EntityFrameworkCore.PostgreSQL:9.0.4+fd2380957bee5cd86f336466af36b08c0163f1a5' with options: MigrationsHistoryTable=import.__ef_migrations_history 
+06:46:55.851 | [06:46:55.851 DBG] Microsoft.EntityFrameworkCore.Database.Connection Creating DbConnection.
+06:46:55.916 | [06:46:55.916 DBG] Microsoft.EntityFrameworkCore.Database.Connection Created DbConnection. (29ms).
+06:46:55.922 | [06:46:55.922 DBG] Microsoft.EntityFrameworkCore.Database.Connection Opening connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+06:46:56.236 | [06:46:56.236 DBG] Microsoft.EntityFrameworkCore.Database.Connection Opened connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+06:46:56.241 | [06:46:56.241 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteReader'.
+06:46:56.248 | [06:46:56.248 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteReader' (5ms).
+06:46:56.249 | [06:46:56.249 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteReader' (9ms).
+06:46:56.256 | [06:46:56.256 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:56.342 | [06:46:56.342 ERR] Microsoft.EntityFrameworkCore.Database.Command Failed executing DbCommand (87ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:56.346 | [06:46:56.346 DBG] Microsoft.EntityFrameworkCore.Database.Connection Closing connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+06:46:56.353 | [06:46:56.353 DBG] Microsoft.EntityFrameworkCore.Database.Connection Closed connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432' (3ms).
+06:46:56.665 | [06:46:56.665 DBG] Microsoft.EntityFrameworkCore.Migrations Migrating using database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+06:46:56.668 | [06:46:56.668 DBG] Microsoft.EntityFrameworkCore.Database.Connection Opening connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+06:46:56.716 | [06:46:56.716 DBG] Microsoft.EntityFrameworkCore.Database.Connection Opening connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+06:46:56.795 | [06:46:56.795 DBG] Microsoft.EntityFrameworkCore.Database.Connection Opened connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+06:46:56.796 | [06:46:56.796 DBG] Microsoft.EntityFrameworkCore.Database.Connection Closing connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+06:46:56.803 | [06:46:56.803 DBG] Microsoft.EntityFrameworkCore.Database.Connection Closed connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432' (7ms).
+06:46:56.805 | [06:46:56.805 DBG] Microsoft.EntityFrameworkCore.Database.Connection Opened connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+06:46:56.805 | [06:46:56.805 DBG] Microsoft.EntityFrameworkCore.Database.Connection Opening connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+06:46:56.869 | [06:46:56.869 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:56.869 | [06:46:56.869 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+06:46:56.869 | [06:46:56.869 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:56.870 | [06:46:56.870 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:56.936 | [06:46:56.936 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (65ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:56.947 | [06:46:56.947 DBG] Microsoft.EntityFrameworkCore.Database.Transaction Beginning transaction with isolation level 'Unspecified'.
+06:46:56.950 | [06:46:56.950 DBG] Microsoft.EntityFrameworkCore.Database.Transaction Began transaction with isolation level 'ReadCommitted'.
+06:46:56.952 | [06:46:56.952 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+06:46:56.952 | [06:46:56.952 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:56.952 | [06:46:56.952 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:56.952 | [06:46:56.952 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:56.964 | [06:46:56.964 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:56.965 | [06:46:56.965 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteReader' (0ms).
+06:46:56.965 | [06:46:56.965 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:56.965 | [06:46:56.965 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteReader' (0ms).
+06:46:56.965 | [06:46:56.965 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteReader'.
+06:46:56.978 | [06:46:56.978 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (12ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:56.982 | [06:46:56.982 DBG] Microsoft.EntityFrameworkCore.Database.Command Closing data reader to 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+06:46:56.985 | [06:46:56.985 DBG] Microsoft.EntityFrameworkCore.Database.Command A data reader for 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432' is being disposed after spending 5ms reading results.
+06:46:56.990 | [06:46:56.990 INF] Microsoft.EntityFrameworkCore.Migrations Applying migration '20260429084812_Initial'.
+06:46:57.034 | [06:46:57.034 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.034 | [06:46:57.034 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.034 | [06:46:57.034 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.034 | [06:46:57.034 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+06:46:57.045 | [06:46:57.045 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.045 | [06:46:57.045 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+06:46:57.045 | [06:46:57.045 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.045 | [06:46:57.045 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.046 | [06:46:57.046 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.059 | [06:46:57.059 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (14ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.059 | [06:46:57.059 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.059 | [06:46:57.059 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+06:46:57.060 | [06:46:57.060 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.060 | [06:46:57.060 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.080 | [06:46:57.080 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+06:46:57.080 | [06:46:57.080 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.080 | [06:46:57.080 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.080 | [06:46:57.080 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (20ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.080 | [06:46:57.080 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.093 | [06:46:57.093 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.093 | [06:46:57.093 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.093 | [06:46:57.093 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+06:46:57.093 | [06:46:57.093 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (13ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.093 | [06:46:57.093 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.106 | [06:46:57.106 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.106 | [06:46:57.106 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+06:46:57.106 | [06:46:57.106 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.106 | [06:46:57.106 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.106 | [06:46:57.106 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (13ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.120 | [06:46:57.120 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (13ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.120 | [06:46:57.120 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.120 | [06:46:57.120 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.120 | [06:46:57.120 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.120 | [06:46:57.120 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+06:46:57.131 | [06:46:57.131 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.132 | [06:46:57.132 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.132 | [06:46:57.132 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.132 | [06:46:57.132 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+06:46:57.132 | [06:46:57.132 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.143 | [06:46:57.143 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.143 | [06:46:57.143 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.143 | [06:46:57.143 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.143 | [06:46:57.143 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.143 | [06:46:57.143 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+06:46:57.154 | [06:46:57.154 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.154 | [06:46:57.154 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.154 | [06:46:57.154 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+06:46:57.154 | [06:46:57.154 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.154 | [06:46:57.154 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.166 | [06:46:57.166 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.166 | [06:46:57.166 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.166 | [06:46:57.166 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+06:46:57.166 | [06:46:57.166 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.166 | [06:46:57.166 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.177 | [06:46:57.177 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.177 | [06:46:57.177 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.177 | [06:46:57.177 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.177 | [06:46:57.177 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.177 | [06:46:57.177 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+06:46:57.189 | [06:46:57.189 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.189 | [06:46:57.189 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.189 | [06:46:57.189 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (12ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.189 | [06:46:57.189 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.189 | [06:46:57.189 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+06:46:57.201 | [06:46:57.201 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.201 | [06:46:57.201 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (12ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.201 | [06:46:57.201 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.201 | [06:46:57.201 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.201 | [06:46:57.201 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+06:46:57.212 | [06:46:57.212 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.212 | [06:46:57.212 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.212 | [06:46:57.212 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+06:46:57.212 | [06:46:57.212 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.213 | [06:46:57.213 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.224 | [06:46:57.224 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.224 | [06:46:57.224 INF] Microsoft.EntityFrameworkCore.Migrations Applying migration '20260429170000_AddCachedProjects'.
+06:46:57.231 | [06:46:57.231 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+06:46:57.231 | [06:46:57.231 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.231 | [06:46:57.231 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.232 | [06:46:57.232 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.244 | [06:46:57.244 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.244 | [06:46:57.244 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.244 | [06:46:57.244 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+06:46:57.244 | [06:46:57.244 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (12ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.244 | [06:46:57.244 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.256 | [06:46:57.256 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+06:46:57.256 | [06:46:57.256 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.256 | [06:46:57.256 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.256 | [06:46:57.256 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.256 | [06:46:57.256 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (12ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.267 | [06:46:57.267 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.267 | [06:46:57.267 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.267 | [06:46:57.267 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+06:46:57.267 | [06:46:57.267 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.267 | [06:46:57.267 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.278 | [06:46:57.278 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.278 | [06:46:57.278 INF] Microsoft.EntityFrameworkCore.Migrations Applying migration '20260430213808_RemoveFileSha256Constraint'.
+06:46:57.285 | [06:46:57.285 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.285 | [06:46:57.285 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.285 | [06:46:57.285 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.285 | [06:46:57.285 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+06:46:57.304 | [06:46:57.304 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (18ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.304 | [06:46:57.304 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.304 | [06:46:57.304 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.304 | [06:46:57.304 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+06:46:57.304 | [06:46:57.304 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.315 | [06:46:57.315 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.315 | [06:46:57.315 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.315 | [06:46:57.315 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+06:46:57.315 | [06:46:57.315 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.315 | [06:46:57.315 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.327 | [06:46:57.327 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+06:46:57.327 | [06:46:57.327 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.327 | [06:46:57.327 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.327 | [06:46:57.327 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.327 | [06:46:57.327 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.338 | [06:46:57.338 INF] Microsoft.EntityFrameworkCore.Migrations Applying migration '20260512095902_AddSheetToStagedRowAndError'.
+06:46:57.338 | [06:46:57.338 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.345 | [06:46:57.345 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+06:46:57.345 | [06:46:57.345 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.345 | [06:46:57.345 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.345 | [06:46:57.345 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.356 | [06:46:57.356 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.356 | [06:46:57.356 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+06:46:57.356 | [06:46:57.356 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.356 | [06:46:57.356 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.356 | [06:46:57.356 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.367 | [06:46:57.367 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.368 | [06:46:57.368 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.368 | [06:46:57.368 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+06:46:57.368 | [06:46:57.368 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.368 | [06:46:57.368 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.381 | [06:46:57.381 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.381 | [06:46:57.381 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.381 | [06:46:57.381 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (14ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.381 | [06:46:57.381 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.381 | [06:46:57.381 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+06:46:57.393 | [06:46:57.393 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+06:46:57.393 | [06:46:57.393 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.393 | [06:46:57.393 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.393 | [06:46:57.393 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.393 | [06:46:57.393 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.405 | [06:46:57.405 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (12ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.405 | [06:46:57.405 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.405 | [06:46:57.405 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.405 | [06:46:57.405 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.405 | [06:46:57.405 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+06:46:57.417 | [06:46:57.417 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.417 | [06:46:57.417 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.417 | [06:46:57.417 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+06:46:57.417 | [06:46:57.417 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (12ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.417 | [06:46:57.417 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.428 | [06:46:57.428 INF] Microsoft.EntityFrameworkCore.Migrations Applying migration '20260518085520_AddActionsToStagedRow'.
+06:46:57.428 | [06:46:57.428 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.434 | [06:46:57.434 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.434 | [06:46:57.434 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.434 | [06:46:57.434 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.434 | [06:46:57.434 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+06:46:57.445 | [06:46:57.445 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.446 | [06:46:57.446 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.446 | [06:46:57.446 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.446 | [06:46:57.446 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+06:46:57.446 | [06:46:57.446 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.457 | [06:46:57.457 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.457 | [06:46:57.457 INF] Microsoft.EntityFrameworkCore.Migrations Applying migration '20260520072742_AddRoomApplySnapshots'.
+06:46:57.466 | [06:46:57.466 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.466 | [06:46:57.466 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+06:46:57.466 | [06:46:57.466 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.466 | [06:46:57.466 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.480 | [06:46:57.480 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.480 | [06:46:57.480 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+06:46:57.480 | [06:46:57.480 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.480 | [06:46:57.480 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.480 | [06:46:57.480 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (14ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.492 | [06:46:57.492 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+06:46:57.492 | [06:46:57.492 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.492 | [06:46:57.492 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (12ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.492 | [06:46:57.492 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.492 | [06:46:57.492 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.503 | [06:46:57.503 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (12ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.503 | [06:46:57.503 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+06:46:57.504 | [06:46:57.504 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.504 | [06:46:57.504 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.504 | [06:46:57.504 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.515 | [06:46:57.515 INF] Microsoft.EntityFrameworkCore.Migrations Applying migration '20260525115407_AddSecondaryFileToSnapshot'.
+06:46:57.515 | [06:46:57.515 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.522 | [06:46:57.522 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.522 | [06:46:57.522 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.522 | [06:46:57.522 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+06:46:57.522 | [06:46:57.522 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.534 | [06:46:57.534 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+06:46:57.534 | [06:46:57.534 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.534 | [06:46:57.534 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.534 | [06:46:57.534 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.534 | [06:46:57.534 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.545 | [06:46:57.545 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.545 | [06:46:57.545 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.545 | [06:46:57.545 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.545 | [06:46:57.545 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.545 | [06:46:57.545 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+06:46:57.556 | [06:46:57.556 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.556 | [06:46:57.556 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.556 | [06:46:57.556 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+06:46:57.556 | [06:46:57.556 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.556 | [06:46:57.556 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.567 | [06:46:57.567 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.570 | [06:46:57.570 DBG] Microsoft.EntityFrameworkCore.Database.Transaction Committing transaction.
+06:46:57.588 | [06:46:57.588 DBG] Microsoft.EntityFrameworkCore.Database.Transaction Committed transaction.
+06:46:57.592 | [06:46:57.592 DBG] Microsoft.EntityFrameworkCore.Database.Transaction Disposing transaction.
+06:46:57.593 | [06:46:57.593 DBG] Microsoft.EntityFrameworkCore.Database.Connection Closed connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432' (0ms).
+06:46:57.593 | [06:46:57.593 DBG] Microsoft.EntityFrameworkCore.Database.Connection Closing connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+06:46:57.599 | [06:46:57.599 INF]  Applying VisaryDb migrations (schema=Data)…
+06:46:57.679 | [06:46:57.679 DBG] Microsoft.EntityFrameworkCore.Infrastructure Entity Framework Core 9.0.4 initialized 'VisaryDbContext' using provider 'Npgsql.EntityFrameworkCore.PostgreSQL:9.0.4+fd2380957bee5cd86f336466af36b08c0163f1a5' with options: MigrationsHistoryTable=Data.__ef_migrations_history 
+06:46:57.719 | [06:46:57.719 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.719 | [06:46:57.719 DBG] Microsoft.EntityFrameworkCore.Database.Connection Created DbConnection. (0ms).
+06:46:57.719 | [06:46:57.719 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteReader'.
+06:46:57.719 | [06:46:57.719 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteReader' (0ms).
+06:46:57.719 | [06:46:57.719 DBG] Microsoft.EntityFrameworkCore.Database.Connection Opening connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+06:46:57.719 | [06:46:57.719 DBG] Microsoft.EntityFrameworkCore.Database.Connection Creating DbConnection.
+06:46:57.719 | [06:46:57.719 DBG] Microsoft.EntityFrameworkCore.Database.Connection Opened connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+06:46:57.719 | [06:46:57.719 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteReader' (0ms).
+06:46:57.731 | [06:46:57.731 DBG] Microsoft.EntityFrameworkCore.Database.Connection Closed connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432' (0ms).
+06:46:57.731 | [06:46:57.731 DBG] Microsoft.EntityFrameworkCore.Database.Connection Closing connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+06:46:57.731 | [06:46:57.731 ERR] Microsoft.EntityFrameworkCore.Database.Command Failed executing DbCommand (12ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.752 | [06:46:57.752 DBG] Microsoft.EntityFrameworkCore.Migrations Migrating using database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+06:46:57.752 | [06:46:57.752 DBG] Microsoft.EntityFrameworkCore.Database.Connection Opening connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+06:46:57.752 | [06:46:57.752 DBG] Microsoft.EntityFrameworkCore.Database.Connection Opening connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+06:46:57.810 | [06:46:57.810 DBG] Microsoft.EntityFrameworkCore.Database.Connection Opened connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+06:46:57.810 | [06:46:57.810 DBG] Microsoft.EntityFrameworkCore.Database.Connection Closing connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+06:46:57.811 | [06:46:57.811 DBG] Microsoft.EntityFrameworkCore.Database.Connection Opened connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+06:46:57.811 | [06:46:57.811 DBG] Microsoft.EntityFrameworkCore.Database.Connection Closed connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432' (0ms).
+06:46:57.811 | [06:46:57.811 DBG] Microsoft.EntityFrameworkCore.Database.Connection Opening connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+06:46:57.814 | [06:46:57.814 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.814 | [06:46:57.814 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+06:46:57.824 | [06:46:57.824 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (10ms).
+06:46:57.824 | [06:46:57.824 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.839 | [06:46:57.839 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (14ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.841 | [06:46:57.841 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.841 | [06:46:57.841 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.841 | [06:46:57.841 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.841 | [06:46:57.841 DBG] Microsoft.EntityFrameworkCore.Database.Transaction Beginning transaction with isolation level 'Unspecified'.
+06:46:57.841 | [06:46:57.841 DBG] Microsoft.EntityFrameworkCore.Database.Transaction Began transaction with isolation level 'ReadCommitted'.
+06:46:57.841 | [06:46:57.841 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+06:46:57.852 | [06:46:57.852 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.853 | [06:46:57.853 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.853 | [06:46:57.853 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteReader'.
+06:46:57.853 | [06:46:57.853 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteReader' (0ms).
+06:46:57.853 | [06:46:57.853 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteReader' (0ms).
+06:46:57.864 | [06:46:57.864 INF] Microsoft.EntityFrameworkCore.Migrations Applying migration '20260623053617_InitialDataSchema'.
+06:46:57.864 | [06:46:57.864 DBG] Microsoft.EntityFrameworkCore.Database.Command A data reader for 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432' is being disposed after spending 0ms reading results.
+06:46:57.864 | [06:46:57.864 DBG] Microsoft.EntityFrameworkCore.Database.Command Closing data reader to 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+06:46:57.864 | [06:46:57.864 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.876 | [06:46:57.876 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.876 | [06:46:57.876 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+06:46:57.876 | [06:46:57.876 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.876 | [06:46:57.876 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.887 | [06:46:57.887 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.888 | [06:46:57.888 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.888 | [06:46:57.888 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.888 | [06:46:57.888 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+06:46:57.888 | [06:46:57.888 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.901 | [06:46:57.901 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.901 | [06:46:57.901 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+06:46:57.901 | [06:46:57.901 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.901 | [06:46:57.901 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.901 | [06:46:57.901 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (13ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.913 | [06:46:57.913 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+06:46:57.913 | [06:46:57.913 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (13ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.914 | [06:46:57.914 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.914 | [06:46:57.914 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.914 | [06:46:57.914 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.926 | [06:46:57.926 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (13ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.927 | [06:46:57.927 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.927 | [06:46:57.927 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+06:46:57.927 | [06:46:57.927 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.927 | [06:46:57.927 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.940 | [06:46:57.940 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.940 | [06:46:57.940 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.940 | [06:46:57.940 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (13ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.940 | [06:46:57.940 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+06:46:57.940 | [06:46:57.940 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+06:46:57.951 | [06:46:57.951 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.951 | [06:46:57.951 DBG] Microsoft.EntityFrameworkCore.Database.Transaction Committing transaction.
+06:46:57.964 | [06:46:57.964 DBG] Microsoft.EntityFrameworkCore.Database.Transaction Committed transaction.
+06:46:57.964 | [06:46:57.964 DBG] Microsoft.EntityFrameworkCore.Database.Transaction Disposing transaction.
+06:46:57.964 | [06:46:57.964 DBG] Microsoft.EntityFrameworkCore.Database.Connection Closing connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+06:46:57.964 | [06:46:57.964 DBG] Microsoft.EntityFrameworkCore.Database.Connection Closed connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432' (0ms).
+06:46:57.970 | [06:46:57.970 DBG] Microsoft.EntityFrameworkCore.Infrastructure 'VisaryDbContext' disposed.
+06:46:57.972 | [06:46:57.972 DBG] Microsoft.EntityFrameworkCore.Database.Connection Disposing connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+06:46:57.973 | [06:46:57.973 DBG] Microsoft.EntityFrameworkCore.Infrastructure 'ImportServiceDbContext' disposed.
+06:46:57.973 | [06:46:57.973 DBG] Microsoft.EntityFrameworkCore.Database.Connection Disposed connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432' (0ms).
+06:46:57.974 | [06:46:57.974 DBG] Microsoft.EntityFrameworkCore.Database.Connection Disposing connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+06:46:57.974 | [06:46:57.974 DBG] Microsoft.EntityFrameworkCore.Database.Connection Disposed connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432' (0ms).
+06:46:58.006 | [06:46:58.006 DBG] Microsoft.AspNetCore.Mvc.ModelBinding.ModelBinderFactory Registered model binder providers, in the following order: ["Microsoft.AspNetCore.Mvc.ModelBinding.Binders.BinderTypeModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.ServicesModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.BodyModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.HeaderModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.FloatingPointTypeModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.EnumTypeModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.DateTimeModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.SimpleTypeModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.TryParseModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.CancellationTokenModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.ByteArrayModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.FormFileModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.FormCollectionModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.KeyValuePairModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.DictionaryModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.ArrayModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.CollectionModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.ComplexObjectModelBinderProvider"]
+06:46:58.094 | [06:46:58.094 DBG] Microsoft.AspNetCore.SignalR.Internal.DefaultHubProtocolResolver Registered SignalR Protocol: json, implemented by Microsoft.AspNetCore.SignalR.Protocol.JsonHubProtocol.
+06:46:58.183 | [06:46:58.183 INF]  ┌── Конфигурация сервиса ─────────────────────────────────────
+06:46:58.184 | [06:46:58.184 INF]  │ JWT auth    : ENABLED
+06:46:58.184 | [06:46:58.184 INF]  │ Swagger     : ENABLED
+06:46:58.184 | [06:46:58.184 INF]  │ Visary API  : http://webapi:8080/api
+06:46:58.184 | [06:46:58.184 INF]  │ PathBase    : (не задан)
+06:46:58.184 | [06:46:58.184 INF]  │ URLs        : http://0.0.0.0:5000
+06:46:58.184 | [06:46:58.184 INF]  │ CORS        : $(UI_PUBLIC_URL)
+06:46:58.184 | [06:46:58.184 INF]  └─────────────────────────────────────────────────────────────
+06:46:58.184 | [06:46:58.184 INF]  │ DB conn-str : Database=ab_fm_import;Host=ab-test-pg-1.ci28823727.cloud.alfaintra.net;Port=5432;Username=ab_fm_import_user;Password=***;Application Name=ab-fm-import;Pooling=true
+06:46:58.185 | [06:46:58.185 INF]  KiloImportService.Api готов принимать запросы на http://0.0.0.0:5000
+06:46:58.185 | [06:46:58.185 INF]  Зарегистрировано 0 HTTP-маршрутов:
+06:46:58.188 | [06:46:58.188 DBG] Microsoft.Extensions.Hosting.Internal.Host Hosting starting
+06:46:58.195 | [06:46:58.195 WRN] Microsoft.AspNetCore.DataProtection.Repositories.EphemeralXmlRepository Using an in-memory repository. Keys will not be persisted to storage.
+06:46:58.196 | [06:46:58.196 WRN] Microsoft.AspNetCore.DataProtection.KeyManagement.XmlKeyManager Neither user profile nor HKLM registry available. Using an ephemeral key repository. Protected data will be unavailable when application exits.
+06:46:58.258 | [06:46:58.258 DBG] Microsoft.AspNetCore.DataProtection.KeyManagement.KeyRingProvider Policy resolution states that a new key should be added to the key ring.
+06:46:58.258 | [06:46:58.258 DBG] Microsoft.AspNetCore.DataProtection.KeyManagement.DefaultKeyResolver Repository contains no viable default key. Caller should generate a key with immediate activation.
+06:46:58.262 | [06:46:58.262 INF] Microsoft.AspNetCore.DataProtection.KeyManagement.XmlKeyManager Creating key {bf4df4de-c595-4c72-b5a9-ce78e0cbb5fe} with creation date 2026-06-25 06:46:58Z, activation date 2026-06-25 06:46:58Z, and expiration date 2026-09-23 06:46:58Z.
+06:46:58.267 | [06:46:58.267 DBG] Microsoft.AspNetCore.DataProtection.KeyManagement.XmlKeyManager Descriptor deserializer type for key {bf4df4de-c595-4c72-b5a9-ce78e0cbb5fe} is 'Microsoft.AspNetCore.DataProtection.AuthenticatedEncryption.ConfigurationModel.AuthenticatedEncryptorDescriptorDeserializer, Microsoft.AspNetCore.DataProtection, Version=10.0.0.0, Culture=neutral, PublicKeyToken=adb9793829ddae60'.
+06:46:58.270 | [06:46:58.270 WRN] Microsoft.AspNetCore.DataProtection.KeyManagement.XmlKeyManager No XML encryptor configured. Key {bf4df4de-c595-4c72-b5a9-ce78e0cbb5fe} may be persisted to storage in unencrypted form.
+06:46:58.270 | [06:46:58.270 DBG] Microsoft.AspNetCore.DataProtection.KeyManagement.XmlKeyManager No key escrow sink found. Not writing key {bf4df4de-c595-4c72-b5a9-ce78e0cbb5fe} to escrow.
+06:46:58.271 | [06:46:58.271 DBG] Microsoft.AspNetCore.DataProtection.KeyManagement.XmlKeyManager Key cache expiration token triggered by 'CreateNewKey' operation.
+06:46:58.272 | [06:46:58.272 DBG] Microsoft.AspNetCore.DataProtection.KeyManagement.XmlKeyManager Found key {bf4df4de-c595-4c72-b5a9-ce78e0cbb5fe}.
+06:46:58.276 | [06:46:58.276 DBG] Microsoft.AspNetCore.DataProtection.KeyManagement.DefaultKeyResolver Considering key {bf4df4de-c595-4c72-b5a9-ce78e0cbb5fe} with expiration date 2026-09-23 06:46:58Z as default key.
+06:46:58.277 | [06:46:58.277 DBG] Microsoft.AspNetCore.DataProtection.AuthenticatedEncryption.ManagedAuthenticatedEncryptorFactory Using managed keyed hash algorithm 'System.Security.Cryptography.HMACSHA256'.
+06:46:58.277 | [06:46:58.277 DBG] Microsoft.AspNetCore.DataProtection.AuthenticatedEncryption.ManagedAuthenticatedEncryptorFactory Using managed symmetric algorithm 'System.Security.Cryptography.Aes'.
+06:46:58.279 | [06:46:58.279 DBG] Microsoft.AspNetCore.DataProtection.KeyManagement.KeyRingProvider Using key {bf4df4de-c595-4c72-b5a9-ce78e0cbb5fe} as the default key.
+06:46:58.280 | [06:46:58.280 DBG] Microsoft.AspNetCore.DataProtection.Internal.DataProtectionHostedService Key ring with default key {bf4df4de-c595-4c72-b5a9-ce78e0cbb5fe} was loaded during application startup.
+06:46:58.281 | [06:46:58.281 WRN] Microsoft.AspNetCore.Hosting.Diagnostics Overriding HTTP_PORTS '8080' and HTTPS_PORTS ''. Binding to values defined by URLS instead 'http://0.0.0.0:5000'.
+06:46:58.375 | [06:46:58.375 DBG] Microsoft.AspNetCore.HostFiltering.HostFilteringMiddleware Middleware configuration started with options: {AllowedHosts = *, AllowEmptyHosts = True, IncludeFailureMessage = True}
+06:46:58.376 | [06:46:58.376 DBG] Microsoft.AspNetCore.HostFiltering.HostFilteringMiddleware Wildcard detected, all requests with hosts will be allowed.
+06:46:58.389 | [06:46:58.389 INF] Microsoft.Hosting.Lifetime Now listening on: http://0.0.0.0:5000
+06:46:58.390 | [06:46:58.390 INF] Microsoft.Hosting.Lifetime Content root path: /app
+06:46:58.390 | [06:46:58.390 INF] Microsoft.Hosting.Lifetime Hosting environment: Test
+06:46:58.390 | [06:46:58.390 INF] Microsoft.Hosting.Lifetime Application started. Press Ctrl+C to shut down.
+06:46:58.390 | [06:46:58.390 DBG] Microsoft.AspNetCore.Hosting.Diagnostics Loaded hosting startup assembly KiloImportService.Api
+06:46:58.392 | [06:46:58.392 DBG] Microsoft.Extensions.Hosting.Internal.Host Hosting started
+99:99:99.999 |     "VisaryShareAgreementId" integer,
+99:99:99.999 | CREATE INDEX "IX_RoomApplySnapshot_Site" ON import.room_apply_snapshots ("VisarySiteId");
+99:99:99.999 | CREATE UNIQUE INDEX "IX_RoomApplySnapshot_BusinessKey" ON import.room_apply_snapshots ("VisarySiteId", "Sheet", "SectionTitle", "RoomKindId", "RoomNumber", "BuildingSection");
+99:99:99.999 |     "VisarySiteId" integer NOT NULL,
+99:99:99.999 | INSERT INTO import.__ef_migrations_history ("MigrationId", "ProductVersion")
+99:99:99.999 |     "VisaryRoomId" integer,
+99:99:99.999 | INSERT INTO import.__ef_migrations_history ("MigrationId", "ProductVersion")
+99:99:99.999 | CREATE INDEX "IX_RoomApplySnapshot_Site" ON import.room_apply_snapshots ("VisarySiteId");
+99:99:99.999 |     "VisaryRoomId" integer,
+99:99:99.999 |     "VisaryShareAgreementId" integer,
+99:99:99.999 | CREATE UNIQUE INDEX "IX_RoomApplySnapshot_BusinessKey" ON import.room_apply_snapshots ("VisarySiteId", "Sheet", "SectionTitle", "RoomKindId", "RoomNumber", "BuildingSection");
+99:99:99.999 |         CREATE SCHEMA "Data";
+99:99:99.999 |         CREATE SCHEMA "Data";
+99:99:99.999 |     "VisarySectionId" integer,
+99:99:99.999 | FROM "Data".__ef_migrations_history
+99:99:99.999 | LOCK TABLE "Data".__ef_migrations_history IN ACCESS EXCLUSIVE MODE
+99:99:99.999 | FROM "Data".__ef_migrations_history
+99:99:99.999 | VALUES ('20260623053617_InitialDataSchema', '9.0.4');
+99:99:99.999 | VALUES ('20260623053617_InitialDataSchema', '9.0.4');
+99:99:99.999 | INSERT INTO "Data".__ef_migrations_history ("MigrationId", "ProductVersion")
+99:99:99.999 | INSERT INTO "Data".__ef_migrations_history ("MigrationId", "ProductVersion")
+99:99:99.999 |         CREATE SCHEMA import;
+99:99:99.999 |     CONSTRAINT "PK___ef_migrations_history" PRIMARY KEY ("MigrationId")
+99:99:99.999 | CREATE TABLE IF NOT EXISTS import.__ef_migrations_history (
+99:99:99.999 | FROM import.__ef_migrations_history
+99:99:99.999 | FROM import.__ef_migrations_history
+99:99:99.999 |     "VisaryProjectId" integer,
+99:99:99.999 |     "Message" character varying(500),
+99:99:99.999 |     "RelativePath" character varying(500) NOT NULL,
+99:99:99.999 | INSERT INTO import.__ef_migrations_history ("MigrationId", "ProductVersion")
+99:99:99.999 | INSERT INTO import.__ef_migrations_history ("MigrationId", "ProductVersion")
+99:99:99.999 |         CREATE SCHEMA import;
+99:99:99.999 | LOCK TABLE import.__ef_migrations_history IN ACCESS EXCLUSIVE MODE
+99:99:99.999 | LOCK TABLE import.__ef_migrations_history IN ACCESS EXCLUSIVE MODE
+99:99:99.999 |     "Title" character varying(500) NOT NULL,
+99:99:99.999 | INSERT INTO import.__ef_migrations_history ("MigrationId", "ProductVersion")
+99:99:99.999 |     "Title" character varying(500) NOT NULL,
+99:99:99.999 | CREATE TABLE IF NOT EXISTS import.__ef_migrations_history (
+99:99:99.999 | FROM import.__ef_migrations_history
+99:99:99.999 | FROM import.__ef_migrations_history
+99:99:99.999 | INSERT INTO import.__ef_migrations_history ("MigrationId", "ProductVersion")
+99:99:99.999 |     "Message" character varying(500),
+99:99:99.999 | INSERT INTO import.__ef_migrations_history ("MigrationId", "ProductVersion")
+99:99:99.999 |     CONSTRAINT "PK___ef_migrations_history" PRIMARY KEY ("MigrationId")
+99:99:99.999 |         CREATE SCHEMA import;
+99:99:99.999 | INSERT INTO import.__ef_migrations_history ("MigrationId", "ProductVersion")
+99:99:99.999 |         CREATE SCHEMA import;
+99:99:99.999 | INSERT INTO import.__ef_migrations_history ("MigrationId", "ProductVersion")
+99:99:99.999 | INSERT INTO import.__ef_migrations_history ("MigrationId", "ProductVersion")
+99:99:99.999 | FROM "Data".__ef_migrations_history
+99:99:99.999 | CREATE TABLE IF NOT EXISTS "Data".__ef_migrations_history (
+99:99:99.999 | INSERT INTO import.__ef_migrations_history ("MigrationId", "ProductVersion")
+99:99:99.999 | CREATE TABLE IF NOT EXISTS "Data".__ef_migrations_history (
+99:99:99.999 |     "VisarySectionId" integer,
+99:99:99.999 | INSERT INTO import.__ef_migrations_history ("MigrationId", "ProductVersion")
+99:99:99.999 | INSERT INTO import.__ef_migrations_history ("MigrationId", "ProductVersion")
+99:99:99.999 |     "VisarySiteId" integer NOT NULL,
+99:99:99.999 | INSERT INTO import.__ef_migrations_history ("MigrationId", "ProductVersion")
+99:99:99.999 | LOCK TABLE "Data".__ef_migrations_history IN ACCESS EXCLUSIVE MODE
+99:99:99.999 |         CREATE SCHEMA "Data";
+99:99:99.999 |     CONSTRAINT "PK___ef_migrations_history" PRIMARY KEY ("MigrationId")
+99:99:99.999 |         CREATE SCHEMA "Data";
+99:99:99.999 | FROM "Data".__ef_migrations_history
+99:99:99.999 |     CONSTRAINT "PK___ef_migrations_history" PRIMARY KEY ("MigrationId")
+99:99:99.999 |     "VisaryProjectId" integer,
+99:99:99.999 |     "RelativePath" character varying(500) NOT NULL,
+99:99:99.999 |     "VisarySiteId" integer,
+99:99:99.999 |     "FileName" character varying(500) NOT NULL,
+99:99:99.999 |     "FileName" character varying(500) NOT NULL,
+99:99:99.999 |     "VisarySiteId" integer,

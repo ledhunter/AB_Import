@@ -123,6 +123,16 @@ public interface ICrudClient
         int versionId, int inputDataId, CancellationToken ct = default);
 
     /// <summary>
+    /// Создать запись «Данные клиента» (<c>clientdata</c>). POST
+    /// <c>/api/visary/crud/clientdata</c>. Импорт «Финмодель» создаёт по одной такой
+    /// записи на каждый непустой (Quarter × RoomKind) из листа «Общий график»
+    /// второго файла. Идемпотентности на сервере нет — caller обязан pre-check'ить
+    /// при необходимости. См. doc_project/150-finmodel-clientdata.md.
+    /// </summary>
+    Task<ClientDataRaw> CreateClientDataAsync(
+        ClientDataCreateRequest request, CancellationToken ct = default);
+
+    /// <summary>
     /// Создать «Заключение» (<c>projectaudit</c>). POST <c>/api/visary/crud/projectaudit</c>.
     /// Импорт Финмодели после успешных Бюджета+ГФ создаёт Заключение типа
     /// «Итоговое заключение КА БП7» (<see cref="ProjectAuditCreateRequest.Stage"/>=110).
@@ -715,6 +725,23 @@ public sealed class CrudClient : VisaryHttpBase<CrudClient>, ICrudClient
         ["ID", "Title", "FMModelVersion", "FMPeriod", "Code", "CreditLineCode",
          "ConstructionSiteCode", "CodeGroup", "Summ", "Amount", "Cost", "Percent",
          "Replicate", "Group"];
+
+    public async Task<ClientDataRaw> CreateClientDataAsync(
+        ClientDataCreateRequest request, CancellationToken ct)
+    {
+        _log.LogDebug(
+            "Visary → POST {Mnemonic} siteId={SiteId} roomKindId={RoomKindId} period={PeriodStart}..{PeriodEnd}",
+            VisaryMnemonics.ClientData, request.Site?.ID, request.RoomKind?.ID,
+            request.PeriodStartDate, request.Date);
+        var result = await PostCrudAsync<ClientDataRaw>(
+            $"{BaseUrl}/api/visary/crud/{VisaryMnemonics.ClientData}",
+            request, VisaryMnemonics.ClientData, ct);
+        _log.LogInformation(
+            "CrudClient.CreateClientDataAsync: created id={Id} siteId={SiteId} roomKindId={RoomKindId} period={PeriodStart}..{PeriodEnd} cost={Cost} rates={Rates}",
+            result.ID, request.Site?.ID, request.RoomKind?.ID,
+            request.PeriodStartDate, request.Date, request.Cost, request.Rates);
+        return result;
+    }
 
     // ─── ProjectAudit / DataForFm / DataSetForFm (Заключение + рассрочки) ────
 

@@ -418,6 +418,41 @@ public sealed class InputDataRaw
 }
 
 /// <summary>
+/// Запись «Данные клиента» (<c>clientdata</c>) — поквартальный срез стоимости 1 кв.м
+/// и площади 1 кв.м для одного вида помещения на объекте строительства.
+/// Один объект × один RoomKind × один квартал = одна запись. Импорт «Финмодель»
+/// создаёт по одной записи на каждый непустой (Quarter × RoomKind) из листа
+/// «Общий график» второго файла. См. doc_project/150-finmodel-clientdata.md.
+/// </summary>
+public sealed class ClientDataRaw
+{
+    public int ID { get; set; }
+    public string? Title { get; set; }
+    public double? Cost { get; set; }
+    public double? Rates { get; set; }
+    public int? RoomCategory { get; set; }
+    public VisaryRef? RoomKind { get; set; }
+    public VisaryRef? Site { get; set; }
+    /// <summary>ISO-дата <c>yyyy-MM-dd</c>; импорт пишет первый день того же квартала, что и <see cref="PeriodStartDate"/>.</summary>
+    public string? Date { get; set; }
+    /// <summary>Начало периода — ISO-дата <c>yyyy-MM-dd</c> первого дня квартала.</summary>
+    public string? PeriodStartDate { get; set; }
+    public double? ODCount { get; set; }
+    public double? ODCountRes { get; set; }
+    public double? ODCountNonRes { get; set; }
+    public double? ODCountOtherNonRes { get; set; }
+    public double? ODCountParking { get; set; }
+    public double? ParkingCost { get; set; }
+    public double? ParkingRates { get; set; }
+    public double? OtherNonresidentialCost { get; set; }
+    public double? OthernonresidentialRates { get; set; }
+    public double? NonresidentialCost { get; set; }
+    public double? NonresidentialRates { get; set; }
+    public double? ResidentialCost { get; set; }
+    public double? ResidentialRates { get; set; }
+}
+
+/// <summary>
 /// «Заключение» (<c>projectaudit</c>). Минимальный набор для импорта Финмодели:
 /// импортеру достаточно <see cref="ID"/>, чтобы знать, что POST прошёл.
 /// <see cref="Stage"/>=110 — «Итоговое заключение КА БП7», единственный поддерживаемый

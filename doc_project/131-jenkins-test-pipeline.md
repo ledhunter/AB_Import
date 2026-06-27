@@ -110,10 +110,10 @@ push-права в репозитории `kilo-import/*` корп. registry.
 
 ```groovy
 environment {
-    DOTNET_SDK_IMAGE    = 'РЕАЛЬНЫЙ-РЕГИСТРИ/mcr/dotnet/sdk:10.0-preview-alpine'
-    DOTNET_ASPNET_IMAGE = 'РЕАЛЬНЫЙ-РЕГИСТРИ/mcr/dotnet/aspnet:10.0-preview-alpine'
+    DOTNET_SDK_IMAGE    = 'РЕАЛЬНЫЙ-РЕГИСТРИ/mcr/dotnet/sdk:10.0-alpine'
+    DOTNET_ASPNET_IMAGE = 'РЕАЛЬНЫЙ-РЕГИСТРИ/mcr/dotnet/aspnet:10.0-alpine'
     NODE_IMAGE          = 'РЕАЛЬНЫЙ-РЕГИСТРИ/library/node:20-alpine'
-    NGINX_IMAGE         = 'РЕАЛЬНЫЙ-РЕГИСТРИ/library/nginx:1.27-alpine'
+    NGINX_IMAGE         = 'РЕАЛЬНЫЙ-РЕГИСТРИ/library/nginx:1.29-alpine'
     NUGET_FEED_URL      = 'https://nuget.РЕАЛЬНЫЙ-ДОМЕН/repository/nuget-proxy/index.json'
     NPM_REGISTRY_URL    = 'https://npm.РЕАЛЬНЫЙ-ДОМЕН/repository/npm-proxy/'
     ALPINE_MIRROR       = 'alpine.РЕАЛЬНЫЙ-ДОМЕН'
@@ -138,11 +138,11 @@ Environment variables**. Тогда `environment {}` блок в Jenkinsfile у�
 | 5 | npm registry доступен | `curl -sf https://npm.corp.alfa/repository/npm-proxy/-/all` |
 | 6 | Credentials `corp-registry-creds` сохранены | `Manage Jenkins → Credentials` |
 | 7 | У робота есть push-права в `kilo-import/*` | вручную: `docker login + push test-image` |
-| 8 | preview-теги .NET 10 (`10.0-preview-alpine`) залиты в корп. registry | `docker pull corp.registry.alfa/mcr/dotnet/sdk:10.0-preview-alpine` |
+| 8 | GA-теги .NET 10 (`10.0-alpine`) залиты в корп. registry | `docker pull corp.registry.alfa/mcr/dotnet/sdk:10.0-alpine` |
 
-⚠️ Пункт 8 — самый частый блокер. Корп-Artifactory банка обычно фильтрует
-preview-/RC-теги. Если DevOps скажет «только GA» — нужно либо ждать .NET 10
-GA и обновить теги в env, либо договориться об исключении.
+⚠️ Пункт 8 — раньше это был самый частый блокер (преrelease-теги). После
+GA-релиза .NET 10 в ноябре 2025 проект перешёл на `10.0-alpine` (см. doc 143),
+который Microsoft пересобирает при каждом security-update'е Alpine.
 
 ---
 
@@ -163,12 +163,12 @@ Credentials с ID `corp-registry-creds` либо отсутствуют, либ�
 
 **Решение**: проверить § 1.2 + п. 7 чек-листа.
 
-### ❌ 3. `manifest unknown` на pull preview-тега .NET 10
+### ❌ 3. `manifest unknown` на pull GA-тега .NET 10
 
 Корп-registry не имеет нужного образа.
 
-**Решение**: запросить у DevOps зеркалирование `mcr.microsoft.com/dotnet/sdk:10.0-preview-alpine`
-и `aspnet:10.0-preview-alpine` в корп-Artifactory. См. § Часть 4 п. 8.
+**Решение**: запросить у DevOps зеркалирование `mcr.microsoft.com/dotnet/sdk:10.0-alpine`
+и `aspnet:10.0-alpine` в корп-Artifactory. См. § Часть 4 п. 8.
 
 ### ❌ 4. `dotnet ef` падает на restore в SDK-контейнере
 

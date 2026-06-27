@@ -531,6 +531,56 @@ public sealed class InputDataCreateRequest
 }
 
 /// <summary>
+/// POST <c>/api/visary/crud/clientdata</c> — создание записи «Данные клиента»:
+/// поквартальная стоимость 1 кв.м (<see cref="Cost"/>) и площадь 1 кв.м
+/// (<see cref="Rates"/>) для одного вида помещения на объекте строительства.
+/// Импорт «Финмодель» создаёт по одной такой записи на каждый непустой
+/// (Quarter × RoomKind) из листа «Общий график» второго файла.
+/// <para/>
+/// Тело (Q2 2026, пример):
+/// <code>{"Cost":1,"Rates":2,"RoomKind":{"Title":"Квартира","ID":3},
+/// "ODCountParking":3,"ODCountOtherNonRes":4,"ODCountNonRes":5,"ODCount":1,"ODCountRes":6,
+/// "Site":{"Title":"Маньчжурский орех рнс0706 1","ID":8030},"Date":"2026-04-01",
+/// "ParkingCost":7,"ParkingRates":8,"OtherNonresidentialCost":9,"OthernonresidentialRates":10,
+/// "NonresidentialCost":11,"NonresidentialRates":12,"ResidentialCost":13,"ResidentialRates":14,
+/// "PeriodStartDate":"2026-04-01"}</code>
+/// <para/>
+/// • <see cref="RoomKind"/> резолвится через <c>listview/roomkind</c> по каноничному Title
+///   (Квартира / Нежилое помещение / Кладовая / Машиноместо). <c>RoomCategory</c> в payload
+///   мы НЕ отправляем — Visary вычисляет её сам по <c>RoomKind</c>.
+/// • Для одного вида помещения проставляются ОДНОВРЕМЕННО общие <see cref="Cost"/>/<see cref="Rates"/>
+///   и префиксированные поля (<c>ResidentialCost/ResidentialRates</c> для квартир и т.д.);
+///   остальные prefixed-поля = 0.
+/// • <see cref="PeriodStartDate"/> и <see cref="Date"/> = первый день УКАЗАННОГО квартала
+///   (формат ISO <c>yyyy-MM-dd</c>); Q4 2027 → 2027-10-01 (НЕ 2028-01-01).
+/// • <see cref="ODCount"/>* — из файла не берутся, отправляются как 0 (контракт inputdata-стиля:
+///   Visary не допускает null в числовых полях, требование заказчика).
+/// См. doc_project/150-finmodel-clientdata.md.
+/// </summary>
+public sealed class ClientDataCreateRequest
+{
+    public double Cost { get; set; }
+    public double Rates { get; set; }
+    public VisaryRef RoomKind { get; set; } = null!;
+    public double ODCountParking { get; set; }
+    public double ODCountOtherNonRes { get; set; }
+    public double ODCountNonRes { get; set; }
+    public double ODCount { get; set; }
+    public double ODCountRes { get; set; }
+    public VisaryRef Site { get; set; } = null!;
+    public string Date { get; set; } = null!;
+    public double ParkingCost { get; set; }
+    public double ParkingRates { get; set; }
+    public double OtherNonresidentialCost { get; set; }
+    public double OthernonresidentialRates { get; set; }
+    public double NonresidentialCost { get; set; }
+    public double NonresidentialRates { get; set; }
+    public double ResidentialCost { get; set; }
+    public double ResidentialRates { get; set; }
+    public string PeriodStartDate { get; set; } = null!;
+}
+
+/// <summary>
 /// POST <c>/api/visary/crud/projectaudit</c> — создание «Заключения». Тело по HAR:
 /// <code>{"Date":"2026-06-17T08:41:39Z","Status":10,"Project":{"ID":4653},
 ///        "ProjectID":4653,"Stage":110}</code>

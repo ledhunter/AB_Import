@@ -1,0 +1,1193 @@
+﻿12:31:21.273 | [12:31:21.273 INF]  ════════════════════════════════════════════════════════════
+12:31:21.366 | [12:31:21.366 INF]  KiloImportService.Api запускается. PID=1 Machine=alfa-building-fm-import-94d79f8fc-xvrf2 .NET=10.0.9
+12:31:21.375 | [12:31:21.375 INF]  CWD=/app  ASPNETCORE_ENVIRONMENT=Test
+12:31:21.375 | [12:31:21.375 INF]  ════════════════════════════════════════════════════════════
+12:31:21.611 | [12:31:21.611 INF]  Incoming JWT auth ENABLED. Authority=http://identity:8080 Audience=visary
+12:31:21.700 | [12:31:21.700 INF]  PathBase активен: /api/ab-fm-import (все маршруты будут доступны под этим префиксом)
+12:31:21.995 | [12:31:21.995 DBG] Microsoft.EntityFrameworkCore.Infrastructure An 'IServiceProvider' was created for internal use by Entity Framework.
+12:31:22.043 | [12:31:22.043 INF]  Applying ImportServiceDb migrations (schema=import)…
+12:31:23.102 | [12:31:23.102 DBG] Microsoft.EntityFrameworkCore.Model The index {'ImportSessionId'} was not created on entity type 'StagedRow' as the properties are already covered by the index {'ImportSessionId', 'Sheet', 'SourceRowNumber'}.
+12:31:23.102 | [12:31:23.102 DBG] Microsoft.EntityFrameworkCore.Model The index {'ImportSessionId'} was not created on entity type 'StagedRow' as the properties are already covered by the index {'ImportSessionId', 'Status'}.
+12:31:23.102 | [12:31:23.102 DBG] Microsoft.EntityFrameworkCore.Model The index {'ImportSessionId'} was not created on entity type 'ImportError' as the properties are already covered by the index {'ImportSessionId', 'Sheet', 'SourceRowNumber'}.
+12:31:23.641 | [12:31:23.641 DBG] Microsoft.EntityFrameworkCore.Infrastructure Entity Framework Core 9.0.4 initialized 'ImportServiceDbContext' using provider 'Npgsql.EntityFrameworkCore.PostgreSQL:9.0.4+fd2380957bee5cd86f336466af36b08c0163f1a5' with options: MigrationsHistoryTable=import.__ef_migrations_history 
+12:31:23.670 | [12:31:23.670 DBG] Microsoft.EntityFrameworkCore.Database.Connection Creating DbConnection.
+12:31:23.756 | [12:31:23.756 DBG] Microsoft.EntityFrameworkCore.Database.Connection Created DbConnection. (82ms).
+12:31:23.763 | [12:31:23.763 DBG] Microsoft.EntityFrameworkCore.Database.Connection Opening connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+12:31:24.055 | [12:31:24.055 DBG] Microsoft.EntityFrameworkCore.Database.Connection Opened connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+12:31:24.060 | [12:31:24.060 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteReader'.
+12:31:24.096 | [12:31:24.096 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteReader' (5ms).
+12:31:24.098 | [12:31:24.098 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteReader' (39ms).
+12:31:24.106 | [12:31:24.106 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+12:31:24.157 | [12:31:24.157 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (51ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+12:31:24.248 | [12:31:24.248 DBG] Microsoft.EntityFrameworkCore.Database.Command Closing data reader to 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+12:31:24.257 | [12:31:24.257 DBG] Microsoft.EntityFrameworkCore.Database.Command A data reader for 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432' is being disposed after spending 94ms reading results.
+12:31:24.260 | [12:31:24.260 DBG] Microsoft.EntityFrameworkCore.Database.Connection Closing connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+12:31:24.295 | [12:31:24.295 DBG] Microsoft.EntityFrameworkCore.Database.Connection Closed connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432' (3ms).
+12:31:24.659 | [12:31:24.659 DBG] Microsoft.EntityFrameworkCore.Migrations Migrating using database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+12:31:24.662 | [12:31:24.662 DBG] Microsoft.EntityFrameworkCore.Database.Connection Opening connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+12:31:24.696 | [12:31:24.696 DBG] Microsoft.EntityFrameworkCore.Database.Connection Opening connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+12:31:24.775 | [12:31:24.775 DBG] Microsoft.EntityFrameworkCore.Database.Connection Opened connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+12:31:24.776 | [12:31:24.776 DBG] Microsoft.EntityFrameworkCore.Database.Connection Closing connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+12:31:24.784 | [12:31:24.784 DBG] Microsoft.EntityFrameworkCore.Database.Connection Closed connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432' (7ms).
+12:31:24.786 | [12:31:24.786 DBG] Microsoft.EntityFrameworkCore.Database.Connection Opening connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+12:31:24.786 | [12:31:24.786 DBG] Microsoft.EntityFrameworkCore.Database.Connection Opened connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+12:31:24.860 | [12:31:24.860 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+12:31:24.860 | [12:31:24.860 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+12:31:24.860 | [12:31:24.860 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+12:31:24.860 | [12:31:24.860 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+12:31:24.904 | [12:31:24.904 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (43ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+12:31:24.916 | [12:31:24.916 DBG] Microsoft.EntityFrameworkCore.Database.Transaction Beginning transaction with isolation level 'Unspecified'.
+12:31:24.943 | [12:31:24.943 DBG] Microsoft.EntityFrameworkCore.Database.Transaction Began transaction with isolation level 'ReadCommitted'.
+12:31:24.945 | [12:31:24.945 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+12:31:24.945 | [12:31:24.945 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+12:31:24.946 | [12:31:24.946 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+12:31:24.946 | [12:31:24.946 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+12:31:24.957 | [12:31:24.957 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+12:31:24.958 | [12:31:24.958 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteReader' (0ms).
+12:31:24.958 | [12:31:24.958 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteReader' (0ms).
+12:31:24.958 | [12:31:24.958 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteReader'.
+12:31:24.958 | [12:31:24.958 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+12:31:24.970 | [12:31:24.970 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (12ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+12:31:24.970 | [12:31:24.970 DBG] Microsoft.EntityFrameworkCore.Database.Command Closing data reader to 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+12:31:24.970 | [12:31:24.970 DBG] Microsoft.EntityFrameworkCore.Database.Command A data reader for 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432' is being disposed after spending 0ms reading results.
+12:31:24.975 | [12:31:24.975 INF] Microsoft.EntityFrameworkCore.Migrations No migrations were applied. The database is already up to date.
+12:31:24.977 | [12:31:24.977 DBG] Microsoft.EntityFrameworkCore.Database.Transaction Committing transaction.
+12:31:24.994 | [12:31:24.994 DBG] Microsoft.EntityFrameworkCore.Database.Transaction Committed transaction.
+12:31:24.997 | [12:31:24.997 DBG] Microsoft.EntityFrameworkCore.Database.Transaction Disposing transaction.
+12:31:24.998 | [12:31:24.998 DBG] Microsoft.EntityFrameworkCore.Database.Connection Closed connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432' (0ms).
+12:31:24.998 | [12:31:24.998 DBG] Microsoft.EntityFrameworkCore.Database.Connection Closing connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+12:31:25.000 | [12:31:25.000 INF]  Applying VisaryDb migrations (schema=Data)…
+12:31:25.112 | [12:31:25.112 DBG] Microsoft.EntityFrameworkCore.Infrastructure Entity Framework Core 9.0.4 initialized 'VisaryDbContext' using provider 'Npgsql.EntityFrameworkCore.PostgreSQL:9.0.4+fd2380957bee5cd86f336466af36b08c0163f1a5' with options: MigrationsHistoryTable=Data.__ef_migrations_history 
+12:31:25.141 | [12:31:25.141 DBG] Microsoft.EntityFrameworkCore.Database.Connection Creating DbConnection.
+12:31:25.142 | [12:31:25.142 DBG] Microsoft.EntityFrameworkCore.Database.Connection Created DbConnection. (0ms).
+12:31:25.142 | [12:31:25.142 DBG] Microsoft.EntityFrameworkCore.Database.Connection Opened connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+12:31:25.142 | [12:31:25.142 DBG] Microsoft.EntityFrameworkCore.Database.Connection Opening connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+12:31:25.142 | [12:31:25.142 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteReader'.
+12:31:25.142 | [12:31:25.142 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteReader' (0ms).
+12:31:25.142 | [12:31:25.142 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteReader' (0ms).
+12:31:25.142 | [12:31:25.142 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+12:31:25.153 | [12:31:25.153 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+12:31:25.153 | [12:31:25.153 DBG] Microsoft.EntityFrameworkCore.Database.Command Closing data reader to 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+12:31:25.154 | [12:31:25.154 DBG] Microsoft.EntityFrameworkCore.Database.Command A data reader for 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432' is being disposed after spending 0ms reading results.
+12:31:25.154 | [12:31:25.154 DBG] Microsoft.EntityFrameworkCore.Database.Connection Closing connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+12:31:25.154 | [12:31:25.154 DBG] Microsoft.EntityFrameworkCore.Database.Connection Closed connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432' (0ms).
+12:31:25.166 | [12:31:25.166 DBG] Microsoft.EntityFrameworkCore.Migrations Migrating using database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+12:31:25.166 | [12:31:25.166 DBG] Microsoft.EntityFrameworkCore.Database.Connection Opening connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+12:31:25.166 | [12:31:25.166 DBG] Microsoft.EntityFrameworkCore.Database.Connection Opening connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+12:31:25.227 | [12:31:25.227 DBG] Microsoft.EntityFrameworkCore.Database.Connection Opened connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+12:31:25.227 | [12:31:25.227 DBG] Microsoft.EntityFrameworkCore.Database.Connection Closing connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+12:31:25.228 | [12:31:25.228 DBG] Microsoft.EntityFrameworkCore.Database.Connection Opened connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+12:31:25.228 | [12:31:25.228 DBG] Microsoft.EntityFrameworkCore.Database.Connection Opening connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+12:31:25.228 | [12:31:25.228 DBG] Microsoft.EntityFrameworkCore.Database.Connection Closed connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432' (0ms).
+12:31:25.231 | [12:31:25.231 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+12:31:25.231 | [12:31:25.231 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+12:31:25.231 | [12:31:25.231 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+12:31:25.231 | [12:31:25.231 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+12:31:25.243 | [12:31:25.243 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+12:31:25.245 | [12:31:25.245 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+12:31:25.245 | [12:31:25.245 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+12:31:25.245 | [12:31:25.245 DBG] Microsoft.EntityFrameworkCore.Database.Transaction Began transaction with isolation level 'ReadCommitted'.
+12:31:25.245 | [12:31:25.245 DBG] Microsoft.EntityFrameworkCore.Database.Transaction Beginning transaction with isolation level 'Unspecified'.
+12:31:25.245 | [12:31:25.245 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+12:31:25.245 | [12:31:25.245 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+12:31:25.256 | [12:31:25.256 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+12:31:25.257 | [12:31:25.257 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteReader'.
+12:31:25.257 | [12:31:25.257 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+12:31:25.257 | [12:31:25.257 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteReader' (0ms).
+12:31:25.257 | [12:31:25.257 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteReader' (0ms).
+12:31:25.268 | [12:31:25.268 DBG] Microsoft.EntityFrameworkCore.Database.Command Closing data reader to 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+12:31:25.268 | [12:31:25.268 DBG] Microsoft.EntityFrameworkCore.Database.Command A data reader for 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432' is being disposed after spending 0ms reading results.
+12:31:25.268 | [12:31:25.268 INF] Microsoft.EntityFrameworkCore.Migrations No migrations were applied. The database is already up to date.
+12:31:25.268 | [12:31:25.268 DBG] Microsoft.EntityFrameworkCore.Database.Transaction Committing transaction.
+12:31:25.268 | [12:31:25.268 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+12:31:25.280 | [12:31:25.280 DBG] Microsoft.EntityFrameworkCore.Database.Transaction Committed transaction.
+12:31:25.280 | [12:31:25.280 DBG] Microsoft.EntityFrameworkCore.Database.Connection Closing connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+12:31:25.280 | [12:31:25.280 DBG] Microsoft.EntityFrameworkCore.Database.Transaction Disposing transaction.
+12:31:25.280 | [12:31:25.280 DBG] Microsoft.EntityFrameworkCore.Database.Connection Closed connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432' (0ms).
+12:31:25.282 | [12:31:25.282 DBG] Microsoft.EntityFrameworkCore.Infrastructure 'VisaryDbContext' disposed.
+12:31:25.285 | [12:31:25.285 DBG] Microsoft.EntityFrameworkCore.Database.Connection Disposing connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+12:31:25.285 | [12:31:25.285 DBG] Microsoft.EntityFrameworkCore.Database.Connection Disposed connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432' (0ms).
+12:31:25.286 | [12:31:25.286 DBG] Microsoft.EntityFrameworkCore.Infrastructure 'ImportServiceDbContext' disposed.
+12:31:25.286 | [12:31:25.286 DBG] Microsoft.EntityFrameworkCore.Database.Connection Disposing connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+12:31:25.286 | [12:31:25.286 DBG] Microsoft.EntityFrameworkCore.Database.Connection Disposed connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432' (0ms).
+12:31:25.319 | [12:31:25.319 DBG] Microsoft.AspNetCore.Mvc.ModelBinding.ModelBinderFactory Registered model binder providers, in the following order: ["Microsoft.AspNetCore.Mvc.ModelBinding.Binders.BinderTypeModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.ServicesModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.BodyModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.HeaderModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.FloatingPointTypeModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.EnumTypeModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.DateTimeModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.SimpleTypeModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.TryParseModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.CancellationTokenModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.ByteArrayModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.FormFileModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.FormCollectionModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.KeyValuePairModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.DictionaryModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.ArrayModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.CollectionModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.ComplexObjectModelBinderProvider"]
+12:31:25.451 | [12:31:25.451 DBG] Microsoft.AspNetCore.SignalR.Internal.DefaultHubProtocolResolver Registered SignalR Protocol: json, implemented by Microsoft.AspNetCore.SignalR.Protocol.JsonHubProtocol.
+12:31:25.529 | [12:31:25.529 INF]  │ PathBase    : /api/ab-fm-import
+12:31:25.529 | [12:31:25.529 INF]  │ Visary API  : http://webapi:8080/api
+12:31:25.529 | [12:31:25.529 INF]  │ CORS        : https://localhost:44466
+12:31:25.529 | [12:31:25.529 INF]  │ Swagger     : ENABLED
+12:31:25.529 | [12:31:25.529 INF]  ┌── Конфигурация сервиса ─────────────────────────────────────
+12:31:25.529 | [12:31:25.529 INF]  └─────────────────────────────────────────────────────────────
+12:31:25.529 | [12:31:25.529 INF]  │ DB conn-str : Database=ab_fm_import;Host=ab-test-pg-1.ci28823727.cloud.alfaintra.net;Port=5432;Username=ab_fm_import_user;Password=***;Application Name=ab-fm-import;Pooling=true
+12:31:25.529 | [12:31:25.529 INF]  │ JWT auth    : ENABLED
+12:31:25.529 | [12:31:25.529 INF]  │ URLs        : http://0.0.0.0:5000
+12:31:25.530 | [12:31:25.530 INF]  KiloImportService.Api готов принимать запросы на http://0.0.0.0:5000
+12:31:25.543 | [12:31:25.543 DBG] Microsoft.Extensions.Hosting.Internal.Host Hosting starting
+12:31:25.551 | [12:31:25.551 WRN] Microsoft.AspNetCore.DataProtection.Repositories.EphemeralXmlRepository Using an in-memory repository. Keys will not be persisted to storage.
+12:31:25.551 | [12:31:25.551 WRN] Microsoft.AspNetCore.DataProtection.KeyManagement.XmlKeyManager Neither user profile nor HKLM registry available. Using an ephemeral key repository. Protected data will be unavailable when application exits.
+12:31:25.601 | [12:31:25.601 DBG] Microsoft.AspNetCore.DataProtection.KeyManagement.KeyRingProvider Policy resolution states that a new key should be added to the key ring.
+12:31:25.601 | [12:31:25.601 DBG] Microsoft.AspNetCore.DataProtection.KeyManagement.DefaultKeyResolver Repository contains no viable default key. Caller should generate a key with immediate activation.
+12:31:25.604 | [12:31:25.604 INF] Microsoft.AspNetCore.DataProtection.KeyManagement.XmlKeyManager Creating key {2cdb81eb-cbcb-432d-97f7-b7b8b1b27114} with creation date 2026-06-25 12:31:25Z, activation date 2026-06-25 12:31:25Z, and expiration date 2026-09-23 12:31:25Z.
+12:31:25.610 | [12:31:25.610 DBG] Microsoft.AspNetCore.DataProtection.KeyManagement.XmlKeyManager Descriptor deserializer type for key {2cdb81eb-cbcb-432d-97f7-b7b8b1b27114} is 'Microsoft.AspNetCore.DataProtection.AuthenticatedEncryption.ConfigurationModel.AuthenticatedEncryptorDescriptorDeserializer, Microsoft.AspNetCore.DataProtection, Version=10.0.0.0, Culture=neutral, PublicKeyToken=adb9793829ddae60'.
+12:31:25.613 | [12:31:25.613 WRN] Microsoft.AspNetCore.DataProtection.KeyManagement.XmlKeyManager No XML encryptor configured. Key {2cdb81eb-cbcb-432d-97f7-b7b8b1b27114} may be persisted to storage in unencrypted form.
+12:31:25.613 | [12:31:25.613 DBG] Microsoft.AspNetCore.DataProtection.KeyManagement.XmlKeyManager No key escrow sink found. Not writing key {2cdb81eb-cbcb-432d-97f7-b7b8b1b27114} to escrow.
+12:31:25.614 | [12:31:25.614 DBG] Microsoft.AspNetCore.DataProtection.KeyManagement.XmlKeyManager Key cache expiration token triggered by 'CreateNewKey' operation.
+12:31:25.615 | [12:31:25.615 DBG] Microsoft.AspNetCore.DataProtection.KeyManagement.XmlKeyManager Found key {2cdb81eb-cbcb-432d-97f7-b7b8b1b27114}.
+12:31:25.620 | [12:31:25.620 DBG] Microsoft.AspNetCore.DataProtection.KeyManagement.DefaultKeyResolver Considering key {2cdb81eb-cbcb-432d-97f7-b7b8b1b27114} with expiration date 2026-09-23 12:31:25Z as default key.
+12:31:25.621 | [12:31:25.621 DBG] Microsoft.AspNetCore.DataProtection.AuthenticatedEncryption.ManagedAuthenticatedEncryptorFactory Using managed keyed hash algorithm 'System.Security.Cryptography.HMACSHA256'.
+12:31:25.621 | [12:31:25.621 DBG] Microsoft.AspNetCore.DataProtection.AuthenticatedEncryption.ManagedAuthenticatedEncryptorFactory Using managed symmetric algorithm 'System.Security.Cryptography.Aes'.
+12:31:25.623 | [12:31:25.623 DBG] Microsoft.AspNetCore.DataProtection.KeyManagement.KeyRingProvider Using key {2cdb81eb-cbcb-432d-97f7-b7b8b1b27114} as the default key.
+12:31:25.624 | [12:31:25.624 DBG] Microsoft.AspNetCore.DataProtection.Internal.DataProtectionHostedService Key ring with default key {2cdb81eb-cbcb-432d-97f7-b7b8b1b27114} was loaded during application startup.
+12:31:25.625 | [12:31:25.625 WRN] Microsoft.AspNetCore.Hosting.Diagnostics Overriding HTTP_PORTS '8080' and HTTPS_PORTS ''. Binding to values defined by URLS instead 'http://0.0.0.0:5000'.
+12:31:25.726 | [12:31:25.726 DBG] Microsoft.AspNetCore.HostFiltering.HostFilteringMiddleware Middleware configuration started with options: {AllowedHosts = *, AllowEmptyHosts = True, IncludeFailureMessage = True}
+12:31:25.728 | [12:31:25.728 DBG] Microsoft.AspNetCore.HostFiltering.HostFilteringMiddleware Wildcard detected, all requests with hosts will be allowed.
+12:31:25.751 | [12:31:25.751 INF] Microsoft.Hosting.Lifetime Now listening on: http://0.0.0.0:5000
+12:31:25.751 | [12:31:25.751 DBG] Microsoft.AspNetCore.Hosting.Diagnostics Loaded hosting startup assembly KiloImportService.Api
+99:99:99.999 | FROM import.__ef_migrations_history
+99:99:99.999 | SELECT "MigrationId", "ProductVersion"
+99:99:99.999 | ORDER BY "MigrationId";
+99:99:99.999 | FROM "Data".__ef_migrations_history
+99:99:99.999 | FROM "Data".__ef_migrations_history
+99:99:99.999 | SELECT "MigrationId", "ProductVersion"
+99:99:99.999 | ORDER BY "MigrationId";
+99:99:99.999 | LOCK TABLE "Data".__ef_migrations_history IN ACCESS EXCLUSIVE MODE
+99:99:99.999 | ORDER BY "MigrationId";
+99:99:99.999 | ORDER BY "MigrationId";
+99:99:99.999 | FROM "Data".__ef_migrations_history
+99:99:99.999 | DO $EF$
+99:99:99.999 | END $EF$;
+99:99:99.999 |     END IF;
+99:99:99.999 |     IF NOT EXISTS(SELECT 1 FROM pg_namespace WHERE nspname = 'import') THEN
+99:99:99.999 | BEGIN
+99:99:99.999 | ORDER BY "MigrationId";
+99:99:99.999 |         CREATE SCHEMA import;
+99:99:99.999 | END $EF$;
+99:99:99.999 | );
+99:99:99.999 | BEGIN
+99:99:99.999 | BEGIN
+99:99:99.999 | CREATE TABLE IF NOT EXISTS import.__ef_migrations_history (
+99:99:99.999 | DO $EF$
+99:99:99.999 |     CONSTRAINT "PK___ef_migrations_history" PRIMARY KEY ("MigrationId")
+99:99:99.999 | CREATE TABLE IF NOT EXISTS import.__ef_migrations_history (
+99:99:99.999 | SELECT "MigrationId", "ProductVersion"
+99:99:99.999 | FROM "Data".__ef_migrations_history
+99:99:99.999 | LOCK TABLE import.__ef_migrations_history IN ACCESS EXCLUSIVE MODE
+99:99:99.999 | FROM import.__ef_migrations_history
+99:99:99.999 | FROM import.__ef_migrations_history
+99:99:99.999 | SELECT "MigrationId", "ProductVersion"
+99:99:99.999 | ORDER BY "MigrationId";
+99:99:99.999 | LOCK TABLE import.__ef_migrations_history IN ACCESS EXCLUSIVE MODE
+99:99:99.999 | );
+99:99:99.999 |     "ProductVersion" character varying(32) NOT NULL,
+99:99:99.999 | SELECT "MigrationId", "ProductVersion"
+99:99:99.999 | ORDER BY "MigrationId";
+99:99:99.999 |     "MigrationId" character varying(150) NOT NULL,
+99:99:99.999 | SELECT "MigrationId", "ProductVersion"
+99:99:99.999 |     CONSTRAINT "PK___ef_migrations_history" PRIMARY KEY ("MigrationId")
+99:99:99.999 |         CREATE SCHEMA "Data";
+99:99:99.999 | CREATE TABLE IF NOT EXISTS "Data".__ef_migrations_history (
+99:99:99.999 |     "ProductVersion" character varying(32) NOT NULL,
+99:99:99.999 | );
+99:99:99.999 |     END IF;
+99:99:99.999 |     IF NOT EXISTS(SELECT 1 FROM pg_namespace WHERE nspname = 'import') THEN
+99:99:99.999 |     CONSTRAINT "PK___ef_migrations_history" PRIMARY KEY ("MigrationId")
+99:99:99.999 | DO $EF$
+99:99:99.999 | FROM import.__ef_migrations_history
+99:99:99.999 | ORDER BY "MigrationId";
+99:99:99.999 | SELECT "MigrationId", "ProductVersion"
+99:99:99.999 | LOCK TABLE "Data".__ef_migrations_history IN ACCESS EXCLUSIVE MODE
+99:99:99.999 |     "MigrationId" character varying(150) NOT NULL,
+99:99:99.999 | BEGIN
+99:99:99.999 | SELECT "MigrationId", "ProductVersion"
+99:99:99.999 |     IF NOT EXISTS(SELECT 1 FROM pg_namespace WHERE nspname = 'Data') THEN
+99:99:99.999 |     IF NOT EXISTS(SELECT 1 FROM pg_namespace WHERE nspname = 'Data') THEN
+99:99:99.999 | DO $EF$
+99:99:99.999 | );
+99:99:99.999 |     "ProductVersion" character varying(32) NOT NULL,
+99:99:99.999 | END $EF$;
+99:99:99.999 | CREATE TABLE IF NOT EXISTS "Data".__ef_migrations_history (
+99:99:99.999 |     "ProductVersion" character varying(32) NOT NULL,
+99:99:99.999 |     END IF;
+99:99:99.999 |         CREATE SCHEMA "Data";
+99:99:99.999 |     "MigrationId" character varying(150) NOT NULL,
+99:99:99.999 | END $EF$;
+99:99:99.999 |         CREATE SCHEMA import;
+99:99:99.999 |     "MigrationId" character varying(150) NOT NULL,
+99:99:99.999 |     END IF;
+99:99:99.999 |     CONSTRAINT "PK___ef_migrations_history" PRIMARY KEY ("MigrationId")
+12:31:25.751 | [12:31:25.751 INF] Microsoft.Hosting.Lifetime Application started. Press Ctrl+C to shut down.
+12:31:25.751 | [12:31:25.751 INF] Microsoft.Hosting.Lifetime Hosting environment: Test
+12:31:25.751 | [12:31:25.751 INF] Microsoft.Hosting.Lifetime Content root path: /app
+12:31:25.755 | [12:31:25.755 INF]      *      api/imports/{id:guid}/report
+12:31:25.755 | [12:31:25.755 INF]      *      api/imports
+12:31:25.755 | [12:31:25.755 INF]      *      api/projects/search
+12:31:25.755 | [12:31:25.755 INF]      *      api/visary/organizations/{id:int}
+12:31:25.755 | [12:31:25.755 INF]      *      api/visary/constructionsiteindicatorvalues/{id:int}
+12:31:25.755 | [12:31:25.755 INF]      *      api/projects/sync
+12:31:25.755 | [12:31:25.755 INF]      *      api/visary/constructionsites
+12:31:25.755 | [12:31:25.755 INF]      *      api/visary/constructionprojects
+12:31:25.755 | [12:31:25.755 INF]      *      api/imports/{id:guid}/cancel
+12:31:25.755 | [12:31:25.755 INF]      *      api/import-types
+12:31:25.755 | [12:31:25.755 INF]      *      api/visary/shareagreements
+12:31:25.755 | [12:31:25.755 INF]      *      api/visary/percentbets/{id:int}
+12:31:25.755 | [12:31:25.755 INF]      *      api/visary/organizations
+12:31:25.755 | [12:31:25.755 INF]      *      health
+12:31:25.755 | [12:31:25.755 INF]      *      api/visary/{name}/{id:int}
+12:31:25.755 | [12:31:25.755 INF]      *      api/visary/shareagreements/{id:int}
+12:31:25.755 | [12:31:25.755 INF]      *      api/visary/rooms/{id:int}
+12:31:25.755 | [12:31:25.755 INF]      *      api/visary/rooms
+12:31:25.755 | [12:31:25.755 INF]      *      api/visary/{name}
+12:31:25.755 | [12:31:25.755 INF]      *      api/visary/percentbets
+12:31:25.755 | [12:31:25.755 INF]      *      api/imports/export-pdf
+12:31:25.755 | [12:31:25.755 INF]      *      api/imports/{id:guid}/budget-xlsx
+12:31:25.755 | [12:31:25.755 INF]      *      api/visary/constructionsections/{id:int}
+12:31:25.755 | [12:31:25.755 INF]      *      api/visary/deals/{id:int}
+12:31:25.755 | [12:31:25.755 INF]      *      api/visary/constructionsiteindicators/{id:int}
+12:31:25.755 | [12:31:25.755 INF]      *      api/visary/constructionsiteindicators
+12:31:25.755 | [12:31:25.755 INF]      *      api/visary/constructionprojects/{id:int}
+12:31:25.755 | [12:31:25.755 INF]      *      api/visary/constructionsiteindicatorvalues
+12:31:25.755 | [12:31:25.755 INF]      *      api/visary/cadastralareas/{id:int}
+12:31:25.755 | [12:31:25.755 INF]      *      /hubs/imports/negotiate
+12:31:25.755 | [12:31:25.755 INF]      *      /hubs/imports
+12:31:25.755 | [12:31:25.755 INF]      *      /diag
+12:31:25.755 | [12:31:25.755 INF]      *      api/visary/constructionsites/{id:int}
+12:31:25.755 | [12:31:25.755 INF]      *      api/visary/cadastralareas
+12:31:25.755 | [12:31:25.755 INF]  Зарегистрировано 39 HTTP-маршрутов:
+12:31:25.755 | [12:31:25.755 INF]      *      api/imports/{id:guid}/apply
+12:31:25.755 | [12:31:25.755 INF]      *      api/imports/{id:guid}
+12:31:25.755 | [12:31:25.755 INF]      *      api/sites/sync/{id:int}
+12:31:25.755 | [12:31:25.755 INF]      *      api/visary/deals
+12:31:25.755 | [12:31:25.755 INF]      *      api/visary/constructionsections
+12:31:25.758 | [12:31:25.758 DBG] Microsoft.Extensions.Hosting.Internal.Host Hosting started
+12:32:24.579 | [12:32:24.579 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF3S" accepted.
+12:32:24.580 | [12:32:24.580 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF3S" started.
+12:32:24.604 | [12:32:24.604 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/ready - null null
+12:32:24.654 | [12:32:24.654 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:32:24.654 | [12:32:24.654 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/ready'
+12:32:24.753 | [12:32:24.753 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:32:24.753 | [12:32:24.753 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/ready'
+12:32:24.802 | [12:32:24.802 DBG] Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerHandler AuthenticationScheme: Bearer was not authenticated.
+12:32:24.809 | [12:32:24.809 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/ready → 404 за 56 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:32:24.813 | [12:32:24.813 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/ready - 404 0 null 210.2032ms
+12:32:24.841 | [12:32:24.841 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/ready, Response status code: 404
+12:32:24.842 | [12:32:24.842 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF3S" disconnecting.
+12:32:24.842 | [12:32:24.842 DBG] Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets Connection id "0HNMIMN7OCF3S" received FIN.
+12:32:24.843 | [12:32:24.843 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF3S" stopped.
+12:32:24.844 | [12:32:24.844 DBG] Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets Connection id "0HNMIMN7OCF3S" sending FIN because: "The Socket transport's send loop completed gracefully."
+12:32:31.941 | [12:32:31.941 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF3T" accepted.
+12:32:31.941 | [12:32:31.941 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF3T" started.
+12:32:31.942 | [12:32:31.942 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/ready - null null
+12:32:31.943 | [12:32:31.943 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:32:31.943 | [12:32:31.943 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/ready'
+12:32:31.945 | [12:32:31.945 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:32:31.945 | [12:32:31.945 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/ready'
+12:32:31.947 | [12:32:31.947 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/ready - 404 0 null 5.4657ms
+12:32:31.947 | [12:32:31.947 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/ready → 404 за 3 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:32:31.947 | [12:32:31.947 DBG] Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerHandler AuthenticationScheme: Bearer was not authenticated.
+12:32:31.948 | [12:32:31.948 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF3T" stopped.
+12:32:31.948 | [12:32:31.948 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF3T" disconnecting.
+12:32:31.948 | [12:32:31.948 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/ready, Response status code: 404
+12:32:31.948 | [12:32:31.948 DBG] Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets Connection id "0HNMIMN7OCF3T" received FIN.
+12:32:31.948 | [12:32:31.948 DBG] Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets Connection id "0HNMIMN7OCF3T" sending FIN because: "The Socket transport's send loop completed gracefully."
+12:32:34.568 | [12:32:34.568 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF3U" started.
+12:32:34.568 | [12:32:34.568 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF3U" accepted.
+12:32:34.569 | [12:32:34.569 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/ready'
+12:32:34.569 | [12:32:34.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/ready - null null
+12:32:34.569 | [12:32:34.569 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:32:34.570 | [12:32:34.570 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/ready'
+12:32:34.570 | [12:32:34.570 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:32:34.573 | [12:32:34.573 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF3U" disconnecting.
+12:32:34.573 | [12:32:34.573 DBG] Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets Connection id "0HNMIMN7OCF3U" sending FIN because: "The Socket transport's send loop completed gracefully."
+12:32:34.573 | [12:32:34.573 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/ready, Response status code: 404
+12:32:34.573 | [12:32:34.573 DBG] Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerHandler AuthenticationScheme: Bearer was not authenticated.
+12:32:34.573 | [12:32:34.573 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/ready → 404 за 3 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:32:34.573 | [12:32:34.573 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/ready - 404 0 null 4.2787ms
+12:32:34.573 | [12:32:34.573 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF3U" stopped.
+12:32:44.569 | [12:32:44.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF3V" accepted.
+12:32:44.569 | [12:32:44.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF3V" started.
+12:32:44.570 | [12:32:44.570 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/ready'
+12:32:44.570 | [12:32:44.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/ready - 404 0 null 0.7475ms
+12:32:44.570 | [12:32:44.570 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:32:44.570 | [12:32:44.570 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF3V" disconnecting.
+12:32:44.570 | [12:32:44.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/ready, Response status code: 404
+12:32:44.570 | [12:32:44.570 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/ready → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:32:44.570 | [12:32:44.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/ready - null null
+12:32:44.570 | [12:32:44.570 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/ready'
+12:32:44.570 | [12:32:44.570 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:32:44.570 | [12:32:44.570 DBG] Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerHandler AuthenticationScheme: Bearer was not authenticated.
+12:32:44.571 | [12:32:44.571 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF3V" stopped.
+12:32:44.571 | [12:32:44.571 DBG] Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets Connection id "0HNMIMN7OCF3V" sending FIN because: "The Socket transport's send loop completed gracefully."
+12:32:44.571 | [12:32:44.571 DBG] Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets Connection id "0HNMIMN7OCF3V" received FIN.
+12:32:54.569 | [12:32:54.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF40" accepted.
+12:32:54.569 | [12:32:54.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF40" started.
+12:32:54.570 | [12:32:54.570 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/ready'
+12:32:54.570 | [12:32:54.570 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:32:54.570 | [12:32:54.570 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/ready → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:32:54.570 | [12:32:54.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/ready - null null
+12:32:54.570 | [12:32:54.570 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:32:54.570 | [12:32:54.570 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/ready'
+12:32:54.570 | [12:32:54.570 DBG] Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerHandler AuthenticationScheme: Bearer was not authenticated.
+12:32:54.571 | [12:32:54.571 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF40" stopped.
+12:32:54.571 | [12:32:54.571 DBG] Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets Connection id "0HNMIMN7OCF40" sending FIN because: "The Socket transport's send loop completed gracefully."
+12:32:54.571 | [12:32:54.571 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF40" disconnecting.
+12:32:54.571 | [12:32:54.571 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/ready, Response status code: 404
+12:32:54.571 | [12:32:54.571 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/ready - 404 0 null 0.944ms
+12:33:04.569 | [12:33:04.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF41" started.
+12:33:04.569 | [12:33:04.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF41" accepted.
+12:33:04.570 | [12:33:04.570 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/ready'
+12:33:04.570 | [12:33:04.570 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:33:04.570 | [12:33:04.570 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:33:04.570 | [12:33:04.570 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/ready'
+12:33:04.570 | [12:33:04.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/ready - null null
+12:33:04.571 | [12:33:04.571 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/ready, Response status code: 404
+12:33:04.571 | [12:33:04.571 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF41" disconnecting.
+12:33:04.571 | [12:33:04.571 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF41" stopped.
+12:33:04.571 | [12:33:04.571 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/ready → 404 за 1 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:33:04.571 | [12:33:04.571 DBG] Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerHandler AuthenticationScheme: Bearer was not authenticated.
+12:33:04.571 | [12:33:04.571 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/ready - 404 0 null 1.6595ms
+12:33:04.572 | [12:33:04.572 DBG] Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets Connection id "0HNMIMN7OCF41" sending FIN because: "The Socket transport's send loop completed gracefully."
+12:33:14.568 | [12:33:14.568 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF42" started.
+12:33:14.568 | [12:33:14.568 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF42" accepted.
+12:33:14.569 | [12:33:14.569 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/ready'
+12:33:14.569 | [12:33:14.569 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/ready → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:33:14.569 | [12:33:14.569 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:33:14.569 | [12:33:14.569 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/ready'
+12:33:14.569 | [12:33:14.569 DBG] Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerHandler AuthenticationScheme: Bearer was not authenticated.
+12:33:14.569 | [12:33:14.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/ready - null null
+12:33:14.569 | [12:33:14.569 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:33:14.570 | [12:33:14.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/ready - 404 0 null 0.8573ms
+12:33:14.570 | [12:33:14.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/ready, Response status code: 404
+12:33:14.570 | [12:33:14.570 DBG] Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets Connection id "0HNMIMN7OCF42" sending FIN because: "The Socket transport's send loop completed gracefully."
+12:33:14.570 | [12:33:14.570 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF42" disconnecting.
+12:33:14.570 | [12:33:14.570 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF42" stopped.
+12:33:14.570 | [12:33:14.570 DBG] Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets Connection id "0HNMIMN7OCF42" received FIN.
+12:33:24.569 | [12:33:24.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/ready - null null
+12:33:24.569 | [12:33:24.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF43" accepted.
+12:33:24.569 | [12:33:24.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF43" started.
+12:33:24.570 | [12:33:24.570 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/ready'
+12:33:24.570 | [12:33:24.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/ready - 404 0 null 0.8408ms
+12:33:24.570 | [12:33:24.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/ready, Response status code: 404
+12:33:24.570 | [12:33:24.570 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/ready'
+12:33:24.570 | [12:33:24.570 DBG] Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerHandler AuthenticationScheme: Bearer was not authenticated.
+12:33:24.570 | [12:33:24.570 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:33:24.570 | [12:33:24.570 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/ready → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:33:24.570 | [12:33:24.570 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:33:24.571 | [12:33:24.571 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF43" disconnecting.
+12:33:24.571 | [12:33:24.571 DBG] Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets Connection id "0HNMIMN7OCF43" sending FIN because: "The Socket transport's send loop completed gracefully."
+12:33:24.571 | [12:33:24.571 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF43" stopped.
+12:33:34.569 | [12:33:34.569 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/ready'
+12:33:34.569 | [12:33:34.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/ready - null null
+12:33:34.569 | [12:33:34.569 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:33:34.569 | [12:33:34.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF44" started.
+12:33:34.569 | [12:33:34.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF44" accepted.
+12:33:34.570 | [12:33:34.570 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/ready'
+12:33:34.570 | [12:33:34.570 DBG] Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets Connection id "0HNMIMN7OCF44" sending FIN because: "The Socket transport's send loop completed gracefully."
+12:33:34.570 | [12:33:34.570 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF44" stopped.
+12:33:34.570 | [12:33:34.570 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF44" disconnecting.
+12:33:34.570 | [12:33:34.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/ready - 404 0 null 0.6118ms
+12:33:34.570 | [12:33:34.570 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/ready → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:33:34.570 | [12:33:34.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/ready, Response status code: 404
+12:33:34.570 | [12:33:34.570 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:33:34.570 | [12:33:34.570 DBG] Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerHandler AuthenticationScheme: Bearer was not authenticated.
+12:33:34.941 | [12:33:34.941 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/ready - null null
+12:33:34.941 | [12:33:34.941 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/ready'
+12:33:34.941 | [12:33:34.941 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:33:34.941 | [12:33:34.941 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:33:34.941 | [12:33:34.941 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF45" accepted.
+12:33:34.941 | [12:33:34.941 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/ready'
+12:33:34.941 | [12:33:34.941 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF45" started.
+12:33:34.942 | [12:33:34.942 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/ready → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:33:34.942 | [12:33:34.942 DBG] Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerHandler AuthenticationScheme: Bearer was not authenticated.
+12:33:34.942 | [12:33:34.942 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/ready - 404 0 null 1.1498ms
+12:33:34.943 | [12:33:34.943 DBG] Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets Connection id "0HNMIMN7OCF45" sending FIN because: "The Socket transport's send loop completed gracefully."
+12:33:34.943 | [12:33:34.943 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF45" stopped.
+12:33:34.943 | [12:33:34.943 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/ready, Response status code: 404
+12:33:34.943 | [12:33:34.943 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF45" disconnecting.
+12:33:44.568 | [12:33:44.568 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF46" started.
+12:33:44.568 | [12:33:44.568 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF46" accepted.
+12:33:44.569 | [12:33:44.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/ready - null null
+12:33:44.569 | [12:33:44.569 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:33:44.569 | [12:33:44.569 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/ready → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:33:44.569 | [12:33:44.569 DBG] Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerHandler AuthenticationScheme: Bearer was not authenticated.
+12:33:44.569 | [12:33:44.569 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/ready'
+12:33:44.569 | [12:33:44.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/ready, Response status code: 404
+12:33:44.569 | [12:33:44.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/ready - 404 0 null 0.6417ms
+12:33:44.569 | [12:33:44.569 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/ready'
+12:33:44.569 | [12:33:44.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF46" disconnecting.
+12:33:44.569 | [12:33:44.569 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:33:44.569 | [12:33:44.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF46" stopped.
+12:33:44.570 | [12:33:44.570 DBG] Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets Connection id "0HNMIMN7OCF46" sending FIN because: "The Socket transport's send loop completed gracefully."
+12:33:44.570 | [12:33:44.570 DBG] Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets Connection id "0HNMIMN7OCF46" received FIN.
+12:33:54.569 | [12:33:54.569 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:33:54.569 | [12:33:54.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/ready - null null
+12:33:54.569 | [12:33:54.569 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/ready → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:33:54.569 | [12:33:54.569 DBG] Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerHandler AuthenticationScheme: Bearer was not authenticated.
+12:33:54.569 | [12:33:54.569 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:33:54.569 | [12:33:54.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF47" started.
+12:33:54.569 | [12:33:54.569 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/ready'
+12:33:54.569 | [12:33:54.569 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/ready'
+12:33:54.569 | [12:33:54.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF47" accepted.
+12:33:54.570 | [12:33:54.570 DBG] Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets Connection id "0HNMIMN7OCF47" sending FIN because: "The Socket transport's send loop completed gracefully."
+12:33:54.570 | [12:33:54.570 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF47" stopped.
+12:33:54.570 | [12:33:54.570 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF47" disconnecting.
+12:33:54.570 | [12:33:54.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/ready, Response status code: 404
+12:33:54.570 | [12:33:54.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/ready - 404 0 null 0.58ms
+12:34:04.569 | [12:34:04.569 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/ready'
+12:34:04.569 | [12:34:04.569 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:34:04.569 | [12:34:04.569 DBG] Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerHandler AuthenticationScheme: Bearer was not authenticated.
+12:34:04.569 | [12:34:04.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF48" accepted.
+12:34:04.569 | [12:34:04.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF48" started.
+12:34:04.569 | [12:34:04.569 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/ready'
+12:34:04.569 | [12:34:04.569 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:34:04.569 | [12:34:04.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/ready - null null
+12:34:04.570 | [12:34:04.570 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/ready → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:34:04.570 | [12:34:04.570 DBG] Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets Connection id "0HNMIMN7OCF48" received FIN.
+12:34:04.570 | [12:34:04.570 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF48" disconnecting.
+12:34:04.570 | [12:34:04.570 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF48" stopped.
+12:34:04.570 | [12:34:04.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/ready - 404 0 null 0.8204ms
+12:34:04.570 | [12:34:04.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/ready, Response status code: 404
+12:34:04.571 | [12:34:04.571 DBG] Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets Connection id "0HNMIMN7OCF48" sending FIN because: "The Socket transport's send loop completed gracefully."
+12:34:14.569 | [12:34:14.569 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/ready'
+12:34:14.569 | [12:34:14.569 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:34:14.569 | [12:34:14.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF49" started.
+12:34:14.569 | [12:34:14.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/ready - null null
+12:34:14.569 | [12:34:14.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF49" accepted.
+12:34:14.570 | [12:34:14.570 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF49" disconnecting.
+12:34:14.570 | [12:34:14.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/ready, Response status code: 404
+12:34:14.570 | [12:34:14.570 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF49" stopped.
+12:34:14.570 | [12:34:14.570 DBG] Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets Connection id "0HNMIMN7OCF49" sending FIN because: "The Socket transport's send loop completed gracefully."
+12:34:14.570 | [12:34:14.570 DBG] Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerHandler AuthenticationScheme: Bearer was not authenticated.
+12:34:14.570 | [12:34:14.570 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:34:14.570 | [12:34:14.570 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/ready'
+12:34:14.570 | [12:34:14.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/ready - 404 0 null 0.5896ms
+12:34:14.570 | [12:34:14.570 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/ready → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:34:24.568 | [12:34:24.568 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4A" accepted.
+12:34:24.569 | [12:34:24.569 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:34:24.569 | [12:34:24.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/ready, Response status code: 404
+12:34:24.569 | [12:34:24.569 DBG] Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerHandler AuthenticationScheme: Bearer was not authenticated.
+12:34:24.569 | [12:34:24.569 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:34:24.569 | [12:34:24.569 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/live'
+12:34:24.569 | [12:34:24.569 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/ready → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:34:24.569 | [12:34:24.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/ready - 404 0 null 0.5043ms
+12:34:24.569 | [12:34:24.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4A" disconnecting.
+12:34:24.569 | [12:34:24.569 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/live → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:34:24.569 | [12:34:24.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/live - 404 0 null 0.445ms
+12:34:24.569 | [12:34:24.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/live - null null
+12:34:24.569 | [12:34:24.569 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:34:24.569 | [12:34:24.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4B" started.
+12:34:24.569 | [12:34:24.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4B" accepted.
+12:34:24.569 | [12:34:24.569 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:34:24.569 | [12:34:24.569 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/ready'
+12:34:24.569 | [12:34:24.569 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/live'
+12:34:24.569 | [12:34:24.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4A" started.
+12:34:24.569 | [12:34:24.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/ready - null null
+12:34:24.569 | [12:34:24.569 DBG] Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerHandler AuthenticationScheme: Bearer was not authenticated.
+12:34:24.569 | [12:34:24.569 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/ready'
+12:34:24.570 | [12:34:24.570 DBG] Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets Connection id "0HNMIMN7OCF4A" sending FIN because: "The Socket transport's send loop completed gracefully."
+12:34:24.570 | [12:34:24.570 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4B" stopped.
+12:34:24.570 | [12:34:24.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/live, Response status code: 404
+12:34:24.570 | [12:34:24.570 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4B" disconnecting.
+12:34:24.570 | [12:34:24.570 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4A" stopped.
+12:34:24.571 | [12:34:24.571 DBG] Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets Connection id "0HNMIMN7OCF4B" sending FIN because: "The Socket transport's send loop completed gracefully."
+12:34:34.568 | [12:34:34.568 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4C" accepted.
+12:34:34.569 | [12:34:34.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4D" started.
+12:34:34.569 | [12:34:34.569 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:34:34.569 | [12:34:34.569 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/ready'
+12:34:34.569 | [12:34:34.569 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:34:34.569 | [12:34:34.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/live - null null
+12:34:34.569 | [12:34:34.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/ready - null null
+12:34:34.569 | [12:34:34.569 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/live'
+12:34:34.569 | [12:34:34.569 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:34:34.569 | [12:34:34.569 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/live'
+12:34:34.569 | [12:34:34.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4D" accepted.
+12:34:34.569 | [12:34:34.569 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/ready'
+12:34:34.569 | [12:34:34.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4C" started.
+12:34:34.570 | [12:34:34.570 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/live → 404 за 1 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:34:34.570 | [12:34:34.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/ready - 404 0 null 1.4427ms
+12:34:34.570 | [12:34:34.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/live - 404 0 null 1.2819ms
+12:34:34.570 | [12:34:34.570 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/ready → 404 за 1 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:34:34.570 | [12:34:34.570 DBG] Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerHandler AuthenticationScheme: Bearer was not authenticated.
+12:34:34.570 | [12:34:34.570 DBG] Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerHandler AuthenticationScheme: Bearer was not authenticated.
+12:34:34.570 | [12:34:34.570 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:34:34.571 | [12:34:34.571 DBG] Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets Connection id "0HNMIMN7OCF4C" received FIN.
+12:34:34.571 | [12:34:34.571 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/ready, Response status code: 404
+12:34:34.571 | [12:34:34.571 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/live, Response status code: 404
+12:34:34.571 | [12:34:34.571 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4D" stopped.
+12:34:34.571 | [12:34:34.571 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4D" disconnecting.
+12:34:34.572 | [12:34:34.572 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4C" stopped.
+12:34:34.572 | [12:34:34.572 DBG] Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets Connection id "0HNMIMN7OCF4C" sending FIN because: "The Socket transport's send loop completed gracefully."
+12:34:34.572 | [12:34:34.572 DBG] Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets Connection id "0HNMIMN7OCF4D" sending FIN because: "The Socket transport's send loop completed gracefully."
+12:34:34.572 | [12:34:34.572 DBG] Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets Connection id "0HNMIMN7OCF4D" received FIN.
+12:34:34.572 | [12:34:34.572 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4C" disconnecting.
+12:34:44.569 | [12:34:44.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4F" accepted.
+12:34:44.569 | [12:34:44.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4E" started.
+12:34:44.569 | [12:34:44.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4E" accepted.
+12:34:44.570 | [12:34:44.570 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/live → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:34:44.570 | [12:34:44.570 DBG] Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerHandler AuthenticationScheme: Bearer was not authenticated.
+12:34:44.570 | [12:34:44.570 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/ready → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:34:44.570 | [12:34:44.570 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/ready'
+12:34:44.570 | [12:34:44.570 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:34:44.570 | [12:34:44.570 DBG] Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerHandler AuthenticationScheme: Bearer was not authenticated.
+12:34:44.570 | [12:34:44.570 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:34:44.570 | [12:34:44.570 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:34:44.570 | [12:34:44.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/live - null null
+12:34:44.570 | [12:34:44.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/ready - null null
+12:34:44.570 | [12:34:44.570 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/ready'
+12:34:44.570 | [12:34:44.570 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4F" started.
+12:34:44.570 | [12:34:44.570 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/live'
+12:34:44.570 | [12:34:44.570 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:34:44.570 | [12:34:44.570 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/live'
+12:34:44.571 | [12:34:44.571 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4F" stopped.
+12:34:44.571 | [12:34:44.571 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/ready - 404 0 null 0.6728ms
+12:34:44.571 | [12:34:44.571 DBG] Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets Connection id "0HNMIMN7OCF4E" sending FIN because: "The Socket transport's send loop completed gracefully."
+12:34:44.571 | [12:34:44.571 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4F" disconnecting.
+12:34:44.571 | [12:34:44.571 DBG] Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets Connection id "0HNMIMN7OCF4F" sending FIN because: "The Socket transport's send loop completed gracefully."
+12:34:44.571 | [12:34:44.571 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4E" stopped.
+12:34:44.571 | [12:34:44.571 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/live, Response status code: 404
+12:34:44.571 | [12:34:44.571 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/live - 404 0 null 0.952ms
+12:34:44.571 | [12:34:44.571 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4E" disconnecting.
+12:34:44.571 | [12:34:44.571 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/ready, Response status code: 404
+12:34:54.569 | [12:34:54.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/live - null null
+12:34:54.569 | [12:34:54.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4G" accepted.
+12:34:54.569 | [12:34:54.569 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:34:54.569 | [12:34:54.569 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/live'
+12:34:54.569 | [12:34:54.569 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:34:54.569 | [12:34:54.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4H" started.
+12:34:54.569 | [12:34:54.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4G" started.
+12:34:54.569 | [12:34:54.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/ready - null null
+12:34:54.569 | [12:34:54.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4H" accepted.
+12:34:54.569 | [12:34:54.569 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/live'
+12:34:54.569 | [12:34:54.569 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/ready'
+12:34:54.570 | [12:34:54.570 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:34:54.570 | [12:34:54.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/live - 404 0 null 1.3001ms
+12:34:54.570 | [12:34:54.570 DBG] Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerHandler AuthenticationScheme: Bearer was not authenticated.
+12:34:54.570 | [12:34:54.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/ready - 404 0 null 1.0446ms
+12:34:54.570 | [12:34:54.570 DBG] Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerHandler AuthenticationScheme: Bearer was not authenticated.
+12:34:54.570 | [12:34:54.570 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4H" stopped.
+12:34:54.570 | [12:34:54.570 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4H" disconnecting.
+12:34:54.570 | [12:34:54.570 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/live → 404 за 1 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:34:54.570 | [12:34:54.570 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:34:54.570 | [12:34:54.570 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/ready → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:34:54.570 | [12:34:54.570 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/ready'
+12:34:54.570 | [12:34:54.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/ready, Response status code: 404
+12:34:54.570 | [12:34:54.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/live, Response status code: 404
+12:34:54.571 | [12:34:54.571 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4G" disconnecting.
+12:34:54.571 | [12:34:54.571 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4G" stopped.
+12:34:54.572 | [12:34:54.572 DBG] Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets Connection id "0HNMIMN7OCF4H" sending FIN because: "The Socket transport's send loop completed gracefully."
+12:34:54.573 | [12:34:54.573 DBG] Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets Connection id "0HNMIMN7OCF4G" sending FIN because: "The Socket transport's send loop completed gracefully."
+12:34:55.941 | [12:34:55.941 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:34:55.941 | [12:34:55.941 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/ready → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:34:55.941 | [12:34:55.941 DBG] Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerHandler AuthenticationScheme: Bearer was not authenticated.
+12:34:55.941 | [12:34:55.941 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4I" started.
+12:34:55.941 | [12:34:55.941 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/ready'
+12:34:55.941 | [12:34:55.941 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/ready - null null
+12:34:55.941 | [12:34:55.941 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4I" accepted.
+12:34:55.941 | [12:34:55.941 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:34:55.941 | [12:34:55.941 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/ready'
+12:34:55.942 | [12:34:55.942 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4I" disconnecting.
+12:34:55.942 | [12:34:55.942 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/ready, Response status code: 404
+12:34:55.942 | [12:34:55.942 DBG] Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets Connection id "0HNMIMN7OCF4I" sending FIN because: "The Socket transport's send loop completed gracefully."
+12:34:55.942 | [12:34:55.942 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/ready - 404 0 null 0.502ms
+12:34:55.942 | [12:34:55.942 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4I" stopped.
+12:35:04.568 | [12:35:04.568 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4J" accepted.
+12:35:04.569 | [12:35:04.569 DBG] Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerHandler AuthenticationScheme: Bearer was not authenticated.
+12:35:04.569 | [12:35:04.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/live - null null
+12:35:04.569 | [12:35:04.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4J" disconnecting.
+12:35:04.569 | [12:35:04.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4J" stopped.
+12:35:04.569 | [12:35:04.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4K" started.
+12:35:04.569 | [12:35:04.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets Connection id "0HNMIMN7OCF4J" sending FIN because: "The Socket transport's send loop completed gracefully."
+12:35:04.569 | [12:35:04.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4K" accepted.
+12:35:04.569 | [12:35:04.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/live, Response status code: 404
+12:35:04.569 | [12:35:04.569 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/live'
+12:35:04.569 | [12:35:04.569 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/live'
+12:35:04.569 | [12:35:04.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4J" started.
+12:35:04.569 | [12:35:04.569 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:35:04.569 | [12:35:04.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/live - 404 0 null 0.5329ms
+12:35:04.569 | [12:35:04.569 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:35:04.569 | [12:35:04.569 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/live → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:35:04.570 | [12:35:04.570 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:35:04.570 | [12:35:04.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/ready - null null
+12:35:04.570 | [12:35:04.570 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/ready → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:35:04.570 | [12:35:04.570 DBG] Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerHandler AuthenticationScheme: Bearer was not authenticated.
+12:35:04.570 | [12:35:04.570 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/ready'
+12:35:04.570 | [12:35:04.570 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:35:04.570 | [12:35:04.570 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/ready'
+12:35:04.571 | [12:35:04.571 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/ready, Response status code: 404
+12:35:04.571 | [12:35:04.571 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4K" stopped.
+12:35:04.571 | [12:35:04.571 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4K" disconnecting.
+12:35:04.571 | [12:35:04.571 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/ready - 404 0 null 0.9405ms
+12:35:04.571 | [12:35:04.571 DBG] Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets Connection id "0HNMIMN7OCF4K" sending FIN because: "The Socket transport's send loop completed gracefully."
+12:35:14.569 | [12:35:14.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4M" started.
+12:35:14.569 | [12:35:14.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4M" accepted.
+12:35:14.569 | [12:35:14.569 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:35:14.569 | [12:35:14.569 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/ready'
+12:35:14.569 | [12:35:14.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/ready - null null
+12:35:14.569 | [12:35:14.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4L" accepted.
+12:35:14.569 | [12:35:14.569 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:35:14.569 | [12:35:14.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4L" started.
+12:35:14.569 | [12:35:14.569 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/ready'
+12:35:14.570 | [12:35:14.570 DBG] Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets Connection id "0HNMIMN7OCF4M" sending FIN because: "The Socket transport's send loop completed gracefully."
+12:35:14.570 | [12:35:14.570 DBG] Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerHandler AuthenticationScheme: Bearer was not authenticated.
+12:35:14.570 | [12:35:14.570 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4M" stopped.
+12:35:14.570 | [12:35:14.570 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:35:14.570 | [12:35:14.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/ready - 404 0 null 0.5626ms
+12:35:14.570 | [12:35:14.570 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4L" disconnecting.
+12:35:14.570 | [12:35:14.570 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/live'
+12:35:14.570 | [12:35:14.570 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/live → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:35:14.570 | [12:35:14.570 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:35:14.570 | [12:35:14.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/live - null null
+12:35:14.570 | [12:35:14.570 DBG] Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerHandler AuthenticationScheme: Bearer was not authenticated.
+12:35:14.570 | [12:35:14.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/ready, Response status code: 404
+12:35:14.570 | [12:35:14.570 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/live'
+12:35:14.570 | [12:35:14.570 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/ready → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:35:14.570 | [12:35:14.570 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4M" disconnecting.
+12:35:14.570 | [12:35:14.570 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4L" stopped.
+12:35:14.570 | [12:35:14.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/live, Response status code: 404
+12:35:14.570 | [12:35:14.570 DBG] Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets Connection id "0HNMIMN7OCF4L" sending FIN because: "The Socket transport's send loop completed gracefully."
+12:35:14.570 | [12:35:14.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/live - 404 0 null 0.1997ms
+12:35:24.569 | [12:35:24.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/live - null null
+12:35:24.569 | [12:35:24.569 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/live'
+12:35:24.569 | [12:35:24.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4N" started.
+12:35:24.569 | [12:35:24.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4O" accepted.
+12:35:24.569 | [12:35:24.569 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:35:24.569 | [12:35:24.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4N" accepted.
+12:35:24.570 | [12:35:24.570 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:35:24.570 | [12:35:24.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/ready - null null
+12:35:24.570 | [12:35:24.570 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:35:24.570 | [12:35:24.570 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/ready'
+12:35:24.570 | [12:35:24.570 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/ready'
+12:35:24.570 | [12:35:24.570 DBG] Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerHandler AuthenticationScheme: Bearer was not authenticated.
+12:35:24.570 | [12:35:24.570 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4O" started.
+12:35:24.570 | [12:35:24.570 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/live'
+12:35:24.570 | [12:35:24.570 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:35:24.571 | [12:35:24.571 DBG] Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets Connection id "0HNMIMN7OCF4O" sending FIN because: "The Socket transport's send loop completed gracefully."
+12:35:24.571 | [12:35:24.571 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/live, Response status code: 404
+12:35:24.571 | [12:35:24.571 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/ready, Response status code: 404
+12:35:24.571 | [12:35:24.571 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4N" disconnecting.
+12:35:24.571 | [12:35:24.571 DBG] Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerHandler AuthenticationScheme: Bearer was not authenticated.
+12:35:24.571 | [12:35:24.571 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/ready → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:35:24.571 | [12:35:24.571 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/live → 404 за 1 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:35:24.571 | [12:35:24.571 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4O" stopped.
+12:35:24.571 | [12:35:24.571 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/ready - 404 0 null 0.3232ms
+12:35:24.571 | [12:35:24.571 DBG] Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets Connection id "0HNMIMN7OCF4N" sending FIN because: "The Socket transport's send loop completed gracefully."
+12:35:24.571 | [12:35:24.571 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4O" disconnecting.
+12:35:24.571 | [12:35:24.571 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/live - 404 0 null 1.4429ms
+12:35:24.571 | [12:35:24.571 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4N" stopped.
+12:35:34.569 | [12:35:34.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/ready - null null
+12:35:34.569 | [12:35:34.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4Q" accepted.
+12:35:34.569 | [12:35:34.569 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:35:34.569 | [12:35:34.569 DBG] Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerHandler AuthenticationScheme: Bearer was not authenticated.
+12:35:34.569 | [12:35:34.569 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:35:34.569 | [12:35:34.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4Q" started.
+12:35:34.569 | [12:35:34.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4P" accepted.
+12:35:34.569 | [12:35:34.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/live - null null
+12:35:34.569 | [12:35:34.569 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:35:34.569 | [12:35:34.569 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/ready'
+12:35:34.569 | [12:35:34.569 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/live'
+12:35:34.569 | [12:35:34.569 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/ready'
+12:35:34.569 | [12:35:34.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4P" started.
+12:35:34.570 | [12:35:34.570 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4P" disconnecting.
+12:35:34.570 | [12:35:34.570 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/live'
+12:35:34.570 | [12:35:34.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/live - 404 0 null 0.4893ms
+12:35:34.570 | [12:35:34.570 DBG] Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets Connection id "0HNMIMN7OCF4P" sending FIN because: "The Socket transport's send loop completed gracefully."
+12:35:34.570 | [12:35:34.570 DBG] Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets Connection id "0HNMIMN7OCF4Q" sending FIN because: "The Socket transport's send loop completed gracefully."
+12:35:34.570 | [12:35:34.570 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4P" stopped.
+12:35:34.570 | [12:35:34.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/live, Response status code: 404
+12:35:34.570 | [12:35:34.570 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/ready → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:35:34.570 | [12:35:34.570 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4Q" stopped.
+12:35:34.570 | [12:35:34.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/ready, Response status code: 404
+12:35:34.570 | [12:35:34.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/ready - 404 0 null 0.9461ms
+12:35:34.570 | [12:35:34.570 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/live → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:35:34.570 | [12:35:34.570 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4Q" disconnecting.
+12:35:34.570 | [12:35:34.570 DBG] Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerHandler AuthenticationScheme: Bearer was not authenticated.
+12:35:34.570 | [12:35:34.570 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:35:44.569 | [12:35:44.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4R" started.
+12:35:44.569 | [12:35:44.569 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/ready'
+12:35:44.569 | [12:35:44.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/live - null null
+12:35:44.569 | [12:35:44.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4S" accepted.
+12:35:44.569 | [12:35:44.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4S" started.
+12:35:44.569 | [12:35:44.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4R" accepted.
+12:35:44.569 | [12:35:44.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/ready - null null
+12:35:44.570 | [12:35:44.570 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:35:44.570 | [12:35:44.570 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/live'
+12:35:44.570 | [12:35:44.570 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/ready → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:35:44.570 | [12:35:44.570 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:35:44.570 | [12:35:44.570 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4R" disconnecting.
+12:35:44.570 | [12:35:44.570 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4S" disconnecting.
+12:35:44.570 | [12:35:44.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/live, Response status code: 404
+12:35:44.570 | [12:35:44.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/ready, Response status code: 404
+12:35:44.570 | [12:35:44.570 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/ready'
+12:35:44.570 | [12:35:44.570 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/live → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:35:44.570 | [12:35:44.570 DBG] Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerHandler AuthenticationScheme: Bearer was not authenticated.
+12:35:44.570 | [12:35:44.570 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/live'
+12:35:44.570 | [12:35:44.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/ready - 404 0 null 0.9065ms
+12:35:44.570 | [12:35:44.570 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:35:44.570 | [12:35:44.570 DBG] Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerHandler AuthenticationScheme: Bearer was not authenticated.
+12:35:44.570 | [12:35:44.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/live - 404 0 null 0.9052ms
+12:35:44.570 | [12:35:44.570 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:35:44.571 | [12:35:44.571 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4S" stopped.
+12:35:44.571 | [12:35:44.571 DBG] Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets Connection id "0HNMIMN7OCF4S" sending FIN because: "The Socket transport's send loop completed gracefully."
+12:35:44.571 | [12:35:44.571 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4R" stopped.
+12:35:44.571 | [12:35:44.571 DBG] Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets Connection id "0HNMIMN7OCF4R" received FIN.
+12:35:44.571 | [12:35:44.571 DBG] Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets Connection id "0HNMIMN7OCF4R" sending FIN because: "The Socket transport's send loop completed gracefully."
+12:35:54.568 | [12:35:54.568 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/ready'
+12:35:54.568 | [12:35:54.568 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:35:54.568 | [12:35:54.568 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/live'
+12:35:54.568 | [12:35:54.568 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:35:54.568 | [12:35:54.568 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/ready'
+12:35:54.568 | [12:35:54.568 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/live'
+12:35:54.568 | [12:35:54.568 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/ready - null null
+12:35:54.568 | [12:35:54.568 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4T" accepted.
+12:35:54.568 | [12:35:54.568 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4T" started.
+12:35:54.568 | [12:35:54.568 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/live - null null
+12:35:54.568 | [12:35:54.568 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4U" started.
+12:35:54.568 | [12:35:54.568 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4U" accepted.
+12:35:54.568 | [12:35:54.568 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:35:54.569 | [12:35:54.569 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:35:54.569 | [12:35:54.569 DBG] Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerHandler AuthenticationScheme: Bearer was not authenticated.
+12:35:54.570 | [12:35:54.570 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4T" stopped.
+12:35:54.570 | [12:35:54.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/live, Response status code: 404
+12:35:54.570 | [12:35:54.570 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4U" stopped.
+12:35:54.570 | [12:35:54.570 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4T" disconnecting.
+12:35:54.570 | [12:35:54.570 DBG] Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets Connection id "0HNMIMN7OCF4U" sending FIN because: "The Socket transport's send loop completed gracefully."
+12:35:54.570 | [12:35:54.570 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4U" disconnecting.
+12:35:54.570 | [12:35:54.570 DBG] Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerHandler AuthenticationScheme: Bearer was not authenticated.
+12:35:54.570 | [12:35:54.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/live - 404 0 null 1.7957ms
+12:35:54.570 | [12:35:54.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/ready, Response status code: 404
+12:35:54.570 | [12:35:54.570 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/ready → 404 за 2 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:35:54.570 | [12:35:54.570 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/live → 404 за 1 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:35:54.570 | [12:35:54.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/ready - 404 0 null 1.8324ms
+12:35:54.571 | [12:35:54.571 DBG] Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets Connection id "0HNMIMN7OCF4T" sending FIN because: "The Socket transport's send loop completed gracefully."
+12:35:54.571 | [12:35:54.571 DBG] Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets Connection id "0HNMIMN7OCF4T" received FIN.
+12:36:00.941 | [12:36:00.941 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4V" started.
+12:36:00.941 | [12:36:00.941 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:36:00.941 | [12:36:00.941 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/ready - 404 0 null 0.3701ms
+12:36:00.941 | [12:36:00.941 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:36:00.941 | [12:36:00.941 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/ready → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:36:00.941 | [12:36:00.941 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4V" disconnecting.
+12:36:00.941 | [12:36:00.941 DBG] Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerHandler AuthenticationScheme: Bearer was not authenticated.
+12:36:00.941 | [12:36:00.941 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/ready, Response status code: 404
+12:36:00.941 | [12:36:00.941 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/ready'
+12:36:00.941 | [12:36:00.941 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4V" stopped.
+12:36:00.941 | [12:36:00.941 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/ready'
+12:36:00.941 | [12:36:00.941 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/ready - null null
+12:36:00.941 | [12:36:00.941 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF4V" accepted.
+12:36:00.941 | [12:36:00.941 DBG] Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets Connection id "0HNMIMN7OCF4V" sending FIN because: "The Socket transport's send loop completed gracefully."
+12:36:04.569 | [12:36:04.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/live - null null
+12:36:04.569 | [12:36:04.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/ready - null null
+12:36:04.569 | [12:36:04.569 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/ready'
+12:36:04.569 | [12:36:04.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF51" accepted.
+12:36:04.569 | [12:36:04.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF51" started.
+12:36:04.569 | [12:36:04.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF50" accepted.
+12:36:04.569 | [12:36:04.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF50" started.
+12:36:04.570 | [12:36:04.570 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/ready'
+12:36:04.570 | [12:36:04.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/ready - 404 0 null 0.9599ms
+12:36:04.570 | [12:36:04.570 DBG] Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerHandler AuthenticationScheme: Bearer was not authenticated.
+12:36:04.570 | [12:36:04.570 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:36:04.570 | [12:36:04.570 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/live'
+12:36:04.570 | [12:36:04.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/live, Response status code: 404
+12:36:04.570 | [12:36:04.570 DBG] Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets Connection id "0HNMIMN7OCF50" sending FIN because: "The Socket transport's send loop completed gracefully."
+12:36:04.570 | [12:36:04.570 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/live → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:36:04.570 | [12:36:04.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/ready, Response status code: 404
+12:36:04.570 | [12:36:04.570 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:36:04.570 | [12:36:04.570 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF50" stopped.
+12:36:04.570 | [12:36:04.570 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF51" disconnecting.
+12:36:04.570 | [12:36:04.570 DBG] Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerHandler AuthenticationScheme: Bearer was not authenticated.
+12:36:04.570 | [12:36:04.570 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:36:04.570 | [12:36:04.570 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/live'
+12:36:04.570 | [12:36:04.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/live - 404 0 null 0.967ms
+12:36:04.570 | [12:36:04.570 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF50" disconnecting.
+12:36:04.570 | [12:36:04.570 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/ready → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:36:04.570 | [12:36:04.570 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF51" stopped.
+12:36:04.570 | [12:36:04.570 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:36:04.571 | [12:36:04.571 DBG] Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets Connection id "0HNMIMN7OCF51" sending FIN because: "The Socket transport's send loop completed gracefully."
+12:36:14.568 | [12:36:14.568 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF52" accepted.
+12:36:14.568 | [12:36:14.568 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF52" started.
+12:36:14.568 | [12:36:14.568 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF53" started.
+12:36:14.568 | [12:36:14.568 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF53" accepted.
+12:36:14.569 | [12:36:14.569 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/ready'
+12:36:14.569 | [12:36:14.569 DBG] Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerHandler AuthenticationScheme: Bearer was not authenticated.
+12:36:14.569 | [12:36:14.569 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/live → 404 за 1 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:36:14.569 | [12:36:14.569 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/live'
+12:36:14.569 | [12:36:14.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/live, Response status code: 404
+12:36:14.569 | [12:36:14.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF52" disconnecting.
+12:36:14.569 | [12:36:14.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/live - 404 0 null 0.8901ms
+12:36:14.569 | [12:36:14.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF52" stopped.
+12:36:14.569 | [12:36:14.569 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/ready'
+12:36:14.569 | [12:36:14.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/ready, Response status code: 404
+12:36:14.569 | [12:36:14.569 DBG] Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerHandler AuthenticationScheme: Bearer was not authenticated.
+12:36:14.569 | [12:36:14.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF53" stopped.
+12:36:14.569 | [12:36:14.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/live - null null
+12:36:14.569 | [12:36:14.569 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/ready → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:36:14.569 | [12:36:14.569 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/live'
+12:36:14.569 | [12:36:14.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF53" disconnecting.
+12:36:14.569 | [12:36:14.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/ready - 404 0 null 0.2867ms
+12:36:14.569 | [12:36:14.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/ready - null null
+12:36:14.569 | [12:36:14.569 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:36:14.569 | [12:36:14.569 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:36:14.569 | [12:36:14.569 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:36:14.569 | [12:36:14.569 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:36:14.569 | [12:36:14.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets Connection id "0HNMIMN7OCF53" sending FIN because: "The Socket transport's send loop completed gracefully."
+12:36:14.570 | [12:36:14.570 DBG] Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets Connection id "0HNMIMN7OCF52" sending FIN because: "The Socket transport's send loop completed gracefully."
+12:36:24.569 | [12:36:24.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF54" started.
+12:36:24.569 | [12:36:24.569 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:36:24.569 | [12:36:24.569 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/ready'
+12:36:24.569 | [12:36:24.569 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/ready'
+12:36:24.569 | [12:36:24.569 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/live'
+12:36:24.569 | [12:36:24.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF55" started.
+12:36:24.569 | [12:36:24.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/ready - null null
+12:36:24.569 | [12:36:24.569 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:36:24.569 | [12:36:24.569 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/live'
+12:36:24.569 | [12:36:24.569 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:36:24.569 | [12:36:24.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/live - null null
+12:36:24.569 | [12:36:24.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF55" accepted.
+12:36:24.569 | [12:36:24.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF54" accepted.
+12:36:24.570 | [12:36:24.570 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:36:24.570 | [12:36:24.570 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF54" disconnecting.
+12:36:24.570 | [12:36:24.570 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF55" disconnecting.
+12:36:24.570 | [12:36:24.570 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/ready → 404 за 1 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:36:24.570 | [12:36:24.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/ready - 404 0 null 1.2825ms
+12:36:24.570 | [12:36:24.570 DBG] Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerHandler AuthenticationScheme: Bearer was not authenticated.
+12:36:24.570 | [12:36:24.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/live - 404 0 null 0.7247ms
+12:36:24.570 | [12:36:24.570 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/live → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:36:24.570 | [12:36:24.570 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF55" stopped.
+12:36:24.570 | [12:36:24.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/live, Response status code: 404
+12:36:24.570 | [12:36:24.570 DBG] Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets Connection id "0HNMIMN7OCF54" sending FIN because: "The Socket transport's send loop completed gracefully."
+12:36:24.570 | [12:36:24.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/ready, Response status code: 404
+12:36:24.570 | [12:36:24.570 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF54" stopped.
+12:36:24.570 | [12:36:24.570 DBG] Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerHandler AuthenticationScheme: Bearer was not authenticated.
+12:36:24.571 | [12:36:24.571 DBG] Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets Connection id "0HNMIMN7OCF55" sending FIN because: "The Socket transport's send loop completed gracefully."
+12:36:34.568 | [12:36:34.568 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF56" accepted.
+12:36:34.569 | [12:36:34.569 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/live'
+12:36:34.569 | [12:36:34.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF56" started.
+12:36:34.569 | [12:36:34.569 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:36:34.569 | [12:36:34.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/live - null null
+12:36:34.569 | [12:36:34.569 DBG] Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerHandler AuthenticationScheme: Bearer was not authenticated.
+12:36:34.569 | [12:36:34.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF57" accepted.
+12:36:34.569 | [12:36:34.569 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/live'
+12:36:34.569 | [12:36:34.569 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:36:34.569 | [12:36:34.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF57" started.
+12:36:34.570 | [12:36:34.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/ready - null null
+12:36:34.570 | [12:36:34.570 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:36:34.570 | [12:36:34.570 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/ready'
+12:36:34.570 | [12:36:34.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/ready - 404 0 null 0.5999ms
+12:36:34.570 | [12:36:34.570 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF57" disconnecting.
+12:36:34.570 | [12:36:34.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/live, Response status code: 404
+12:36:34.570 | [12:36:34.570 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:36:34.570 | [12:36:34.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/live - 404 0 null 0.6578ms
+12:36:34.570 | [12:36:34.570 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF57" stopped.
+12:36:34.570 | [12:36:34.570 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/live → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:36:34.570 | [12:36:34.570 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/ready'
+12:36:34.570 | [12:36:34.570 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/ready → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:36:34.570 | [12:36:34.570 DBG] Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerHandler AuthenticationScheme: Bearer was not authenticated.
+12:36:34.571 | [12:36:34.571 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF56" stopped.
+12:36:34.571 | [12:36:34.571 DBG] Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets Connection id "0HNMIMN7OCF56" sending FIN because: "The Socket transport's send loop completed gracefully."
+12:36:34.571 | [12:36:34.571 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF56" disconnecting.
+12:36:34.571 | [12:36:34.571 DBG] Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets Connection id "0HNMIMN7OCF57" sending FIN because: "The Socket transport's send loop completed gracefully."
+12:36:34.571 | [12:36:34.571 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/ready, Response status code: 404
+12:36:44.569 | [12:36:44.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF58" stopped.
+12:36:44.569 | [12:36:44.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF59" started.
+12:36:44.569 | [12:36:44.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/ready - 404 0 null 0.3706ms
+12:36:44.569 | [12:36:44.569 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:36:44.569 | [12:36:44.569 DBG] Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerHandler AuthenticationScheme: Bearer was not authenticated.
+12:36:44.569 | [12:36:44.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF58" started.
+12:36:44.569 | [12:36:44.569 DBG] Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerHandler AuthenticationScheme: Bearer was not authenticated.
+12:36:44.569 | [12:36:44.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets Connection id "0HNMIMN7OCF58" sending FIN because: "The Socket transport's send loop completed gracefully."
+12:36:44.569 | [12:36:44.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF58" disconnecting.
+12:36:44.569 | [12:36:44.569 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/live'
+12:36:44.569 | [12:36:44.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/ready, Response status code: 404
+12:36:44.569 | [12:36:44.569 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/ready'
+12:36:44.569 | [12:36:44.569 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:36:44.569 | [12:36:44.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF59" accepted.
+12:36:44.569 | [12:36:44.569 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF58" accepted.
+12:36:44.569 | [12:36:44.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/live - null null
+12:36:44.569 | [12:36:44.569 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/live'
+12:36:44.569 | [12:36:44.569 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/ready'
+12:36:44.569 | [12:36:44.569 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:36:44.569 | [12:36:44.569 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/ready - null null
+12:36:44.569 | [12:36:44.569 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:36:44.569 | [12:36:44.569 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/ready → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:36:44.570 | [12:36:44.570 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/live → 404 за 1 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:36:44.570 | [12:36:44.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/live - 404 0 null 1.4405ms
+12:36:44.570 | [12:36:44.570 DBG] Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets Connection id "0HNMIMN7OCF59" sending FIN because: "The Socket transport's send loop completed gracefully."
+12:36:44.570 | [12:36:44.570 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/live, Response status code: 404
+12:36:44.570 | [12:36:44.570 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF59" disconnecting.
+12:36:44.570 | [12:36:44.570 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF59" stopped.
+12:36:44.572 | [12:36:44.572 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF5A" stopped.
+12:36:44.572 | [12:36:44.572 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request finished HTTP/1.1 GET http://10.137.14.139:5000/health/ready - 404 0 null 0.3515ms
+12:36:44.572 | [12:36:44.572 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF5A" disconnecting.
+12:36:44.572 | [12:36:44.572 DBG] Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerHandler AuthenticationScheme: Bearer was not authenticated.
+12:36:44.572 | [12:36:44.572 INF] Serilog.AspNetCore.RequestLoggingMiddleware HTTP GET /health/ready → 404 за 0 мс  (scheme=http host=10.137.14.139:5000 pathBase=-)
+12:36:44.572 | [12:36:44.572 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://10.137.14.139:5000/health/ready, Response status code: 404
+12:36:44.572 | [12:36:44.572 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:36:44.572 | [12:36:44.572 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF5A" started.
+12:36:44.572 | [12:36:44.572 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/ready'
+12:36:44.572 | [12:36:44.572 DBG] Microsoft.AspNetCore.Server.Kestrel.Connections Connection id "0HNMIMN7OCF5A" accepted.
+12:36:44.572 | [12:36:44.572 DBG] Microsoft.AspNetCore.Routing.Matching.DfaMatcher No candidates found for the request path '/health/ready'
+12:36:44.572 | [12:36:44.572 INF] Microsoft.AspNetCore.Hosting.Diagnostics Request starting HTTP/1.1 GET http://10.137.14.139:5000/health/ready - null null
+12:36:44.572 | [12:36:44.572 DBG] Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware Request did not match any endpoints
+12:36:44.573 | [12:36:44.573 DBG] Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets Connection id "0HNMIMN7OCF5A" sending FIN because: "The Socket transport's send loop completed gracefully."
+12:36:44.580 | [12:36:44.580 INF] Microsoft.Hosting.Lifetime Application is shutting down...
+12:36:44.581 | [12:36:44.581 DBG] Microsoft.Extensions.Hosting.Internal.Host Hosting stopping
+12:36:44.590 | [12:36:44.590 DBG] Microsoft.Extensions.Hosting.Internal.Host Hosting stopped
+12:36:45.160 | [12:36:45.160 INF]  ════════════════════════════════════════════════════════════
+12:36:45.215 | [12:36:45.215 INF]  KiloImportService.Api запускается. PID=1 Machine=alfa-building-fm-import-94d79f8fc-xvrf2 .NET=10.0.9
+12:36:45.222 | [12:36:45.222 INF]  CWD=/app  ASPNETCORE_ENVIRONMENT=Test
+12:36:45.223 | [12:36:45.223 INF]  ════════════════════════════════════════════════════════════
+12:36:45.426 | [12:36:45.426 INF]  Incoming JWT auth ENABLED. Authority=http://identity:8080 Audience=visary
+12:36:45.517 | [12:36:45.517 INF]  PathBase активен: /api/ab-fm-import (все маршруты будут доступны под этим префиксом)
+12:36:45.735 | [12:36:45.735 DBG] Microsoft.EntityFrameworkCore.Infrastructure An 'IServiceProvider' was created for internal use by Entity Framework.
+12:36:45.798 | [12:36:45.798 INF]  Applying ImportServiceDb migrations (schema=import)…
+12:36:46.831 | [12:36:46.831 DBG] Microsoft.EntityFrameworkCore.Model The index {'ImportSessionId'} was not created on entity type 'ImportError' as the properties are already covered by the index {'ImportSessionId', 'Sheet', 'SourceRowNumber'}.
+12:36:46.832 | [12:36:46.832 DBG] Microsoft.EntityFrameworkCore.Model The index {'ImportSessionId'} was not created on entity type 'StagedRow' as the properties are already covered by the index {'ImportSessionId', 'Sheet', 'SourceRowNumber'}.
+12:36:46.832 | [12:36:46.832 DBG] Microsoft.EntityFrameworkCore.Model The index {'ImportSessionId'} was not created on entity type 'StagedRow' as the properties are already covered by the index {'ImportSessionId', 'Status'}.
+12:36:47.328 | [12:36:47.328 DBG] Microsoft.EntityFrameworkCore.Infrastructure Entity Framework Core 9.0.4 initialized 'ImportServiceDbContext' using provider 'Npgsql.EntityFrameworkCore.PostgreSQL:9.0.4+fd2380957bee5cd86f336466af36b08c0163f1a5' with options: MigrationsHistoryTable=import.__ef_migrations_history 
+12:36:47.405 | [12:36:47.405 DBG] Microsoft.EntityFrameworkCore.Database.Connection Creating DbConnection.
+12:36:47.439 | [12:36:47.439 DBG] Microsoft.EntityFrameworkCore.Database.Connection Created DbConnection. (32ms).
+12:36:47.444 | [12:36:47.444 DBG] Microsoft.EntityFrameworkCore.Database.Connection Opening connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+12:36:47.753 | [12:36:47.753 DBG] Microsoft.EntityFrameworkCore.Database.Connection Opened connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+12:36:47.795 | [12:36:47.795 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteReader'.
+12:36:47.802 | [12:36:47.802 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteReader' (42ms).
+12:36:47.803 | [12:36:47.803 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteReader' (47ms).
+12:36:47.810 | [12:36:47.810 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+12:36:47.845 | [12:36:47.845 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (35ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+12:36:47.937 | [12:36:47.937 DBG] Microsoft.EntityFrameworkCore.Database.Command Closing data reader to 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+12:36:47.996 | [12:36:47.996 DBG] Microsoft.EntityFrameworkCore.Database.Command A data reader for 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432' is being disposed after spending 97ms reading results.
+12:36:48.001 | [12:36:48.001 DBG] Microsoft.EntityFrameworkCore.Database.Connection Closing connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+12:36:48.006 | [12:36:48.006 DBG] Microsoft.EntityFrameworkCore.Database.Connection Closed connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432' (4ms).
+12:36:48.323 | [12:36:48.323 DBG] Microsoft.EntityFrameworkCore.Migrations Migrating using database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+12:36:48.327 | [12:36:48.327 DBG] Microsoft.EntityFrameworkCore.Database.Connection Opening connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+12:36:48.330 | [12:36:48.330 DBG] Microsoft.EntityFrameworkCore.Database.Connection Opening connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+12:36:48.403 | [12:36:48.403 DBG] Microsoft.EntityFrameworkCore.Database.Connection Opened connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+12:36:48.404 | [12:36:48.404 DBG] Microsoft.EntityFrameworkCore.Database.Connection Closing connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+12:36:48.410 | [12:36:48.410 DBG] Microsoft.EntityFrameworkCore.Database.Connection Closed connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432' (6ms).
+12:36:48.412 | [12:36:48.412 DBG] Microsoft.EntityFrameworkCore.Database.Connection Opening connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+12:36:48.412 | [12:36:48.412 DBG] Microsoft.EntityFrameworkCore.Database.Connection Opened connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+12:36:48.517 | [12:36:48.517 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+12:36:48.518 | [12:36:48.518 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+12:36:48.518 | [12:36:48.518 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+12:36:48.518 | [12:36:48.518 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+12:36:48.535 | [12:36:48.535 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (16ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+12:36:48.545 | [12:36:48.545 DBG] Microsoft.EntityFrameworkCore.Database.Transaction Beginning transaction with isolation level 'Unspecified'.
+12:36:48.549 | [12:36:48.549 DBG] Microsoft.EntityFrameworkCore.Database.Transaction Began transaction with isolation level 'ReadCommitted'.
+12:36:48.550 | [12:36:48.550 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+12:36:48.550 | [12:36:48.550 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+12:36:48.550 | [12:36:48.550 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+12:36:48.551 | [12:36:48.551 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+12:36:48.561 | [12:36:48.561 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (10ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+12:36:48.600 | [12:36:48.600 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteReader'.
+12:36:48.600 | [12:36:48.600 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteReader' (0ms).
+12:36:48.600 | [12:36:48.600 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteReader' (0ms).
+12:36:48.600 | [12:36:48.600 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+12:36:48.611 | [12:36:48.611 DBG] Microsoft.EntityFrameworkCore.Database.Command Closing data reader to 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+12:36:48.611 | [12:36:48.611 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (10ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+12:36:48.611 | [12:36:48.611 DBG] Microsoft.EntityFrameworkCore.Database.Command A data reader for 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432' is being disposed after spending 0ms reading results.
+12:36:48.617 | [12:36:48.617 INF] Microsoft.EntityFrameworkCore.Migrations No migrations were applied. The database is already up to date.
+12:36:48.620 | [12:36:48.620 DBG] Microsoft.EntityFrameworkCore.Database.Transaction Committing transaction.
+12:36:48.635 | [12:36:48.635 DBG] Microsoft.EntityFrameworkCore.Database.Transaction Committed transaction.
+12:36:48.640 | [12:36:48.640 DBG] Microsoft.EntityFrameworkCore.Database.Transaction Disposing transaction.
+12:36:48.641 | [12:36:48.641 DBG] Microsoft.EntityFrameworkCore.Database.Connection Closed connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432' (0ms).
+12:36:48.641 | [12:36:48.641 DBG] Microsoft.EntityFrameworkCore.Database.Connection Closing connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+12:36:48.644 | [12:36:48.644 INF]  Applying VisaryDb migrations (schema=Data)…
+12:36:48.742 | [12:36:48.742 DBG] Microsoft.EntityFrameworkCore.Infrastructure Entity Framework Core 9.0.4 initialized 'VisaryDbContext' using provider 'Npgsql.EntityFrameworkCore.PostgreSQL:9.0.4+fd2380957bee5cd86f336466af36b08c0163f1a5' with options: MigrationsHistoryTable=Data.__ef_migrations_history 
+12:36:48.746 | [12:36:48.746 DBG] Microsoft.EntityFrameworkCore.Database.Connection Opening connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+12:36:48.746 | [12:36:48.746 DBG] Microsoft.EntityFrameworkCore.Database.Connection Created DbConnection. (0ms).
+12:36:48.746 | [12:36:48.746 DBG] Microsoft.EntityFrameworkCore.Database.Connection Creating DbConnection.
+12:36:48.747 | [12:36:48.747 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteReader' (0ms).
+12:36:48.747 | [12:36:48.747 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteReader'.
+12:36:48.747 | [12:36:48.747 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteReader' (0ms).
+12:36:48.747 | [12:36:48.747 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+12:36:48.747 | [12:36:48.747 DBG] Microsoft.EntityFrameworkCore.Database.Connection Opened connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+12:36:48.757 | [12:36:48.757 DBG] Microsoft.EntityFrameworkCore.Database.Command Closing data reader to 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+12:36:48.757 | [12:36:48.757 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (10ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+12:36:48.758 | [12:36:48.758 DBG] Microsoft.EntityFrameworkCore.Database.Connection Closing connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+12:36:48.758 | [12:36:48.758 DBG] Microsoft.EntityFrameworkCore.Database.Connection Closed connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432' (0ms).
+12:36:48.758 | [12:36:48.758 DBG] Microsoft.EntityFrameworkCore.Database.Command A data reader for 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432' is being disposed after spending 0ms reading results.
+12:36:48.810 | [12:36:48.810 DBG] Microsoft.EntityFrameworkCore.Database.Connection Opening connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+12:36:48.810 | [12:36:48.810 DBG] Microsoft.EntityFrameworkCore.Migrations Migrating using database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+12:36:48.810 | [12:36:48.810 DBG] Microsoft.EntityFrameworkCore.Database.Connection Opening connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+12:36:48.866 | [12:36:48.866 DBG] Microsoft.EntityFrameworkCore.Database.Connection Opened connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+12:36:48.866 | [12:36:48.866 DBG] Microsoft.EntityFrameworkCore.Database.Connection Closing connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+12:36:48.867 | [12:36:48.867 DBG] Microsoft.EntityFrameworkCore.Database.Connection Opening connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+12:36:48.867 | [12:36:48.867 DBG] Microsoft.EntityFrameworkCore.Database.Connection Closed connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432' (0ms).
+12:36:48.867 | [12:36:48.867 DBG] Microsoft.EntityFrameworkCore.Database.Connection Opened connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+12:36:48.870 | [12:36:48.870 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+12:36:48.870 | [12:36:48.870 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+12:36:48.870 | [12:36:48.870 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+12:36:48.870 | [12:36:48.870 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+12:36:48.880 | [12:36:48.880 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (10ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+12:36:48.881 | [12:36:48.881 DBG] Microsoft.EntityFrameworkCore.Database.Transaction Beginning transaction with isolation level 'Unspecified'.
+12:36:48.882 | [12:36:48.882 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteNonQuery' (0ms).
+12:36:48.882 | [12:36:48.882 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteNonQuery' (0ms).
+12:36:48.882 | [12:36:48.882 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteNonQuery'.
+12:36:48.882 | [12:36:48.882 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+12:36:48.882 | [12:36:48.882 DBG] Microsoft.EntityFrameworkCore.Database.Transaction Began transaction with isolation level 'ReadCommitted'.
+12:36:48.891 | [12:36:48.891 DBG] Microsoft.EntityFrameworkCore.Database.Command Executing DbCommand [Parameters=[], CommandType='Text', CommandTimeout='30']
+12:36:48.891 | [12:36:48.891 DBG] Microsoft.EntityFrameworkCore.Database.Command Created DbCommand for 'ExecuteReader' (0ms).
+12:36:48.891 | [12:36:48.891 DBG] Microsoft.EntityFrameworkCore.Database.Command Creating DbCommand for 'ExecuteReader'.
+12:36:48.891 | [12:36:48.891 DBG] Microsoft.EntityFrameworkCore.Database.Command Initialized DbCommand for 'ExecuteReader' (0ms).
+12:36:48.891 | [12:36:48.891 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (9ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+12:36:48.901 | [12:36:48.901 DBG] Microsoft.EntityFrameworkCore.Database.Transaction Committing transaction.
+12:36:48.901 | [12:36:48.901 DBG] Microsoft.EntityFrameworkCore.Database.Command A data reader for 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432' is being disposed after spending 0ms reading results.
+12:36:48.901 | [12:36:48.901 DBG] Microsoft.EntityFrameworkCore.Database.Command Closing data reader to 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+12:36:48.901 | [12:36:48.901 INF] Microsoft.EntityFrameworkCore.Migrations No migrations were applied. The database is already up to date.
+12:36:48.901 | [12:36:48.901 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (9ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+12:36:48.912 | [12:36:48.912 DBG] Microsoft.EntityFrameworkCore.Database.Connection Closing connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+12:36:48.912 | [12:36:48.912 DBG] Microsoft.EntityFrameworkCore.Database.Connection Closed connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432' (0ms).
+12:36:48.912 | [12:36:48.912 DBG] Microsoft.EntityFrameworkCore.Database.Transaction Committed transaction.
+12:36:48.912 | [12:36:48.912 DBG] Microsoft.EntityFrameworkCore.Database.Transaction Disposing transaction.
+12:36:48.914 | [12:36:48.914 DBG] Microsoft.EntityFrameworkCore.Infrastructure 'VisaryDbContext' disposed.
+12:36:48.916 | [12:36:48.916 DBG] Microsoft.EntityFrameworkCore.Database.Connection Disposed connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432' (0ms).
+12:36:48.916 | [12:36:48.916 DBG] Microsoft.EntityFrameworkCore.Database.Connection Disposing connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+12:36:48.917 | [12:36:48.917 DBG] Microsoft.EntityFrameworkCore.Database.Connection Disposing connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432'.
+12:36:48.917 | [12:36:48.917 DBG] Microsoft.EntityFrameworkCore.Infrastructure 'ImportServiceDbContext' disposed.
+12:36:48.917 | [12:36:48.917 DBG] Microsoft.EntityFrameworkCore.Database.Connection Disposed connection to database 'ab_fm_import' on server 'tcp://ab-test-pg-1.ci28823727.cloud.alfaintra.net:5432' (0ms).
+12:36:48.952 | [12:36:48.952 DBG] Microsoft.AspNetCore.Mvc.ModelBinding.ModelBinderFactory Registered model binder providers, in the following order: ["Microsoft.AspNetCore.Mvc.ModelBinding.Binders.BinderTypeModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.ServicesModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.BodyModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.HeaderModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.FloatingPointTypeModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.EnumTypeModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.DateTimeModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.SimpleTypeModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.TryParseModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.CancellationTokenModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.ByteArrayModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.FormFileModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.FormCollectionModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.KeyValuePairModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.DictionaryModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.ArrayModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.CollectionModelBinderProvider", "Microsoft.AspNetCore.Mvc.ModelBinding.Binders.ComplexObjectModelBinderProvider"]
+12:36:49.115 | [12:36:49.115 DBG] Microsoft.AspNetCore.SignalR.Internal.DefaultHubProtocolResolver Registered SignalR Protocol: json, implemented by Microsoft.AspNetCore.SignalR.Protocol.JsonHubProtocol.
+12:36:49.202 | [12:36:49.202 INF]  │ PathBase    : /api/ab-fm-import
+12:36:49.202 | [12:36:49.202 INF]  │ DB conn-str : Database=ab_fm_import;Host=ab-test-pg-1.ci28823727.cloud.alfaintra.net;Port=5432;Username=ab_fm_import_user;Password=***;Application Name=ab-fm-import;Pooling=true
+12:36:49.202 | [12:36:49.202 INF]  │ JWT auth    : ENABLED
+12:36:49.202 | [12:36:49.202 INF]  └─────────────────────────────────────────────────────────────
+12:36:49.202 | [12:36:49.202 INF]  │ CORS        : https://localhost:44466
+12:36:49.202 | [12:36:49.202 INF]  │ URLs        : http://0.0.0.0:5000
+12:36:49.202 | [12:36:49.202 INF]  ┌── Конфигурация сервиса ─────────────────────────────────────
+12:36:49.202 | [12:36:49.202 INF]  │ Visary API  : http://webapi:8080/api
+12:36:49.202 | [12:36:49.202 INF]  │ Swagger     : ENABLED
+12:36:49.203 | [12:36:49.203 INF]  KiloImportService.Api готов принимать запросы на http://0.0.0.0:5000
+12:36:49.206 | [12:36:49.206 DBG] Microsoft.Extensions.Hosting.Internal.Host Hosting starting
+12:36:49.214 | [12:36:49.214 WRN] Microsoft.AspNetCore.DataProtection.KeyManagement.XmlKeyManager Neither user profile nor HKLM registry available. Using an ephemeral key repository. Protected data will be unavailable when application exits.
+12:36:49.214 | [12:36:49.214 WRN] Microsoft.AspNetCore.DataProtection.Repositories.EphemeralXmlRepository Using an in-memory repository. Keys will not be persisted to storage.
+12:36:49.225 | [12:36:49.225 DBG] Microsoft.AspNetCore.DataProtection.KeyManagement.KeyRingProvider Policy resolution states that a new key should be added to the key ring.
+12:36:49.225 | [12:36:49.225 DBG] Microsoft.AspNetCore.DataProtection.KeyManagement.DefaultKeyResolver Repository contains no viable default key. Caller should generate a key with immediate activation.
+12:36:49.228 | [12:36:49.228 INF] Microsoft.AspNetCore.DataProtection.KeyManagement.XmlKeyManager Creating key {9a936945-d800-4379-b8e9-561a3136b98b} with creation date 2026-06-25 12:36:49Z, activation date 2026-06-25 12:36:49Z, and expiration date 2026-09-23 12:36:49Z.
+12:36:49.234 | [12:36:49.234 DBG] Microsoft.AspNetCore.DataProtection.KeyManagement.XmlKeyManager Descriptor deserializer type for key {9a936945-d800-4379-b8e9-561a3136b98b} is 'Microsoft.AspNetCore.DataProtection.AuthenticatedEncryption.ConfigurationModel.AuthenticatedEncryptorDescriptorDeserializer, Microsoft.AspNetCore.DataProtection, Version=10.0.0.0, Culture=neutral, PublicKeyToken=adb9793829ddae60'.
+12:36:49.239 | [12:36:49.239 WRN] Microsoft.AspNetCore.DataProtection.KeyManagement.XmlKeyManager No XML encryptor configured. Key {9a936945-d800-4379-b8e9-561a3136b98b} may be persisted to storage in unencrypted form.
+12:36:49.239 | [12:36:49.239 DBG] Microsoft.AspNetCore.DataProtection.KeyManagement.XmlKeyManager No key escrow sink found. Not writing key {9a936945-d800-4379-b8e9-561a3136b98b} to escrow.
+12:36:49.239 | [12:36:49.239 DBG] Microsoft.AspNetCore.DataProtection.KeyManagement.XmlKeyManager Key cache expiration token triggered by 'CreateNewKey' operation.
+12:36:49.241 | [12:36:49.241 DBG] Microsoft.AspNetCore.DataProtection.KeyManagement.XmlKeyManager Found key {9a936945-d800-4379-b8e9-561a3136b98b}.
+12:36:49.245 | [12:36:49.245 DBG] Microsoft.AspNetCore.DataProtection.KeyManagement.DefaultKeyResolver Considering key {9a936945-d800-4379-b8e9-561a3136b98b} with expiration date 2026-09-23 12:36:49Z as default key.
+12:36:49.246 | [12:36:49.246 DBG] Microsoft.AspNetCore.DataProtection.AuthenticatedEncryption.ManagedAuthenticatedEncryptorFactory Using managed symmetric algorithm 'System.Security.Cryptography.Aes'.
+12:36:49.246 | [12:36:49.246 DBG] Microsoft.AspNetCore.DataProtection.AuthenticatedEncryption.ManagedAuthenticatedEncryptorFactory Using managed keyed hash algorithm 'System.Security.Cryptography.HMACSHA256'.
+12:36:49.248 | [12:36:49.248 DBG] Microsoft.AspNetCore.DataProtection.KeyManagement.KeyRingProvider Using key {9a936945-d800-4379-b8e9-561a3136b98b} as the default key.
+12:36:49.249 | [12:36:49.249 DBG] Microsoft.AspNetCore.DataProtection.Internal.DataProtectionHostedService Key ring with default key {9a936945-d800-4379-b8e9-561a3136b98b} was loaded during application startup.
+12:36:49.250 | [12:36:49.250 WRN] Microsoft.AspNetCore.Hosting.Diagnostics Overriding HTTP_PORTS '8080' and HTTPS_PORTS ''. Binding to values defined by URLS instead 'http://0.0.0.0:5000'.
+12:36:49.346 | [12:36:49.346 DBG] Microsoft.AspNetCore.HostFiltering.HostFilteringMiddleware Middleware configuration started with options: {AllowedHosts = *, AllowEmptyHosts = True, IncludeFailureMessage = True}
+12:36:49.348 | [12:36:49.348 DBG] Microsoft.AspNetCore.HostFiltering.HostFilteringMiddleware Wildcard detected, all requests with hosts will be allowed.
+12:36:49.408 | [12:36:49.408 INF] Microsoft.Hosting.Lifetime Hosting environment: Test
+12:36:49.408 | [12:36:49.408 INF] Microsoft.Hosting.Lifetime Now listening on: http://0.0.0.0:5000
+12:36:49.408 | [12:36:49.408 INF] Microsoft.Hosting.Lifetime Content root path: /app
+12:36:49.408 | [12:36:49.408 DBG] Microsoft.AspNetCore.Hosting.Diagnostics Loaded hosting startup assembly KiloImportService.Api
+12:36:49.408 | [12:36:49.408 INF] Microsoft.Hosting.Lifetime Application started. Press Ctrl+C to shut down.
+12:36:49.410 | [12:36:49.410 INF]      *      api/imports/export-pdf
+12:36:49.410 | [12:36:49.410 INF]      *      api/imports/{id:guid}
+12:36:49.410 | [12:36:49.410 INF]      *      api/imports/{id:guid}/cancel
+12:36:49.410 | [12:36:49.410 INF]      *      api/visary/cadastralareas/{id:int}
+12:36:49.410 | [12:36:49.410 INF]      *      api/visary/constructionprojects/{id:int}
+12:36:49.410 | [12:36:49.410 INF]      *      api/visary/constructionsiteindicatorvalues
+12:36:49.410 | [12:36:49.410 INF]      *      api/visary/constructionsiteindicatorvalues/{id:int}
+12:36:49.410 | [12:36:49.410 INF]      *      api/visary/constructionsiteindicators/{id:int}
+12:36:49.410 | [12:36:49.410 INF]      *      api/projects/sync
+12:36:49.410 | [12:36:49.410 INF]      *      api/visary/constructionsiteindicators
+12:36:49.410 | [12:36:49.410 INF]      *      /hubs/imports
+12:36:49.410 | [12:36:49.410 INF]      *      api/imports/{id:guid}/report
+12:36:49.410 | [12:36:49.410 INF]      *      api/imports/{id:guid}/apply
+12:36:49.410 | [12:36:49.410 INF]  Зарегистрировано 39 HTTP-маршрутов:
+12:36:49.410 | [12:36:49.410 INF]      *      api/import-types
+12:36:49.410 | [12:36:49.410 INF]      *      api/imports
+12:36:49.410 | [12:36:49.410 INF]      *      api/sites/sync/{id:int}
+12:36:49.410 | [12:36:49.410 INF]      *      api/visary/constructionsections
+12:36:49.410 | [12:36:49.410 INF]      *      /diag
+12:36:49.410 | [12:36:49.410 INF]      *      api/imports/{id:guid}/budget-xlsx
+12:36:49.410 | [12:36:49.410 INF]      *      api/visary/constructionprojects
+12:36:49.410 | [12:36:49.410 INF]      *      api/projects/search
+12:36:49.410 | [12:36:49.410 INF]      *      api/visary/constructionsections/{id:int}
+12:36:49.410 | [12:36:49.410 INF]      *      /hubs/imports/negotiate
+12:36:49.410 | [12:36:49.410 INF]      *      api/visary/cadastralareas
+12:36:49.411 | [12:36:49.411 INF]      *      health
+12:36:49.411 | [12:36:49.411 INF]      *      api/visary/{name}
+12:36:49.411 | [12:36:49.411 INF]      *      api/visary/deals
+12:36:49.411 | [12:36:49.411 INF]      *      api/visary/deals/{id:int}
+12:36:49.411 | [12:36:49.411 INF]      *      api/visary/shareagreements/{id:int}
+12:36:49.411 | [12:36:49.411 INF]      *      api/visary/percentbets/{id:int}
+12:36:49.411 | [12:36:49.411 INF]      *      api/visary/organizations/{id:int}
+12:36:49.411 | [12:36:49.411 INF]      *      api/visary/rooms
+12:36:49.411 | [12:36:49.411 INF]      *      api/visary/organizations
+12:36:49.411 | [12:36:49.411 INF]      *      api/visary/constructionsites/{id:int}
+12:36:49.411 | [12:36:49.411 INF]      *      api/visary/rooms/{id:int}
+12:36:49.411 | [12:36:49.411 INF]      *      api/visary/percentbets
+12:36:49.411 | [12:36:49.411 INF]      *      api/visary/shareagreements
+12:36:49.411 | [12:36:49.411 INF]      *      api/visary/constructionsites
+12:36:49.411 | [12:36:49.411 INF]      *      api/visary/{name}/{id:int}
+12:36:49.413 | [12:36:49.413 DBG] Microsoft.Extensions.Hosting.Internal.Host Hosting started
+99:99:99.999 |         CREATE SCHEMA import;
+99:99:99.999 | DO $EF$
+99:99:99.999 |     END IF;
+99:99:99.999 |     "MigrationId" character varying(150) NOT NULL,
+99:99:99.999 |     IF NOT EXISTS(SELECT 1 FROM pg_namespace WHERE nspname = 'import') THEN
+99:99:99.999 |     "ProductVersion" character varying(32) NOT NULL,
+99:99:99.999 | END $EF$;
+99:99:99.999 | BEGIN
+99:99:99.999 |     CONSTRAINT "PK___ef_migrations_history" PRIMARY KEY ("MigrationId")
+99:99:99.999 | FROM "Data".__ef_migrations_history
+99:99:99.999 | FROM import.__ef_migrations_history
+99:99:99.999 | FROM "Data".__ef_migrations_history
+99:99:99.999 | SELECT "MigrationId", "ProductVersion"
+99:99:99.999 | );
+99:99:99.999 | CREATE TABLE IF NOT EXISTS import.__ef_migrations_history (
+99:99:99.999 | SELECT "MigrationId", "ProductVersion"
+99:99:99.999 | ORDER BY "MigrationId";
+99:99:99.999 | END $EF$;
+99:99:99.999 | BEGIN
+99:99:99.999 | ORDER BY "MigrationId";
+99:99:99.999 | SELECT "MigrationId", "ProductVersion"
+99:99:99.999 | FROM import.__ef_migrations_history
+99:99:99.999 |     IF NOT EXISTS(SELECT 1 FROM pg_namespace WHERE nspname = 'import') THEN
+99:99:99.999 | LOCK TABLE import.__ef_migrations_history IN ACCESS EXCLUSIVE MODE
+99:99:99.999 | LOCK TABLE import.__ef_migrations_history IN ACCESS EXCLUSIVE MODE
+99:99:99.999 | CREATE TABLE IF NOT EXISTS import.__ef_migrations_history (
+99:99:99.999 |     END IF;
+99:99:99.999 |     CONSTRAINT "PK___ef_migrations_history" PRIMARY KEY ("MigrationId")
+99:99:99.999 |     "ProductVersion" character varying(32) NOT NULL,
+99:99:99.999 |     "MigrationId" character varying(150) NOT NULL,
+99:99:99.999 | );
+99:99:99.999 | ORDER BY "MigrationId";
+99:99:99.999 | SELECT "MigrationId", "ProductVersion"
+99:99:99.999 | DO $EF$
+99:99:99.999 |         CREATE SCHEMA import;
+99:99:99.999 | FROM import.__ef_migrations_history
+99:99:99.999 | );
+99:99:99.999 |     END IF;
+99:99:99.999 |     "ProductVersion" character varying(32) NOT NULL,
+99:99:99.999 | BEGIN
+99:99:99.999 |         CREATE SCHEMA "Data";
+99:99:99.999 | CREATE TABLE IF NOT EXISTS "Data".__ef_migrations_history (
+99:99:99.999 | END $EF$;
+99:99:99.999 |     IF NOT EXISTS(SELECT 1 FROM pg_namespace WHERE nspname = 'Data') THEN
+99:99:99.999 | DO $EF$
+99:99:99.999 | SELECT "MigrationId", "ProductVersion"
+99:99:99.999 | FROM "Data".__ef_migrations_history
+99:99:99.999 | ORDER BY "MigrationId";
+99:99:99.999 | FROM "Data".__ef_migrations_history
+99:99:99.999 | LOCK TABLE "Data".__ef_migrations_history IN ACCESS EXCLUSIVE MODE
+99:99:99.999 | LOCK TABLE "Data".__ef_migrations_history IN ACCESS EXCLUSIVE MODE
+99:99:99.999 |     CONSTRAINT "PK___ef_migrations_history" PRIMARY KEY ("MigrationId")
+99:99:99.999 | ORDER BY "MigrationId";
+99:99:99.999 | SELECT "MigrationId", "ProductVersion"
+99:99:99.999 |         CREATE SCHEMA "Data";
+99:99:99.999 | FROM import.__ef_migrations_history
+99:99:99.999 |     "ProductVersion" character varying(32) NOT NULL,
+99:99:99.999 | CREATE TABLE IF NOT EXISTS "Data".__ef_migrations_history (
+99:99:99.999 | SELECT "MigrationId", "ProductVersion"
+99:99:99.999 | ORDER BY "MigrationId";
+99:99:99.999 | SELECT "MigrationId", "ProductVersion"
+99:99:99.999 | ORDER BY "MigrationId";
+99:99:99.999 | ORDER BY "MigrationId";
+99:99:99.999 |     "MigrationId" character varying(150) NOT NULL,
+99:99:99.999 |     END IF;
+99:99:99.999 |     "MigrationId" character varying(150) NOT NULL,
+99:99:99.999 |     CONSTRAINT "PK___ef_migrations_history" PRIMARY KEY ("MigrationId")
+99:99:99.999 | );
+99:99:99.999 | BEGIN
+99:99:99.999 | DO $EF$
+99:99:99.999 | END $EF$;
+99:99:99.999 |     IF NOT EXISTS(SELECT 1 FROM pg_namespace WHERE nspname = 'Data') THEN

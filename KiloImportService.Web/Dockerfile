@@ -4,15 +4,22 @@
 # См. doc_project/129-build-time-config-for-corp-network.md.
 #
 # Stage'ы:
-#   • dev  — Vite dev-server (горячий reload). Используется docker-compose.
+#   • dev   — Vite dev-server (горячий reload). Используется docker-compose.
 #   • build — компиляция бандла `npm run build` → /app/dist (промежуточный).
-#   • prod — nginx, раздаёт /app/dist. Используется k8s (см. doc 130).
+#   • prod  — корп. base-образ `alfa-building-ui-base` (dotnet-сервер статики,
+#            non-root, слушает 8080, SPA-fallback из коробки). Используется k8s.
 # ════════════════════════════════════════════════════════════════════
 # Дефолты — корп. зеркало Альфы (эталонный путь, см. doc_project/132).
 # Для локальной сборки docker-compose передаёт NODE_IMAGE из .env с дефолтом
 # `node:20-alpine` (см. docker-compose.yml секция 7 / .env.example).
+#
+# ⚠️ `alfa-building-ui-base` — корп. base-образ Альфы для UI-сервисов
+# (см. эталон `visary-cloud/workflow/ui` и doc_project/132). Внутри —
+# dotnet-сервер для раздачи статики из /app/wwwroot, работает от non-root
+# пользователя без CAP_NET_BIND_SERVICE (порт 8080). За CVE-цикл базы
+# отвечает Альфа — apk-upgrade блока для nginx-Alpine здесь больше нет.
 ARG NODE_IMAGE=docker-hub.binary.alfabank.ru/library/node:20-alpine
-ARG NGINX_IMAGE=docker-hub.binary.alfabank.ru/library/nginx:1.27-alpine
+ARG UI_BASE_IMAGE=alfa-building-docker-releases.binary.alfabank.ru/alfa-building-ui-base:v0.0.8
 
 # ────────────── Dev stage (docker-compose, hot reload) ──────────────
 FROM ${NODE_IMAGE} AS dev
@@ -89,82 +96,39 @@ RUN rm -f package-lock.json && \
     fi && \
     npm install --legacy-peer-deps --no-audit --no-fund
 COPY . .
+
+# ─── Reverse-proxy base-path (см. doc 147) ───
+# Передаются из docker-compose / Jenkins build-arg → ENV → читаются Vite через `loadEnv`.
+# Дефолты пустые, чтобы локальная сборка работала как раньше.
+#   VITE_BASE_URL    — URL-префикс, где будет опубликована SPA (Vite `base` для ассетов).
+#                      Пример: `/api/ab-fm-import-web/` (заметь trailing slash для Vite).
+#   VITE_API_PREFIX  — URL-префикс backend-API (для apiUrl.ts). Без trailing slash.
+#                      Пример: `/api/ab-fm-import`.
+ARG VITE_BASE_URL=/
+ARG VITE_API_PREFIX=
+ENV VITE_BASE_URL=$VITE_BASE_URL
+ENV VITE_API_PREFIX=$VITE_API_PREFIX
+RUN echo "[Dockerfile build] VITE_BASE_URL=${VITE_BASE_URL} VITE_API_PREFIX=${VITE_API_PREFIX}"
+
 # `npm run build` = tsc -b && vite build → /app/dist
 RUN npm run build
 
-# ────────────── Prod stage (nginx раздаёт собранный bundle) ──────────────
-FROM ${NGINX_IMAGE} AS prod
-# ────────────── Security upgrade: уязвимые системные пакеты ──────────────
-# Закрывает CVE из appsec_v4 (см. doc 137 v1.4 — двух-зеркальный fallback).
-# Логика идентична API/Dockerfile runtime-stage:
-#   1) ALPINE_REPOSITORIES_URL (корп. зеркало Альфы) → apk update+upgrade.
-#   2) Fallback на штатный dl-cdn.alpinelinux.org с версия-specific path
-#      (берётся из /etc/alpine-release).
-#   3) Громкий баннер если оба зеркала упали (эталон не падает).
-#   4) Sanity-check `apk info -v` — финальные версии в лог сборки.
-# Подробности — в API/Dockerfile и doc 137 v1.4.
-ARG ALPINE_REPOSITORIES_URL=""
-RUN set -e; \
-    REPO_URL="${ALPINE_REPOSITORIES_URL:-}"; \
-    if [ -n "$REPO_URL" ]; then \
-        echo "${REPO_URL}/main"      >  /etc/apk/repositories; \
-        echo "${REPO_URL}/community" >> /etc/apk/repositories; \
-        echo "INFO: /etc/apk/repositories переписан на ${REPO_URL}"; \
-    fi; \
-    APK_PKGS="libcrypto3 libssl3 musl musl-utils zlib"; \
-    if apk update 2>&1 && apk upgrade --no-cache --available $APK_PKGS 2>&1; then \
-        echo "OK: appsec_v4 — Alpine system packages upgraded via primary mirror"; \
-    else \
-        echo "WARN: primary apk upgrade failed — попытка через штатный dl-cdn.alpinelinux.org"; \
-        ALPINE_VER=$(cut -d. -f1,2 /etc/alpine-release 2>/dev/null || echo "3.20"); \
-        echo "http://dl-cdn.alpinelinux.org/alpine/v${ALPINE_VER}/main"      >  /etc/apk/repositories; \
-        echo "http://dl-cdn.alpinelinux.org/alpine/v${ALPINE_VER}/community" >> /etc/apk/repositories; \
-        if apk update 2>&1 && apk upgrade --no-cache --available $APK_PKGS 2>&1; then \
-            echo "OK: appsec_v4 — Alpine system packages upgraded via dl-cdn fallback"; \
-        else \
-            echo ""; \
-            echo "############################################################"; \
-            echo "# WARNING: apk upgrade FAILED — оба Alpine-зеркала упали.   #"; \
-            echo "# Уязвимые системные пакеты ОСТАЮТСЯ в финальном образе:    #"; \
-            echo "#   libcrypto3 libssl3 musl musl-utils zlib                 #"; \
-            echo "# AppSec_v4 будет показывать те же CVE до устранения.       #"; \
-            echo "#                                                          #"; \
-            echo "# DevOps action — проверить:                                #"; \
-            echo "#  1. Outbound к binary.alfabank.ru/artifactory/...         #"; \
-            echo "#  2. Outbound к dl-cdn.alpinelinux.org (если разрешён)     #"; \
-            echo "#  3. ALPINE_REPOSITORIES_URL в jenkinsConfiguration.json  #"; \
-            echo "# См. doc_project/137 v1.4.                                 #"; \
-            echo "############################################################"; \
-            echo ""; \
-        fi; \
-    fi; \
-    echo "── Финальные версии Alpine-пакетов (для трассировки AppSec) ──"; \
-    apk info -v $APK_PKGS 2>&1 || true; \
-    echo "── Verify: libcrypto3 >= 3.5.7-r0 (CVE-2026-45447 PKCS#7 use-after-free, см. doc 137 v1.5) ──"; \
-    CRYPTO_VER=$(apk info -v libcrypto3 2>/dev/null | head -1 | sed -E 's/^libcrypto3-//'); \
-    MIN_VER="3.5.7-r0"; \
-    LOWER=$(printf '%s\n%s\n' "$CRYPTO_VER" "$MIN_VER" | sort -V | head -1); \
-    if [ "$LOWER" = "$MIN_VER" ]; then \
-        echo "OK: libcrypto3=$CRYPTO_VER >= $MIN_VER — CVE-2026-45447 закрыт"; \
-    else \
-        echo "############################################################"; \
-        echo "# WARNING: libcrypto3=$CRYPTO_VER < $MIN_VER"; \
-        echo "# CVE-2026-45447 (PKCS#7 use-after-free, потенц. RCE)       #"; \
-        echo "# ОСТАЁТСЯ в образе для libcrypto3 + libssl3.               #"; \
-        echo "# Apk upgrade сработал, но Alpine репо не содержит >=3.5.7. #"; \
-        echo "# DevOps action — Alpine-ветка корп. mirror устарела:       #"; \
-        echo "#  /etc/alpine-release: $(cat /etc/alpine-release)"; \
-        echo "#  Перепривязать latest-stable или поднять base-образ.       #"; \
-        echo "# См. doc_project/137 v1.5.                                 #"; \
-        echo "############################################################"; \
-    fi
-# Свой конфиг (SPA-fallback + security headers + кэширование). Перезаписывает
-# дефолтный server-блок из nginx:alpine — там listen 80, у нас listen 8080.
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-# Собранный bundle из build-stage.
-COPY --from=build /app/dist /usr/share/nginx/html
-# Non-root: nginx:alpine содержит пользователя `nginx` (uid 101) — переключаемся на него.
-# /var/cache/nginx, /var/run, /etc/nginx — уже writable для группы nginx в base-образе.
-USER nginx
+# ────────────── Prod stage (корп. alfa-building-ui-base, dotnet-сервер статики) ──────────────
+# Эталон Альфы для UI-сервисов (см. `visary-cloud/workflow/ui` и doc 132):
+# base-образ внутри содержит dotnet-сервер для раздачи статики, non-root user,
+# listen 8080, SPA-fallback. CVE-цикл базы — на стороне Альфы.
+#
+# Раньше здесь был nginx:alpine + ~100 строк apk-upgrade для libcrypto3/libssl3
+# и edge-fallback (см. doc 137 v1.6 / v1.7). Они больше не нужны — alfa-building-
+# ui-base поставляется уже обновлённым, а nginx требовал бы CAP_NET_BIND_SERVICE
+# при listen<1024 и доп. писать-маунты для /var/cache/nginx, /var/run, что
+# несовместимо с k8s securityContext platformPolicy Альфы (runAsNonRoot,
+# readOnlyRootFilesystem, drop ALL capabilities).
+FROM ${UI_BASE_IMAGE} AS prod
+# Собранный SPA-bundle кладём туда, где base-образ его ожидает.
+# `vite build` помещает `index.html` в корень `dist/`, после COPY получим
+# `/app/wwwroot/index.html` — это и есть entry-point SPA для dotnet-сервера.
+COPY --from=build /app/dist /app/wwwroot
 EXPOSE 8080
-# Стандартный entrypoint nginx-образа сам запустит nginx; CMD оставляем дефолтным.
+# ENTRYPOINT/CMD не переопределяем — alfa-building-ui-base сам запускает
+# dotnet-сервер при старте контейнера.

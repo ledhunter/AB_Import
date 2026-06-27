@@ -8,8 +8,9 @@ namespace KiloImportService.Api.Tests.VisaryLive;
 /// Источники в порядке приоритета:
 ///   1. env var <c>VISARY_TEST_TOKEN</c> / <c>VISARY_TEST_BASEURL</c>
 ///   2. <c>.audit/.token</c> в корне репозитория (используется audit-скриптом)
-///   3. корневой <c>.env</c> (поля <c>Visary__BearerToken</c> / <c>Visary__BaseUrl</c>) —
-///      тот же файл, что читают docker-compose, Vite и backend.
+///   3. корневой <c>.env</c> (поля <c>EndpointsConfiguration__VisaryApi__BearerToken</c> /
+///      <c>EndpointsConfiguration__VisaryApi__Endpoint</c>) — тот же файл, что читают
+///      docker-compose, Vite и backend (см. doc 145).
 ///
 /// Если токен не найден или истёк — все live-тесты пропускаются через
 /// <c>Skip.IfNot(...)</c>. Локально перед запуском обновите токен в корневом <c>.env</c>.
@@ -60,7 +61,7 @@ internal static class VisaryLiveTestConfig
     {
         var (baseUrl, token) = Resolve();
         if (string.IsNullOrWhiteSpace(token))
-            return "Live-тесты пропущены: токен не задан. Установите VISARY_TEST_TOKEN, или положите токен в .audit/.token, или в корневом .env (Visary__BearerToken).";
+            return "Live-тесты пропущены: токен не задан. Установите VISARY_TEST_TOKEN, или положите токен в .audit/.token, или в корневом .env (EndpointsConfiguration__VisaryApi__BearerToken).";
         if (!IsTokenLikelyAlive(token))
             return $"Live-тесты пропущены: токен истёк (BaseUrl={baseUrl}). Получите свежий из DevTools Visary.";
         return "OK";
@@ -83,8 +84,9 @@ internal static class VisaryLiveTestConfig
         return null;
     }
 
-    // Парсит корневой .env и достаёт Visary__* — те же ключи, что читает docker-compose
-    // и backend через DotEnvLoader. Single Source Of Truth для токена.
+    // Парсит корневой .env и достаёт EndpointsConfiguration__VisaryApi__* — те же ключи,
+    // что читает docker-compose и backend через DotEnvLoader. SSOT для токена.
+    // Имена приведены к эталону service-dev (см. doc 145).
     private static (string? BaseUrl, string? Token) ReadDotEnv()
     {
         var path = FindRepoFile(".env");
@@ -103,8 +105,8 @@ internal static class VisaryLiveTestConfig
                 var val = line[(eq + 1)..].Trim();
                 if (val.Length >= 2 && val[0] == '"' && val[^1] == '"') val = val[1..^1];
 
-                if (key == "Visary__BaseUrl")     baseUrl = val;
-                if (key == "Visary__BearerToken") token   = val;
+                if (key == "EndpointsConfiguration__VisaryApi__Endpoint")    baseUrl = val;
+                if (key == "EndpointsConfiguration__VisaryApi__BearerToken") token   = val;
             }
         }
         catch { return (null, null); }

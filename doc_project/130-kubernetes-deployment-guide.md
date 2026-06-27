@@ -1,5 +1,15 @@
 # ☸️ Запуск KiloImportService в Kubernetes — пошаговая инструкция
 
+> ⚠️ **С 2026-06-23 (doc 145, B1)** деплой использует **одну БД `ab_fm_import`**
+> с двумя схемами (`import` + `Data`), через единую connection-string
+> `ConnectionStrings__AbFmImport`. В платформе Альфы все хосты/пароли
+> приходят через **helm values** (`$(VAR)` в yaml). Старые init-скрипты
+> `db/visary/init/*.sql` удалены — схема `Data` создаётся EF-миграцией
+> `Migrations/Visary/InitialDataSchema`. Ниже разделы 5.1, 6.1 и далее
+> сохранены как историческая справка для случая ручного `kubectl apply`,
+> но **штатный путь — yaml-манифесты + helm values платформы** (см.
+> [doc 145](./145-helm-values-and-config-alignment.md)).
+
 ## 📋 Описание
 
 Практическое руководство, как развернуть сервис в кластере Kubernetes
@@ -574,7 +584,7 @@ spec:
 |-------|-----|------------------|
 | `dev` | Vite dev-server (порт 5173, hot reload) | `docker compose up` (compose явно указывает `target: dev`) |
 | `build` | Промежуточный: компилирует bundle через `npm ci && npm run build` → `/app/dist` | Не запускается напрямую |
-| `prod` | nginx:1.27-alpine, отдаёт `/app/dist` на порту 8080 | k8s (см. сборку выше) |
+| `prod` | nginx:1.29-alpine, отдаёт `/app/dist` на порту 8080 | k8s (см. сборку выше) |
 
 Прод-stage конфигурируется через [nginx.conf](../KiloImportService.Web/nginx.conf):
 SPA-fallback (все пути → `index.html`), security headers (X-Frame-Options,

@@ -1,10 +1,21 @@
 <!doctype html>
-<html lang="en">
+<html lang="ru">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <!-- favicon: путь относительный, чтобы корректно резолвиться под любым reverse-proxy
+         base-path (см. doc 147). Vite переписывает абсолютные пути по base, но
+         относительная ссылка (./) надёжнее для пограничных случаев `index.html`
+         в подкаталогах SPA-роутера. -->
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>kiloimportservice-web</title>
+    <title>AB.FM.Import — импорт данных в Visary</title>
+    <script>
+      // Pre-React boot-маркер: видно в DevTools-консоли даже если bundle вообще не
+      // загрузился (DNS/404/MIME-type ошибки). Если в консоли есть только эта строка
+      // и нет [ab-fm-import] SPA boot start — проблема между index.html и main.tsx:
+      // обычно неверный base/PathBase или CSP-блокировка модуля.
+      console.info('[ab-fm-import] index.html loaded. Ожидается загрузка main.tsx…');
+    </script>
   </head>
   <body>
     <div id="root"></div>

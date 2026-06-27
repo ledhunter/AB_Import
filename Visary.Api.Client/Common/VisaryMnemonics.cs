@@ -22,6 +22,16 @@ public static class VisaryMnemonics
     public const string FmModelVersion = "fmmodelversion";
     public const string InputData = "inputdata";
     /// <summary>
+    /// «Данные клиента» (<c>clientdata</c>) — поквартальная запись на объект
+    /// строительства × вид помещения. POST <c>/api/visary/crud/clientdata</c>;
+    /// одна запись на каждый непустой (Quarter × RoomKind) из листа «Общий график»
+    /// второго файла Финмодели. В payload — стоимость 1 кв.м (<c>Cost</c>/<c>{Prefix}Cost</c>)
+    /// и площадь 1 кв.м (<c>Rates</c>/<c>{Prefix}Rates</c>) для конкретного вида помещения
+    /// (Residential/Nonresidential/Othernonresidential/Parking).
+    /// См. doc_project/150-finmodel-clientdata.md.
+    /// </summary>
+    public const string ClientData = "clientdata";
+    /// <summary>
     /// Справочник «Код фин. модели» (<c>fmcode</c>) — содержит ID/Code/Title и
     /// классификацию (Group=Доходы/Расходы, Sign=±1, Method, Priority …). Используется
     /// как <see cref="Dto.InputDataCreateRequest.Code"/> в <c>inputdata</c>.

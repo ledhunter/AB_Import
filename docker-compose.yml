@@ -1,5 +1,5 @@
 # ════════════════════════════════════════════════════════════════════
-# KiloImportService — локальная dev-стенд (frontend + backend + 2×Postgres)
+# KiloImportService — локальный dev-стенд (frontend + backend + 1×Postgres)
 # ════════════════════════════════════════════════════════════════════
 #
 #  Запуск:    docker compose up -d
@@ -10,57 +10,41 @@
 #  URL'ы:
 #    UI:        http://localhost:5173
 #    Backend:   http://localhost:5000  (Swagger: /swagger)
-#    Postgres service-db: localhost:5433  (db: import_service_db)
-#    Postgres visary-db:  localhost:5434  (db: visary_webapi_db)
+#    Postgres:  localhost:5433  (db: ab_fm_import, две схемы: import + Data)
+#
+# Архитектура (см. doc 145 — вариант B1):
+#   • Одна физическая БД `ab_fm_import` — одна connection-string
+#     `ConnectionStrings__AbFmImport`.
+#   • Внутри БД две схемы: `import` (служебные таблицы, миграции
+#     ImportServiceDbContext) и `Data` (mirror справочников Visary,
+#     миграции VisaryDbContext / Initial_DataSchema).
+#   • Старые init-скрипты `db/visary/init/*.sql` удалены — схему Data
+#     создаёт EF-миграция при первом запуске backend.
+#   • Имена секций конфига — эталон service-dev (см. doc 132):
+#     EndpointsConfiguration:VisaryApi/VisaryAuthApi, JwtConfiguration,
+#     Features:Swagger/RequireJwt, Cors (строка).
 # ════════════════════════════════════════════════════════════════════
 
 name: kilo-import
 
 services:
-  # ──────────────────────────── PostgreSQL: служебная БД сервиса ────────────────────────────
-  postgres-service:
-    # Параметризация для корп. контура (см. doc_project/129). Дефолт — публичный docker.io.
+  # ──────────────────────────── PostgreSQL: единая БД сервиса ────────────────────────────
+  postgres:
+    # Параметризация для корп. контура (см. doc 129). Дефолт — публичный docker.io.
     image: ${POSTGRES_IMAGE:-postgres:16-alpine}
-    container_name: kilo-import-pg-service
+    container_name: kilo-import-pg
     restart: unless-stopped
     environment:
-      POSTGRES_DB: import_service_db
-      POSTGRES_USER: ${IMPORT_SERVICE_DB_USER:?IMPORT_SERVICE_DB_USER не задан — скопируй .env.example → .env (см. doc_project/121)}
-      POSTGRES_PASSWORD: ${IMPORT_SERVICE_DB_PASSWORD:?IMPORT_SERVICE_DB_PASSWORD не задан — скопируй .env.example → .env}
+      POSTGRES_DB: ab_fm_import
+      POSTGRES_USER: ${ABFMI_DB_USER:?ABFMI_DB_USER не задан — скопируй .env.example → .env (см. doc 145)}
+      POSTGRES_PASSWORD: ${ABFMI_DB_USER_PASSWORD:?ABFMI_DB_USER_PASSWORD не задан — скопируй .env.example → .env}
       PGDATA: /var/lib/postgresql/data/pgdata
     ports:
       - "5433:5432"
     volumes:
-      - pg-service-data:/var/lib/postgresql/data
+      - pg-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d import_service_db"]
-      interval: 5s
-      timeout: 3s
-      retries: 20
-    networks:
-      - kilo-net
-
-  # ──────────────────────────── PostgreSQL: целевая БД (срез Visary) ────────────────────────
-  postgres-visary:
-    image: ${POSTGRES_IMAGE:-postgres:16-alpine}
-    container_name: kilo-import-pg-visary
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: visary_webapi_db
-      POSTGRES_USER: ${VISARY_DB_USER:?VISARY_DB_USER не задан — скопируй .env.example → .env (см. doc_project/121)}
-      POSTGRES_PASSWORD: ${VISARY_DB_PASSWORD:?VISARY_DB_PASSWORD не задан — скопируй .env.example → .env}
-      PGDATA: /var/lib/postgresql/data/pgdata
-    ports:
-      - "5434:5432"
-    volumes:
-      - pg-visary-data:/var/lib/postgresql/data
-      # Init-скрипты выполняются один раз при создании БД (по алфавиту):
-      #   01-schema.sql       — CREATE TABLE/FK (66 таблиц из CSV)
-      #   02-missing-roots.sql — ConstructionProject/Site + 30 FK
-      #   03-seed-data.sql    — справочники (User, RoomKind, тестовый проект)
-      - ./db/visary/init:/docker-entrypoint-initdb.d:ro
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d visary_webapi_db"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d ab_fm_import"]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -72,61 +56,59 @@ services:
     build:
       context: .
       dockerfile: KiloImportService.Api/Dockerfile
-      # Build-args для корп. контура (см. doc_project/129). Дефолты — публичные хосты,
+      # Build-args для корп. контура (см. doc 129). Дефолты — публичные хосты,
       # сборка работает «из коробки». В закрытом контуре задать переменные в .env.
       args:
-        DOTNET_SDK_IMAGE: ${DOTNET_SDK_IMAGE:-mcr.microsoft.com/dotnet/sdk:10.0-preview-alpine}
-        DOTNET_ASPNET_IMAGE: ${DOTNET_ASPNET_IMAGE:-mcr.microsoft.com/dotnet/aspnet:10.0-preview-alpine}
-        # NUGET_FEED_URL опц.: пусто → берётся BinaryNuGetMirror из nuget.config (эталон).
-        # Для локальной сборки задаём nuget.org через override.
+        # ⚠️ Тег `10.0-alpine` (GA), НЕ `10.0-preview-alpine` — Microsoft пересобирает
+        # только GA-тег при security-update'ах Alpine (см. doc 137 v1.6 / doc 143).
+        DOTNET_SDK_IMAGE: ${DOTNET_SDK_IMAGE:-mcr.microsoft.com/dotnet/sdk:10.0-alpine}
+        DOTNET_ASPNET_IMAGE: ${DOTNET_ASPNET_IMAGE:-mcr.microsoft.com/dotnet/aspnet:10.0-alpine}
         NUGET_FEED_URL: ${NUGET_FEED_URL:-https://api.nuget.org/v3/index.json}
-        # ALPINE_REPOSITORIES_URL — полный base URL Alpine-репо для apk upgrade
-        # в runtime-stage (закрытие appsec_v4 CVE, см. doc 137 v1.3).
-        # Корп. mirror Альфы:
-        #   https://binary.alfabank.ru/artifactory/alpine-mirror/latest-stable
-        # Пустой дефолт → НЕ трогаем /etc/apk/repositories; используется штатный
-        # `dl-cdn.alpinelinux.org/alpine/v3.XX/...` из base-образа (compose-локаль
-        # с outbound доступом к интернету — работает «из коробки»). В Jenkins —
-        # передаётся через jenkinsConfiguration.json -> dockerBuildArgs.
         ALPINE_REPOSITORIES_URL: ${ALPINE_REPOSITORIES_URL:-}
+        ALPINE_OPENSSL_EDGE_FALLBACK: ${ALPINE_OPENSSL_EDGE_FALLBACK:-false}
+        ALPINE_EDGE_REPO_URL: ${ALPINE_EDGE_REPO_URL:-https://dl-cdn.alpinelinux.org/alpine/edge/main}
     container_name: kilo-import-backend
     restart: unless-stopped
     environment:
       ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
       ASPNETCORE_URLS: http://+:5000
-      # Connection strings: для dev строятся из частей IMPORT_SERVICE_DB_*/VISARY_DB_*
-      # (docker-compose postgres-контейнеры). Для prod с managed-PostgreSQL — задать
-      # ConnectionStrings__ServiceDb / ConnectionStrings__VisaryDb целиком в .env,
-      # и они перекроют построенные. См. doc_project/122-environment-config.md.
-      ConnectionStrings__ServiceDb: ${ConnectionStrings__ServiceDb:-Host=postgres-service;Port=5432;Database=import_service_db;Username=${IMPORT_SERVICE_DB_USER};Password=${IMPORT_SERVICE_DB_PASSWORD}}
-      ConnectionStrings__VisaryDb: ${ConnectionStrings__VisaryDb:-Host=postgres-visary;Port=5432;Database=visary_webapi_db;Username=${VISARY_DB_USER};Password=${VISARY_DB_PASSWORD}}
+      # ─── ConnectionStrings (эталон, см. doc 145) ───
+      # Одна БД `ab_fm_import` под обе схемы (import + Data). В prod / preprod —
+      # managed-PG, задаётся `ConnectionStrings__AbFmImport` целиком из Vault.
+      ConnectionStrings__AbFmImport: ${ConnectionStrings__AbFmImport:-Host=postgres;Port=5432;Database=ab_fm_import;Username=${ABFMI_DB_USER};Password=${ABFMI_DB_USER_PASSWORD};Application Name=kilo-import-api;Pooling=true}
+      # ─── Прочие секции (эталон) ───
       ImportStorage__Path: /var/lib/import-files
-      # CORS: публичный URL UI per-среда (см. .env: UI_PUBLIC_URL)
-      Cors__AllowedOrigins__0: ${UI_PUBLIC_URL:?UI_PUBLIC_URL не задан — скопируй .env.example → .env (см. doc_project/122)}
+      # Cors: origin UI per-среда. Эталон держит как одну строку (см. doc 145).
+      # Несколько origin'ов — через запятую (поддерживается в Program.cs).
+      Cors: ${UI_PUBLIC_URL:?UI_PUBLIC_URL не задан — скопируй .env.example → .env (см. doc 122)}
       # Visary API (per-среда). SSOT — VISARY_BASE_URL в .env.
       # Deny-by-default: без значения сервис не стартует, чтобы хост test-стенда
       # не уехал случайно в prod.
-      Visary__BaseUrl: ${VISARY_BASE_URL:?VISARY_BASE_URL не задан — скопируй .env.example → .env (см. doc_project/122)}
-      Visary__BearerToken: ${Visary__BearerToken:-}
-      Visary__Auth__TokenEndpoint: ${Visary__Auth__TokenEndpoint:-}
-      Visary__Auth__ClientId: ${Visary__Auth__ClientId:-visary-ui}
+      EndpointsConfiguration__VisaryApi__Endpoint: ${VISARY_BASE_URL:?VISARY_BASE_URL не задан — скопируй .env.example → .env (см. doc 122)}
+      EndpointsConfiguration__VisaryApi__BearerToken: ${EndpointsConfiguration__VisaryApi__BearerToken:-}
+      # OIDC refresh-flow (если задан TokenEndpoint, см. doc 107)
+      EndpointsConfiguration__VisaryAuthApi__TokenEndpoint: ${EndpointsConfiguration__VisaryAuthApi__TokenEndpoint:-}
+      EndpointsConfiguration__VisaryAuthApi__ClientId: ${EndpointsConfiguration__VisaryAuthApi__ClientId:-visary-ui}
       VISARY_AUTH_REFRESH_TOKEN: ${VISARY_AUTH_REFRESH_TOKEN:-}
-      # JWT-валидация ВХОДЯЩИХ запросов (опц., см. doc 111). Пусто = выключено.
-      Auth__Authority: ${Auth__Authority:-}
-      Auth__Audience: ${Auth__Audience:-kilo-import-api}
-      Auth__RequireHttpsMetadata: ${Auth__RequireHttpsMetadata:-true}
+      # JWT-валидация ВХОДЯЩИХ запросов (см. doc 111).
+      # `Features:RequireJwt=true` + `JwtConfiguration:Authority` — основной триггер.
+      # Пусто/false = выключено (legacy/dev).
+      Features__Swagger: ${Features__Swagger:-false}
+      Features__RequireJwt: ${Features__RequireJwt:-false}
+      # Reverse-proxy base-path (см. doc 147). Пусто = маршруты от корня '/'
+      # (локалка). На стенде задаётся `Features__PathBase=/api/ab-fm-import`
+      # через helm values.
+      Features__PathBase: ${Features__PathBase:-}
+      JwtConfiguration__Authority: ${JwtConfiguration__Authority:-}
+      JwtConfiguration__Audience: ${JwtConfiguration__Audience:-kilo-import-api}
+      JwtConfiguration__UseSsl: ${JwtConfiguration__UseSsl:-true}
     ports:
       - "5000:5000"
     volumes:
       - import-files:/var/lib/import-files
     depends_on:
-      postgres-service:
+      postgres:
         condition: service_healthy
-      postgres-visary:
-        condition: service_healthy
-    # wget (а не curl) — curl не входит в base aspnet:alpine, а apk add его не ставит
-    # (нет корп. Alpine-зеркала, см. doc 132). wget — из busybox, всегда есть.
-    # На k8s этот healthcheck не используется — там httpGet probes (см. doc 130).
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:5000/health"]
       interval: 10s
@@ -141,34 +123,26 @@ services:
     build:
       context: ./KiloImportService.Web
       dockerfile: Dockerfile
-      # Локальный compose — dev-стенд с hot-reload (Vite на :5173).
-      # Для k8s/prod собирается отдельным `docker build --target prod` (nginx, см. doc 130).
       target: dev
       args:
         NODE_IMAGE: ${NODE_IMAGE:-node:20-alpine}
-        # Локально по умолчанию — публичный npmjs.org (быстрее, полный набор).
-        # В корп. контуре передаётся через .env: virtual репо Артифактори Альфы
-        # `https://binary.alfabank.ru/artifactory/api/npm/npm/` (содержит alfalab-internal
-        # пакеты `@alfalab/*` + публичные через proxy; путь `/api/npm/<repo>/` —
-        # обязательный, без него Артифактори отдаёт 406 Not Acceptable npm-клиенту).
         NPM_REGISTRY_URL: ${NPM_REGISTRY_URL:-https://registry.npmjs.org}
         NPM_REGISTRY_ALFALAB_URL: ${NPM_REGISTRY_ALFALAB_URL:-https://registry.npmjs.org/}
-        # ALPINE_MIRROR — legacy host для sed в dev/build стейджах (no-op на дефолте,
-        # apk там не вызывается). Оставлен для совместимости с doc 129.
         ALPINE_MIRROR: ${ALPINE_MIRROR:-dl-cdn.alpinelinux.org}
-        # ALPINE_REPOSITORIES_URL — для apk upgrade в prod-stage (target=prod).
-        # compose локально использует target=dev — ARG проходит, но не применяется
-        # (warning «ARG not used»). При `docker build --target prod` локально —
-        # уязвимости тоже закроются, если URL задан. См. doc 137 v1.3.
         ALPINE_REPOSITORIES_URL: ${ALPINE_REPOSITORIES_URL:-}
+        ALPINE_OPENSSL_EDGE_FALLBACK: ${ALPINE_OPENSSL_EDGE_FALLBACK:-false}
+        ALPINE_EDGE_REPO_URL: ${ALPINE_EDGE_REPO_URL:-https://dl-cdn.alpinelinux.org/alpine/edge/main}
+        # Reverse-proxy base-path (см. doc 147). Используется только prod-stage
+        # (`vite build`). В compose `target: dev` сборка не вызывается — ARG'и
+        # игнорируются, но прокидываем «впрок», чтобы локальный build target=prod
+        # (`docker compose build --build-arg=...`) подхватывал env из .env.
+        VITE_BASE_URL: ${VITE_BASE_URL:-/}
+        VITE_API_PREFIX: ${VITE_API_PREFIX:-}
     container_name: kilo-import-frontend
     restart: unless-stopped
     environment:
-      # Vite proxy при dev-сборке; в prod-bundle Vite не работает — запросы
-      # идут на same-origin /api/visary/* через nginx/backend.
       VITE_BACKEND_URL: http://backend:5000
-      # Маппинг SSOT VISARY_BASE_URL → VITE_VISARY_API_URL. Один источник для backend+frontend.
-      VITE_VISARY_API_URL: ${VISARY_BASE_URL:?VISARY_BASE_URL не задан — скопируй .env.example → .env (см. doc_project/122)}
+      VITE_VISARY_API_URL: ${VISARY_BASE_URL:?VISARY_BASE_URL не задан — скопируй .env.example → .env (см. doc 122)}
       VITE_VISARY_API_TOKEN: ${VITE_VISARY_API_TOKEN:-}
     ports:
       - "5173:5173"
@@ -179,10 +153,8 @@ services:
 
 # ──────────────────────────── Persistence ────────────────────────────────────
 volumes:
-  pg-service-data:
-    name: kilo-import_pg-service-data
-  pg-visary-data:
-    name: kilo-import_pg-visary-data
+  pg-data:
+    name: kilo-import_pg-data
   import-files:
     name: kilo-import_import-files
 

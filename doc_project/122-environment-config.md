@@ -1,5 +1,14 @@
 # 🌍 Конфигурация сред (test / preprod / prod)
 
+> ⚠️ **С 2026-06-23 (doc 145, вариант B1)** имена секций конфига приведены к
+> эталону `service-dev`: `EndpointsConfiguration:VisaryApi/VisaryAuthApi`,
+> `JwtConfiguration:{Authority,Audience,UseSsl,Secret}`,
+> `Features:{Swagger,RequireJwt}`, `Cors` (одна строка),
+> `ConnectionStrings:AbFmImport` (одна БД, две схемы `import` + `Data`).
+> В этом документе ниже встречаются **старые** имена (`Visary:BaseUrl`,
+> `Auth:Authority`, `ConnectionStrings:ServiceDb/VisaryDb`) — см. таблицу
+> маппинга в [doc 145](./145-helm-values-and-config-alignment.md#маппинг-старое--новое).
+
 ## 📋 Описание
 
 Один артефакт сборки — `KiloImportService.Api` + `KiloImportService.Web` — должен уметь развёртываться на трёх контурах Visary:

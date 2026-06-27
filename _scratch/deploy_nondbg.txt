@@ -1,0 +1,560 @@
+﻿06:46:53.667 | [06:46:53.667 INF]  ════════════════════════════════════════════════════════════
+06:46:53.731 | [06:46:53.731 INF]  KiloImportService.Api запускается. PID=1 Machine=alfa-building-fm-import-84946b76cb-k9xt9 .NET=10.0.9
+06:46:53.753 | [06:46:53.753 INF]  ════════════════════════════════════════════════════════════
+06:46:53.753 | [06:46:53.753 INF]  CWD=/app  ASPNETCORE_ENVIRONMENT=Test
+06:46:53.929 | [06:46:53.929 INF]  Incoming JWT auth ENABLED. Authority=http://identity:8080 Audience=visary
+06:46:53.983 | [06:46:53.983 INF]  PathBase НЕ задан (Features:PathBase пусто) — маршруты обслуживаются от корня '/'
+06:46:54.271 | [06:46:54.271 INF]  Applying ImportServiceDb migrations (schema=import)…
+06:46:56.342 | [06:46:56.342 ERR] Microsoft.EntityFrameworkCore.Database.Command Failed executing DbCommand (87ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:56.936 | [06:46:56.936 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (65ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:56.964 | [06:46:56.964 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:56.978 | [06:46:56.978 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (12ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:56.990 | [06:46:56.990 INF] Microsoft.EntityFrameworkCore.Migrations Applying migration '20260429084812_Initial'.
+06:46:57.045 | [06:46:57.045 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.059 | [06:46:57.059 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (14ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.080 | [06:46:57.080 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (20ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.093 | [06:46:57.093 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (13ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.106 | [06:46:57.106 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (13ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.120 | [06:46:57.120 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (13ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.131 | [06:46:57.131 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.143 | [06:46:57.143 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.154 | [06:46:57.154 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.166 | [06:46:57.166 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.177 | [06:46:57.177 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.189 | [06:46:57.189 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (12ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.201 | [06:46:57.201 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (12ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.212 | [06:46:57.212 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.224 | [06:46:57.224 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.224 | [06:46:57.224 INF] Microsoft.EntityFrameworkCore.Migrations Applying migration '20260429170000_AddCachedProjects'.
+06:46:57.244 | [06:46:57.244 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (12ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.256 | [06:46:57.256 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (12ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.267 | [06:46:57.267 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.278 | [06:46:57.278 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.278 | [06:46:57.278 INF] Microsoft.EntityFrameworkCore.Migrations Applying migration '20260430213808_RemoveFileSha256Constraint'.
+06:46:57.304 | [06:46:57.304 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (18ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.315 | [06:46:57.315 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.327 | [06:46:57.327 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.338 | [06:46:57.338 INF] Microsoft.EntityFrameworkCore.Migrations Applying migration '20260512095902_AddSheetToStagedRowAndError'.
+06:46:57.338 | [06:46:57.338 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.356 | [06:46:57.356 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.367 | [06:46:57.367 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.381 | [06:46:57.381 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (14ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.393 | [06:46:57.393 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.405 | [06:46:57.405 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (12ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.417 | [06:46:57.417 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (12ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.428 | [06:46:57.428 INF] Microsoft.EntityFrameworkCore.Migrations Applying migration '20260518085520_AddActionsToStagedRow'.
+06:46:57.428 | [06:46:57.428 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.445 | [06:46:57.445 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.457 | [06:46:57.457 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.457 | [06:46:57.457 INF] Microsoft.EntityFrameworkCore.Migrations Applying migration '20260520072742_AddRoomApplySnapshots'.
+06:46:57.480 | [06:46:57.480 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (14ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.492 | [06:46:57.492 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (12ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.503 | [06:46:57.503 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (12ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.515 | [06:46:57.515 INF] Microsoft.EntityFrameworkCore.Migrations Applying migration '20260525115407_AddSecondaryFileToSnapshot'.
+06:46:57.515 | [06:46:57.515 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.534 | [06:46:57.534 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.545 | [06:46:57.545 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.556 | [06:46:57.556 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.567 | [06:46:57.567 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.599 | [06:46:57.599 INF]  Applying VisaryDb migrations (schema=Data)…
+06:46:57.731 | [06:46:57.731 ERR] Microsoft.EntityFrameworkCore.Database.Command Failed executing DbCommand (12ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.839 | [06:46:57.839 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (14ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.852 | [06:46:57.852 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.864 | [06:46:57.864 INF] Microsoft.EntityFrameworkCore.Migrations Applying migration '20260623053617_InitialDataSchema'.
+06:46:57.864 | [06:46:57.864 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.887 | [06:46:57.887 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.901 | [06:46:57.901 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (13ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.913 | [06:46:57.913 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (13ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.926 | [06:46:57.926 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (13ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.940 | [06:46:57.940 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (13ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:57.951 | [06:46:57.951 INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+06:46:58.183 | [06:46:58.183 INF]  ┌── Конфигурация сервиса ─────────────────────────────────────
+06:46:58.184 | [06:46:58.184 INF]  │ JWT auth    : ENABLED
+06:46:58.184 | [06:46:58.184 INF]  │ Swagger     : ENABLED
+06:46:58.184 | [06:46:58.184 INF]  │ Visary API  : http://webapi:8080/api
+06:46:58.184 | [06:46:58.184 INF]  │ PathBase    : (не задан)
+06:46:58.184 | [06:46:58.184 INF]  │ URLs        : http://0.0.0.0:5000
+06:46:58.184 | [06:46:58.184 INF]  │ CORS        : $(UI_PUBLIC_URL)
+06:46:58.184 | [06:46:58.184 INF]  └─────────────────────────────────────────────────────────────
+06:46:58.184 | [06:46:58.184 INF]  │ DB conn-str : Database=ab_fm_import;Host=ab-test-pg-1.ci28823727.cloud.alfaintra.net;Port=5432;Username=ab_fm_import_user;Password=***;Application Name=ab-fm-import;Pooling=true
+06:46:58.185 | [06:46:58.185 INF]  KiloImportService.Api готов принимать запросы на http://0.0.0.0:5000
+06:46:58.185 | [06:46:58.185 INF]  Зарегистрировано 0 HTTP-маршрутов:
+06:46:58.195 | [06:46:58.195 WRN] Microsoft.AspNetCore.DataProtection.Repositories.EphemeralXmlRepository Using an in-memory repository. Keys will not be persisted to storage.
+06:46:58.196 | [06:46:58.196 WRN] Microsoft.AspNetCore.DataProtection.KeyManagement.XmlKeyManager Neither user profile nor HKLM registry available. Using an ephemeral key repository. Protected data will be unavailable when application exits.
+06:46:58.262 | [06:46:58.262 INF] Microsoft.AspNetCore.DataProtection.KeyManagement.XmlKeyManager Creating key {bf4df4de-c595-4c72-b5a9-ce78e0cbb5fe} with creation date 2026-06-25 06:46:58Z, activation date 2026-06-25 06:46:58Z, and expiration date 2026-09-23 06:46:58Z.
+06:46:58.270 | [06:46:58.270 WRN] Microsoft.AspNetCore.DataProtection.KeyManagement.XmlKeyManager No XML encryptor configured. Key {bf4df4de-c595-4c72-b5a9-ce78e0cbb5fe} may be persisted to storage in unencrypted form.
+06:46:58.281 | [06:46:58.281 WRN] Microsoft.AspNetCore.Hosting.Diagnostics Overriding HTTP_PORTS '8080' and HTTPS_PORTS ''. Binding to values defined by URLS instead 'http://0.0.0.0:5000'.
+06:46:58.389 | [06:46:58.389 INF] Microsoft.Hosting.Lifetime Now listening on: http://0.0.0.0:5000
+06:46:58.390 | [06:46:58.390 INF] Microsoft.Hosting.Lifetime Content root path: /app
+06:46:58.390 | [06:46:58.390 INF] Microsoft.Hosting.Lifetime Hosting environment: Test
+06:46:58.390 | [06:46:58.390 INF] Microsoft.Hosting.Lifetime Application started. Press Ctrl+C to shut down.
+99:99:99.999 |     "ShareAgreementNumber" character varying(255),
+99:99:99.999 |     "MappedSnapshot" jsonb NOT NULL,
+99:99:99.999 |     "RoomNumber" character varying(255) NOT NULL,
+99:99:99.999 |     "LastAppliedSessionId" uuid NOT NULL,
+99:99:99.999 |     "VisaryShareAgreementId" integer,
+99:99:99.999 |     "MappedHash" character varying(64) NOT NULL,
+99:99:99.999 |     "Sheet" character varying(255) NOT NULL,
+99:99:99.999 |     "BuildingSection" character varying(255) NOT NULL,
+99:99:99.999 |     "LastAppliedAt" timestamp with time zone NOT NULL,
+99:99:99.999 | CREATE INDEX "IX_RoomApplySnapshot_Site" ON import.room_apply_snapshots ("VisarySiteId");
+99:99:99.999 |     CONSTRAINT "PK_room_apply_snapshots" PRIMARY KEY ("Id")
+99:99:99.999 | CREATE TABLE import.room_apply_snapshots (
+99:99:99.999 | CREATE UNIQUE INDEX "IX_RoomApplySnapshot_BusinessKey" ON import.room_apply_snapshots ("VisarySiteId", "Sheet", "SectionTitle", "RoomKindId", "RoomNumber", "BuildingSection");
+99:99:99.999 |     "VisarySiteId" integer NOT NULL,
+99:99:99.999 | VALUES ('20260512095902_AddSheetToStagedRowAndError', '9.0.4');
+99:99:99.999 | INSERT INTO import.__ef_migrations_history ("MigrationId", "ProductVersion")
+99:99:99.999 | CREATE UNIQUE INDEX "IX_staged_rows_ImportSessionId_Sheet_SourceRowNumber" ON import.staged_rows ("ImportSessionId", "Sheet", "SourceRowNumber");
+99:99:99.999 | CREATE INDEX "IX_import_errors_ImportSessionId_Sheet_SourceRowNumber" ON import.import_errors ("ImportSessionId", "Sheet", "SourceRowNumber");
+99:99:99.999 |     "VisaryRoomId" integer,
+99:99:99.999 |     "SectionTitle" character varying(255) NOT NULL,
+99:99:99.999 | VALUES ('20260512095902_AddSheetToStagedRowAndError', '9.0.4');
+99:99:99.999 | CREATE INDEX "IX_import_errors_ImportSessionId_Sheet_SourceRowNumber" ON import.import_errors ("ImportSessionId", "Sheet", "SourceRowNumber");
+99:99:99.999 |     "LastAppliedAt" timestamp with time zone NOT NULL,
+99:99:99.999 |     CONSTRAINT "PK_room_apply_snapshots" PRIMARY KEY ("Id")
+99:99:99.999 |     "MappedHash" character varying(64) NOT NULL,
+99:99:99.999 |     "MappedSnapshot" jsonb NOT NULL,
+99:99:99.999 |     "BuildingSection" character varying(255) NOT NULL,
+99:99:99.999 |     "RoomKindId" integer,
+99:99:99.999 |     "Id" bigint GENERATED BY DEFAULT AS IDENTITY,
+99:99:99.999 |     "SectionTitle" character varying(255) NOT NULL,
+99:99:99.999 | INSERT INTO import.__ef_migrations_history ("MigrationId", "ProductVersion")
+99:99:99.999 | CREATE INDEX "IX_RoomApplySnapshot_Site" ON import.room_apply_snapshots ("VisarySiteId");
+99:99:99.999 |     "Id" bigint GENERATED BY DEFAULT AS IDENTITY,
+99:99:99.999 | VALUES ('20260520072742_AddRoomApplySnapshots', '9.0.4');
+99:99:99.999 |     "VisaryRoomId" integer,
+99:99:99.999 |     "VisaryShareAgreementId" integer,
+99:99:99.999 | CREATE UNIQUE INDEX "IX_RoomApplySnapshot_BusinessKey" ON import.room_apply_snapshots ("VisarySiteId", "Sheet", "SectionTitle", "RoomKindId", "RoomNumber", "BuildingSection");
+99:99:99.999 |     "RoomKindId" integer,
+99:99:99.999 |     CONSTRAINT "PK_ConstructionProject" PRIMARY KEY ("ID")
+99:99:99.999 |         CREATE SCHEMA "Data";
+99:99:99.999 | CREATE TABLE "Data"."ConstructionProject" (
+99:99:99.999 | END $EF$;
+99:99:99.999 |     "TownID" integer,
+99:99:99.999 |     "ConstructionProjectNumber" text,
+99:99:99.999 | BEGIN
+99:99:99.999 |     "Hidden" boolean NOT NULL,
+99:99:99.999 |     "Title" text,
+99:99:99.999 |     "IdentifierZPLM" text,
+99:99:99.999 |     "Hidden" boolean NOT NULL,
+99:99:99.999 |     "IdentifierKK" text,
+99:99:99.999 |     END IF;
+99:99:99.999 |     IF NOT EXISTS(SELECT 1 FROM pg_namespace WHERE nspname = 'Data') THEN
+99:99:99.999 |     "ID" integer GENERATED BY DEFAULT AS IDENTITY,
+99:99:99.999 | DO $EF$
+99:99:99.999 | );
+99:99:99.999 |     "ConstructionProjectID" integer,
+99:99:99.999 |     "TotalAreaWithoutSummerRoom" double precision,
+99:99:99.999 |     "TotalArea" double precision,
+99:99:99.999 | CREATE TABLE "Data"."ConstructionSite" (
+99:99:99.999 |     "RegionID" integer,
+99:99:99.999 |     "IsStudio" boolean NOT NULL,
+99:99:99.999 |     "Description" text,
+99:99:99.999 |     "RoomPurpose" text,
+99:99:99.999 |     "UniqueNumber" text,
+99:99:99.999 |     "IdentifierKK" text,
+99:99:99.999 |     CONSTRAINT "PK_ConstructionSite" PRIMARY KEY ("ID")
+99:99:99.999 |     "Version" timestamp with time zone,
+99:99:99.999 | );
+99:99:99.999 |     "Title" text,
+99:99:99.999 | CREATE TABLE "Data"."ConstructionProject" (
+99:99:99.999 |     "IdentifierZPLM" text,
+99:99:99.999 |     "RegionID" integer,
+99:99:99.999 |     "Hidden" boolean NOT NULL,
+99:99:99.999 |     "Title" text,
+99:99:99.999 |     "FinishingMaterialId" integer,
+99:99:99.999 |     "StageNumber" text,
+99:99:99.999 |     "ID" integer GENERATED BY DEFAULT AS IDENTITY,
+99:99:99.999 |     "ID" integer GENERATED BY DEFAULT AS IDENTITY,
+99:99:99.999 | );
+99:99:99.999 |     "Address" text,
+99:99:99.999 |     "ConstructionPermissionNumber" text,
+99:99:99.999 |     "ParkingPlaceType" text,
+99:99:99.999 |     "CostForOne" numeric,
+99:99:99.999 |     "ExplicationNumber" text,
+99:99:99.999 | CREATE INDEX "IX_CachedProject_Title" ON import.cached_projects ("Title");
+99:99:99.999 | );
+99:99:99.999 |     "Hidden" boolean NOT NULL,
+99:99:99.999 |     "StageNumber" text,
+99:99:99.999 |     "IsStudio" boolean NOT NULL,
+99:99:99.999 |     "Address" text,
+99:99:99.999 |     "IsShowcaseWindows" text,
+99:99:99.999 |     "Title" text,
+99:99:99.999 |     "ConstructionProjectID" integer,
+99:99:99.999 |     "ConstructionPermissionNumber" text,
+99:99:99.999 |     "LivingArea" double precision,
+99:99:99.999 |     "ProjectArea" double precision NOT NULL,
+99:99:99.999 |     CONSTRAINT "PK_ConstructionProject" PRIMARY KEY ("ID")
+99:99:99.999 |     "Hidden" boolean NOT NULL,
+99:99:99.999 |     "RoomPurpose" text,
+99:99:99.999 |     CONSTRAINT "PK_ConstructionSite" PRIMARY KEY ("ID")
+99:99:99.999 |     "SummerRoomArea" double precision,
+99:99:99.999 |     "FinishingMaterialId" integer,
+99:99:99.999 |     "TotalArea" double precision,
+99:99:99.999 |     "UniqueNumber" text,
+99:99:99.999 |     "TownID" integer,
+99:99:99.999 | CREATE TABLE "Data"."ConstructionSite" (
+99:99:99.999 |     "TotalAreaWithoutSummerRoom" double precision,
+99:99:99.999 | );
+99:99:99.999 | );
+99:99:99.999 |     "SectionID" integer,
+99:99:99.999 |     "ParkingPlaceType" text,
+99:99:99.999 |     "CostForOne" numeric,
+99:99:99.999 |     "Hidden" boolean NOT NULL,
+99:99:99.999 |     "Floor" text,
+99:99:99.999 |     "Cost" numeric,
+99:99:99.999 |     "ID" integer GENERATED BY DEFAULT AS IDENTITY,
+99:99:99.999 |     "Hidden" boolean NOT NULL,
+99:99:99.999 |     "Title" text,
+99:99:99.999 |     "ID" integer GENERATED BY DEFAULT AS IDENTITY,
+99:99:99.999 |     "Floor" text,
+99:99:99.999 |     "Version" timestamp with time zone,
+99:99:99.999 |     "ProjectArea" double precision NOT NULL,
+99:99:99.999 |     "BuildingSection" text,
+99:99:99.999 |     "SiteID" integer NOT NULL,
+99:99:99.999 |     CONSTRAINT "PK_RoomKind" PRIMARY KEY ("ID")
+99:99:99.999 |     "Number" text,
+99:99:99.999 | SELECT "MigrationId", "ProductVersion"
+99:99:99.999 | END $EF$;
+99:99:99.999 | BEGIN
+99:99:99.999 |         CREATE SCHEMA "Data";
+99:99:99.999 |     "VisarySectionId" integer,
+99:99:99.999 | );
+99:99:99.999 | DO $EF$
+99:99:99.999 |     END IF;
+99:99:99.999 |     IF NOT EXISTS(SELECT 1 FROM pg_namespace WHERE nspname = 'Data') THEN
+99:99:99.999 | FROM "Data".__ef_migrations_history
+99:99:99.999 | LOCK TABLE "Data".__ef_migrations_history IN ACCESS EXCLUSIVE MODE
+99:99:99.999 |     "ExplicationNumber" text,
+99:99:99.999 |     "IsSeparateEntrance" text,
+99:99:99.999 | FROM "Data".__ef_migrations_history
+99:99:99.999 | ORDER BY "MigrationId";
+99:99:99.999 | ORDER BY "MigrationId";
+99:99:99.999 | SELECT "MigrationId", "ProductVersion"
+99:99:99.999 | CREATE TABLE "Data"."RoomKind" (
+99:99:99.999 |     "Hidden" boolean NOT NULL,
+99:99:99.999 |     "Title" text,
+99:99:99.999 |     "ID" integer GENERATED BY DEFAULT AS IDENTITY,
+99:99:99.999 | VALUES ('20260623053617_InitialDataSchema', '9.0.4');
+99:99:99.999 | );
+99:99:99.999 | VALUES ('20260623053617_InitialDataSchema', '9.0.4');
+99:99:99.999 | INSERT INTO "Data".__ef_migrations_history ("MigrationId", "ProductVersion")
+99:99:99.999 | CREATE TABLE "Data"."Room" (
+99:99:99.999 |     CONSTRAINT "PK_Room" PRIMARY KEY ("ID")
+99:99:99.999 |     "Title" text,
+99:99:99.999 |     "LivingArea" double precision,
+99:99:99.999 | CREATE TABLE "Data"."RoomKind" (
+99:99:99.999 |     "SummerRoomArea" double precision,
+99:99:99.999 |     "IsShowcaseWindows" text,
+99:99:99.999 | );
+99:99:99.999 |     "RoomsNumber" integer,
+99:99:99.999 |     "ID" integer GENERATED BY DEFAULT AS IDENTITY,
+99:99:99.999 |     "Description" text,
+99:99:99.999 |     "KindID" integer NOT NULL,
+99:99:99.999 |     CONSTRAINT "PK_Room" PRIMARY KEY ("ID")
+99:99:99.999 |     "BuildingSection" text,
+99:99:99.999 |     "Number" text,
+99:99:99.999 |     "RoomsNumber" integer,
+99:99:99.999 |     "IsSeparateEntrance" text,
+99:99:99.999 |     "Cost" numeric,
+99:99:99.999 |     "ConstructionProjectNumber" text,
+99:99:99.999 | INSERT INTO "Data".__ef_migrations_history ("MigrationId", "ProductVersion")
+99:99:99.999 |     "KindID" integer NOT NULL,
+99:99:99.999 |     "Title" text,
+99:99:99.999 |     CONSTRAINT "PK_RoomKind" PRIMARY KEY ("ID")
+99:99:99.999 |     "SiteID" integer NOT NULL,
+99:99:99.999 | CREATE TABLE "Data"."Room" (
+99:99:99.999 |     "ID" integer GENERATED BY DEFAULT AS IDENTITY,
+99:99:99.999 |     "SectionID" integer,
+99:99:99.999 |     "ProductVersion" character varying(32) NOT NULL,
+99:99:99.999 | BEGIN
+99:99:99.999 | CREATE TABLE import.import_file_snapshots (
+99:99:99.999 |     CONSTRAINT "FK_import_session_stages_import_sessions_ImportSessionId" FOREIGN KEY ("ImportSessionId") REFERENCES import.import_sessions ("Id") ON DELETE CASCADE
+99:99:99.999 |         CREATE SCHEMA import;
+99:99:99.999 |     "Status" character varying(16) NOT NULL,
+99:99:99.999 |     "ImportSessionId" uuid NOT NULL,
+99:99:99.999 |     CONSTRAINT "PK_import_session_stages" PRIMARY KEY ("Id"),
+99:99:99.999 |     CONSTRAINT "PK_staged_rows" PRIMARY KEY ("Id"),
+99:99:99.999 |     CONSTRAINT "PK___ef_migrations_history" PRIMARY KEY ("MigrationId")
+99:99:99.999 |     IF NOT EXISTS(SELECT 1 FROM pg_namespace WHERE nspname = 'import') THEN
+99:99:99.999 |     "Kind" character varying(16) NOT NULL,
+99:99:99.999 |     "ImportSessionId" uuid NOT NULL,
+99:99:99.999 | CREATE TABLE IF NOT EXISTS import.__ef_migrations_history (
+99:99:99.999 | END $EF$;
+99:99:99.999 | );
+99:99:99.999 |     "Id" bigint GENERATED BY DEFAULT AS IDENTITY,
+99:99:99.999 |     END IF;
+99:99:99.999 | ORDER BY "MigrationId";
+99:99:99.999 |     "AppliedTargetId" integer,
+99:99:99.999 | FROM import.__ef_migrations_history
+99:99:99.999 |     CONSTRAINT "FK_staged_rows_import_sessions_ImportSessionId" FOREIGN KEY ("ImportSessionId") REFERENCES import.import_sessions ("Id") ON DELETE CASCADE
+99:99:99.999 | FROM import.__ef_migrations_history
+99:99:99.999 |     "Id" bigint GENERATED BY DEFAULT AS IDENTITY,
+99:99:99.999 |     CONSTRAINT "FK_import_session_stages_import_sessions_ImportSessionId" FOREIGN KEY ("ImportSessionId") REFERENCES import.import_sessions ("Id") ON DELETE CASCADE
+99:99:99.999 | SELECT "MigrationId", "ProductVersion"
+99:99:99.999 |     "ImportSessionId" uuid NOT NULL,
+99:99:99.999 |     "AppliedTargetId" integer,
+99:99:99.999 |     "SourceRowNumber" integer NOT NULL,
+99:99:99.999 |     "StartedAt" timestamp with time zone NOT NULL,
+99:99:99.999 | CREATE TABLE import.import_session_stages (
+99:99:99.999 |     CONSTRAINT "FK_staged_rows_import_sessions_ImportSessionId" FOREIGN KEY ("ImportSessionId") REFERENCES import.import_sessions ("Id") ON DELETE CASCADE
+99:99:99.999 |     "RawValues" jsonb NOT NULL,
+99:99:99.999 |     "ImportSessionId" uuid NOT NULL,
+99:99:99.999 | CREATE INDEX "IX_import_errors_ImportSessionId_SourceRowNumber" ON import.import_errors ("ImportSessionId", "SourceRowNumber");
+99:99:99.999 |     "Id" bigint GENERATED BY DEFAULT AS IDENTITY,
+99:99:99.999 | );
+99:99:99.999 |     "VisaryProjectId" integer,
+99:99:99.999 |     "TotalRows" integer NOT NULL,
+99:99:99.999 |     "Message" character varying(2000) NOT NULL,
+99:99:99.999 |     "SuccessRows" integer NOT NULL,
+99:99:99.999 |     "SourceRowNumber" integer NOT NULL,
+99:99:99.999 |     "Id" bigint GENERATED BY DEFAULT AS IDENTITY,
+99:99:99.999 |     "Message" character varying(2000) NOT NULL,
+99:99:99.999 |     "SourceRowNumber" integer NOT NULL,
+99:99:99.999 |     CONSTRAINT "PK_import_errors" PRIMARY KEY ("Id"),
+99:99:99.999 |     "ColumnName" character varying(255),
+99:99:99.999 | );
+99:99:99.999 |     "Message" character varying(500),
+99:99:99.999 |     CONSTRAINT "PK_import_session_stages" PRIMARY KEY ("Id"),
+99:99:99.999 |     "ImportSessionId" uuid NOT NULL,
+99:99:99.999 | CREATE TABLE import.import_errors (
+99:99:99.999 |     "ErrorCode" character varying(64) NOT NULL,
+99:99:99.999 |     "RelativePath" character varying(500) NOT NULL,
+99:99:99.999 |     CONSTRAINT "PK_staged_rows" PRIMARY KEY ("Id"),
+99:99:99.999 | );
+99:99:99.999 |     CONSTRAINT "FK_import_file_snapshots_import_sessions_ImportSessionId" FOREIGN KEY ("ImportSessionId") REFERENCES import.import_sessions ("Id") ON DELETE CASCADE
+99:99:99.999 | );
+99:99:99.999 |     "Status" character varying(16) NOT NULL,
+99:99:99.999 |     "ContentType" character varying(128) NOT NULL,
+99:99:99.999 | ORDER BY "MigrationId";
+99:99:99.999 |     "ProgressPercent" integer NOT NULL,
+99:99:99.999 |     "SizeBytes" bigint NOT NULL,
+99:99:99.999 | SELECT "MigrationId", "ProductVersion"
+99:99:99.999 | );
+99:99:99.999 |     CONSTRAINT "PK_import_file_snapshots" PRIMARY KEY ("Id"),
+99:99:99.999 |     "MappedValues" jsonb,
+99:99:99.999 |     "ImportSessionId" uuid NOT NULL,
+99:99:99.999 |     "CompletedAt" timestamp with time zone,
+99:99:99.999 | );
+99:99:99.999 |     "ProgressPercent" integer NOT NULL,
+99:99:99.999 |     "Id" uuid NOT NULL,
+99:99:99.999 |     "CreatedAt" timestamp with time zone NOT NULL,
+99:99:99.999 | INSERT INTO import.__ef_migrations_history ("MigrationId", "ProductVersion")
+99:99:99.999 | VALUES ('20260429084812_Initial', '9.0.4');
+99:99:99.999 | CREATE INDEX "IX_ImportSession_Type" ON import.import_sessions ("ImportTypeCode");
+99:99:99.999 | SELECT "MigrationId", "ProductVersion"
+99:99:99.999 | INSERT INTO import.__ef_migrations_history ("MigrationId", "ProductVersion")
+99:99:99.999 |     CONSTRAINT "PK_cached_projects" PRIMARY KEY ("Id")
+99:99:99.999 | );
+99:99:99.999 |     "Id" integer NOT NULL,
+99:99:99.999 |     "IdentifierKK" character varying(255),
+99:99:99.999 | );
+99:99:99.999 |         CREATE SCHEMA import;
+99:99:99.999 | DO $EF$
+99:99:99.999 |     END IF;
+99:99:99.999 | DO $EF$
+99:99:99.999 | LOCK TABLE import.__ef_migrations_history IN ACCESS EXCLUSIVE MODE
+99:99:99.999 | VALUES ('20260430213808_RemoveFileSha256Constraint', '9.0.4');
+99:99:99.999 | ALTER TABLE import.import_sessions DROP COLUMN "FileSha256";
+99:99:99.999 | LOCK TABLE import.__ef_migrations_history IN ACCESS EXCLUSIVE MODE
+99:99:99.999 |     "IdentifierZPLM" character varying(255),
+99:99:99.999 |     "Title" character varying(500) NOT NULL,
+99:99:99.999 | INSERT INTO import.__ef_migrations_history ("MigrationId", "ProductVersion")
+99:99:99.999 | CREATE INDEX "IX_CachedProject_Title" ON import.cached_projects ("Title");
+99:99:99.999 |     "IdentifierKK" character varying(255),
+99:99:99.999 |     CONSTRAINT "PK_cached_projects" PRIMARY KEY ("Id")
+99:99:99.999 | CREATE INDEX "IX_CachedProject_IdentifierKK" ON import.cached_projects ("IdentifierKK");
+99:99:99.999 | CREATE TABLE import.cached_projects (
+99:99:99.999 |     "Id" integer NOT NULL,
+99:99:99.999 | CREATE INDEX "IX_staged_rows_ImportSessionId_Status" ON import.staged_rows ("ImportSessionId", "Status");
+99:99:99.999 |     "IdentifierZPLM" character varying(255),
+99:99:99.999 | );
+99:99:99.999 |     "LastSyncedAt" timestamp with time zone NOT NULL,
+99:99:99.999 |     "LastSyncedAt" timestamp with time zone NOT NULL,
+99:99:99.999 |     "Title" character varying(500) NOT NULL,
+99:99:99.999 | VALUES ('20260429084812_Initial', '9.0.4');
+99:99:99.999 | CREATE INDEX "IX_staged_rows_ImportSessionId_Status" ON import.staged_rows ("ImportSessionId", "Status");
+99:99:99.999 | CREATE TABLE import.cached_projects (
+99:99:99.999 | CREATE TABLE IF NOT EXISTS import.__ef_migrations_history (
+99:99:99.999 | ORDER BY "MigrationId";
+99:99:99.999 | CREATE INDEX "IX_CachedProject_IdentifierKK" ON import.cached_projects ("IdentifierKK");
+99:99:99.999 | VALUES ('20260429170000_AddCachedProjects', '9.0.4');
+99:99:99.999 | FROM import.__ef_migrations_history
+99:99:99.999 | SELECT "MigrationId", "ProductVersion"
+99:99:99.999 | BEGIN
+99:99:99.999 | BEGIN
+99:99:99.999 | FROM import.__ef_migrations_history
+99:99:99.999 | INSERT INTO import.__ef_migrations_history ("MigrationId", "ProductVersion")
+99:99:99.999 | ALTER TABLE import.import_sessions DROP COLUMN "FileSha256";
+99:99:99.999 |     "MigrationId" character varying(150) NOT NULL,
+99:99:99.999 |     "Message" character varying(500),
+99:99:99.999 |     "Kind" character varying(16) NOT NULL,
+99:99:99.999 | DROP INDEX import."UX_ImportSession_TypeAndSha";
+99:99:99.999 |     END IF;
+99:99:99.999 | INSERT INTO import.__ef_migrations_history ("MigrationId", "ProductVersion")
+99:99:99.999 | ORDER BY "MigrationId";
+99:99:99.999 | DROP INDEX import."UX_ImportSession_TypeAndSha";
+99:99:99.999 |     "ProductVersion" character varying(32) NOT NULL,
+99:99:99.999 |     CONSTRAINT "PK___ef_migrations_history" PRIMARY KEY ("MigrationId")
+99:99:99.999 |     IF NOT EXISTS(SELECT 1 FROM pg_namespace WHERE nspname = 'import') THEN
+99:99:99.999 | DROP INDEX import."IX_staged_rows_ImportSessionId_SourceRowNumber";
+99:99:99.999 | CREATE INDEX "IX_ImportSession_Type" ON import.import_sessions ("ImportTypeCode");
+99:99:99.999 |     "MigrationId" character varying(150) NOT NULL,
+99:99:99.999 | BEGIN
+99:99:99.999 |     IF NOT EXISTS(SELECT 1 FROM pg_namespace WHERE nspname = 'import') THEN
+99:99:99.999 | END $EF$;
+99:99:99.999 |         CREATE SCHEMA import;
+99:99:99.999 | INSERT INTO import.__ef_migrations_history ("MigrationId", "ProductVersion")
+99:99:99.999 | END $EF$;
+99:99:99.999 | VALUES ('20260429170000_AddCachedProjects', '9.0.4');
+99:99:99.999 | DO $EF$
+99:99:99.999 | DO $EF$
+99:99:99.999 |         CREATE SCHEMA import;
+99:99:99.999 | DROP INDEX import."IX_staged_rows_ImportSessionId_SourceRowNumber";
+99:99:99.999 | VALUES ('20260430213808_RemoveFileSha256Constraint', '9.0.4');
+99:99:99.999 | ALTER TABLE import.import_file_snapshots ADD "SecondaryRelativePath" text;
+99:99:99.999 | ALTER TABLE import.import_file_snapshots ADD "SecondaryFileName" text;
+99:99:99.999 | VALUES ('20260520072742_AddRoomApplySnapshots', '9.0.4');
+99:99:99.999 | INSERT INTO import.__ef_migrations_history ("MigrationId", "ProductVersion")
+99:99:99.999 | SELECT "MigrationId", "ProductVersion"
+99:99:99.999 | INSERT INTO import.__ef_migrations_history ("MigrationId", "ProductVersion")
+99:99:99.999 | VALUES ('20260525115407_AddSecondaryFileToSnapshot', '9.0.4');
+99:99:99.999 | ORDER BY "MigrationId";
+99:99:99.999 | FROM "Data".__ef_migrations_history
+99:99:99.999 |     "ProductVersion" character varying(32) NOT NULL,
+99:99:99.999 |     IF NOT EXISTS(SELECT 1 FROM pg_namespace WHERE nspname = 'Data') THEN
+99:99:99.999 | BEGIN
+99:99:99.999 |     END IF;
+99:99:99.999 | CREATE TABLE IF NOT EXISTS "Data".__ef_migrations_history (
+99:99:99.999 | ALTER TABLE import.import_file_snapshots ADD "SecondaryFileName" text;
+99:99:99.999 | ALTER TABLE import.import_file_snapshots ADD "SecondaryRelativePath" text;
+99:99:99.999 | END $EF$;
+99:99:99.999 | ALTER TABLE import.import_file_snapshots ADD "SecondarySizeBytes" bigint;
+99:99:99.999 | );
+99:99:99.999 | DROP INDEX import."IX_import_errors_ImportSessionId_SourceRowNumber";
+99:99:99.999 |     "MappedValues" jsonb,
+99:99:99.999 |     "RawValues" jsonb NOT NULL,
+99:99:99.999 | CREATE TABLE import.staged_rows (
+99:99:99.999 |     "CompletedAt" timestamp with time zone,
+99:99:99.999 | CREATE INDEX "IX_import_errors_ImportSessionId_SourceRowNumber" ON import.import_errors ("ImportSessionId", "SourceRowNumber");
+99:99:99.999 | ALTER TABLE import.staged_rows ADD "Sheet" character varying(255) NOT NULL DEFAULT '';
+99:99:99.999 | ALTER TABLE import.import_errors ADD "Sheet" character varying(255) NOT NULL DEFAULT '';
+99:99:99.999 | VALUES ('20260525115407_AddSecondaryFileToSnapshot', '9.0.4');
+99:99:99.999 | CREATE INDEX "IX_import_session_stages_ImportSessionId" ON import.import_session_stages ("ImportSessionId");
+99:99:99.999 | ALTER TABLE import.import_file_snapshots ADD "SecondarySizeBytes" bigint;
+99:99:99.999 | INSERT INTO import.__ef_migrations_history ("MigrationId", "ProductVersion")
+99:99:99.999 | CREATE INDEX "IX_import_session_stages_ImportSessionId" ON import.import_session_stages ("ImportSessionId");
+99:99:99.999 | DROP INDEX import."IX_import_errors_ImportSessionId_SourceRowNumber";
+99:99:99.999 | CREATE INDEX "IX_import_sessions_StartedAt" ON import.import_sessions ("StartedAt");
+99:99:99.999 | ALTER TABLE import.staged_rows ADD "Sheet" character varying(255) NOT NULL DEFAULT '';
+99:99:99.999 | CREATE UNIQUE INDEX "IX_import_file_snapshots_ImportSessionId" ON import.import_file_snapshots ("ImportSessionId");
+99:99:99.999 | CREATE TABLE IF NOT EXISTS "Data".__ef_migrations_history (
+99:99:99.999 |     "Sheet" character varying(255) NOT NULL,
+99:99:99.999 |     "RoomNumber" character varying(255) NOT NULL,
+99:99:99.999 | CREATE TABLE import.room_apply_snapshots (
+99:99:99.999 |     "VisarySectionId" integer,
+99:99:99.999 | VALUES ('20260518085520_AddActionsToStagedRow', '9.0.4');
+99:99:99.999 | ALTER TABLE import.staged_rows ADD "Actions" jsonb;
+99:99:99.999 |     IF NOT EXISTS(SELECT 1 FROM pg_namespace WHERE nspname = 'Data') THEN
+99:99:99.999 | INSERT INTO import.__ef_migrations_history ("MigrationId", "ProductVersion")
+99:99:99.999 | ALTER TABLE import.staged_rows ADD "Actions" jsonb;
+99:99:99.999 | INSERT INTO import.__ef_migrations_history ("MigrationId", "ProductVersion")
+99:99:99.999 |     "ShareAgreementNumber" character varying(255),
+99:99:99.999 | ALTER TABLE import.import_errors ADD "Sheet" character varying(255) NOT NULL DEFAULT '';
+99:99:99.999 | CREATE UNIQUE INDEX "IX_staged_rows_ImportSessionId_Sheet_SourceRowNumber" ON import.staged_rows ("ImportSessionId", "Sheet", "SourceRowNumber");
+99:99:99.999 | );
+99:99:99.999 |     "LastAppliedSessionId" uuid NOT NULL,
+99:99:99.999 |     "VisarySiteId" integer NOT NULL,
+99:99:99.999 | INSERT INTO import.__ef_migrations_history ("MigrationId", "ProductVersion")
+99:99:99.999 | VALUES ('20260518085520_AddActionsToStagedRow', '9.0.4');
+99:99:99.999 | LOCK TABLE "Data".__ef_migrations_history IN ACCESS EXCLUSIVE MODE
+99:99:99.999 |     "MigrationId" character varying(150) NOT NULL,
+99:99:99.999 |         CREATE SCHEMA "Data";
+99:99:99.999 | DO $EF$
+99:99:99.999 |     CONSTRAINT "PK___ef_migrations_history" PRIMARY KEY ("MigrationId")
+99:99:99.999 |     "ProductVersion" character varying(32) NOT NULL,
+99:99:99.999 | DO $EF$
+99:99:99.999 | END $EF$;
+99:99:99.999 |     END IF;
+99:99:99.999 | BEGIN
+99:99:99.999 |     "MigrationId" character varying(150) NOT NULL,
+99:99:99.999 | );
+99:99:99.999 |         CREATE SCHEMA "Data";
+99:99:99.999 | FROM "Data".__ef_migrations_history
+99:99:99.999 | );
+99:99:99.999 |     CONSTRAINT "PK___ef_migrations_history" PRIMARY KEY ("MigrationId")
+99:99:99.999 | ORDER BY "MigrationId";
+99:99:99.999 | SELECT "MigrationId", "ProductVersion"
+99:99:99.999 |     CONSTRAINT "FK_import_errors_import_sessions_ImportSessionId" FOREIGN KEY ("ImportSessionId") REFERENCES import.import_sessions ("Id") ON DELETE CASCADE
+99:99:99.999 | CREATE TABLE import.import_file_snapshots (
+99:99:99.999 | CREATE INDEX "IX_import_sessions_Status" ON import.import_sessions ("Status");
+99:99:99.999 |     "SuccessRows" integer NOT NULL,
+99:99:99.999 |     "SizeBytes" bigint NOT NULL,
+99:99:99.999 | CREATE TABLE import.import_errors (
+99:99:99.999 |     CONSTRAINT "FK_import_errors_import_sessions_ImportSessionId" FOREIGN KEY ("ImportSessionId") REFERENCES import.import_sessions ("Id") ON DELETE CASCADE
+99:99:99.999 |     CONSTRAINT "FK_import_file_snapshots_import_sessions_ImportSessionId" FOREIGN KEY ("ImportSessionId") REFERENCES import.import_sessions ("Id") ON DELETE CASCADE
+99:99:99.999 |     "CreatedAt" timestamp with time zone NOT NULL,
+99:99:99.999 |     "VisaryProjectId" integer,
+99:99:99.999 |     CONSTRAINT "PK_import_sessions" PRIMARY KEY ("Id")
+99:99:99.999 |     "Id" uuid NOT NULL,
+99:99:99.999 |     "CompletedAt" timestamp with time zone,
+99:99:99.999 |     "ErrorRows" integer NOT NULL,
+99:99:99.999 |     "TotalRows" integer NOT NULL,
+99:99:99.999 | CREATE UNIQUE INDEX "UX_ImportSession_TypeAndSha" ON import.import_sessions ("ImportTypeCode", "FileSha256") WHERE "Status" NOT IN ('Failed','Cancelled');
+99:99:99.999 |     "FileSize" bigint NOT NULL,
+99:99:99.999 |     "UserId" character varying(128),
+99:99:99.999 | );
+99:99:99.999 | CREATE TABLE import.staged_rows (
+99:99:99.999 |     "IsSuccess" boolean NOT NULL,
+99:99:99.999 |     "StartedAt" timestamp with time zone NOT NULL,
+99:99:99.999 |     "RelativePath" character varying(500) NOT NULL,
+99:99:99.999 |     CONSTRAINT "PK_import_file_snapshots" PRIMARY KEY ("Id"),
+99:99:99.999 |     "ImportSessionId" uuid NOT NULL,
+99:99:99.999 |     "IsSuccess" boolean NOT NULL,
+99:99:99.999 | CREATE TABLE import.import_session_stages (
+99:99:99.999 |     "ColumnName" character varying(255),
+99:99:99.999 |     "ErrorCode" character varying(64) NOT NULL,
+99:99:99.999 |     "CreatedAt" timestamp with time zone NOT NULL,
+99:99:99.999 | CREATE UNIQUE INDEX "UX_ImportSession_TypeAndSha" ON import.import_sessions ("ImportTypeCode", "FileSha256") WHERE "Status" NOT IN ('Failed','Cancelled');
+99:99:99.999 | CREATE INDEX "IX_import_sessions_StartedAt" ON import.import_sessions ("StartedAt");
+99:99:99.999 |     "Id" bigint GENERATED BY DEFAULT AS IDENTITY,
+99:99:99.999 |     "CompletedAt" timestamp with time zone,
+99:99:99.999 |     "ContentType" character varying(128) NOT NULL,
+99:99:99.999 |     "Id" uuid NOT NULL,
+99:99:99.999 | CREATE TABLE import.import_sessions (
+99:99:99.999 |     "ErrorMessage" character varying(4000),
+99:99:99.999 | );
+99:99:99.999 |     "VisarySiteId" integer,
+99:99:99.999 |     "ImportSessionId" uuid NOT NULL,
+99:99:99.999 |     "CreatedAt" timestamp with time zone NOT NULL,
+99:99:99.999 |     "ErrorRows" integer NOT NULL,
+99:99:99.999 | CREATE TABLE import.import_sessions (
+99:99:99.999 |     "FileName" character varying(500) NOT NULL,
+99:99:99.999 |     "Status" character varying(16) NOT NULL,
+99:99:99.999 |     "FileFormat" character varying(8) NOT NULL,
+99:99:99.999 |     "FileSha256" character varying(64) NOT NULL,
+99:99:99.999 |     CONSTRAINT "PK_import_errors" PRIMARY KEY ("Id"),
+99:99:99.999 |     "ImportTypeCode" character varying(64) NOT NULL,
+99:99:99.999 |     CONSTRAINT "PK_import_sessions" PRIMARY KEY ("Id")
+99:99:99.999 |     "Id" uuid NOT NULL,
+99:99:99.999 |     "SourceRowNumber" integer NOT NULL,
+99:99:99.999 | CREATE UNIQUE INDEX "IX_import_file_snapshots_ImportSessionId" ON import.import_file_snapshots ("ImportSessionId");
+99:99:99.999 |     "FileName" character varying(500) NOT NULL,
+99:99:99.999 |     END IF;
+99:99:99.999 | CREATE UNIQUE INDEX "IX_staged_rows_ImportSessionId_SourceRowNumber" ON import.staged_rows ("ImportSessionId", "SourceRowNumber");
+99:99:99.999 |     "Status" character varying(16) NOT NULL,
+99:99:99.999 | CREATE UNIQUE INDEX "IX_staged_rows_ImportSessionId_SourceRowNumber" ON import.staged_rows ("ImportSessionId", "SourceRowNumber");
+99:99:99.999 |     IF NOT EXISTS(SELECT 1 FROM pg_namespace WHERE nspname = 'import') THEN
+99:99:99.999 | END $EF$;
+99:99:99.999 |     "ImportTypeCode" character varying(64) NOT NULL,
+99:99:99.999 |     "ErrorMessage" character varying(4000),
+99:99:99.999 | );
+99:99:99.999 |     "FileSize" bigint NOT NULL,
+99:99:99.999 |     "StartedAt" timestamp with time zone NOT NULL,
+99:99:99.999 |     "UserId" character varying(128),
+99:99:99.999 |     "Id" bigint GENERATED BY DEFAULT AS IDENTITY,
+99:99:99.999 | CREATE INDEX "IX_import_sessions_Status" ON import.import_sessions ("Status");
+99:99:99.999 |     "FileSha256" character varying(64) NOT NULL,
+99:99:99.999 |     "FileFormat" character varying(8) NOT NULL,
+99:99:99.999 |     "VisarySiteId" integer,
+99:99:99.999 |     "StartedAt" timestamp with time zone NOT NULL,

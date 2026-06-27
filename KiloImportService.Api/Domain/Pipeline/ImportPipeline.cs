@@ -68,6 +68,11 @@ public sealed class ImportPipeline
         Stream? secondaryFileStream = null,
         string? secondaryFileName = null)
     {
+        _log.LogInformation(
+            "Upload→Pipeline: importType={Type} file='{File}' project={Project} site={Site} user={User} secondary='{Secondary}'",
+            importTypeCode, fileName, visaryProjectId, visarySiteId, userId ?? "(анонимно)",
+            secondaryFileName ?? "(нет)");
+
         // Проверяем тип импорта.
         _ = _mapperRegistry.GetByTypeCode(importTypeCode); // throws if unknown
 
@@ -166,16 +171,24 @@ public sealed class ImportPipeline
         var mapper = _mapperRegistry.GetByTypeCode(session.ImportTypeCode);
 
         // ── PARSE ──
+        _log.LogInformation("Session {SessionId}: ▶ PARSE stage  (mapper={Mapper}, file='{File}', format={Format})",
+            sessionId, mapper.GetType().Name, session.FileName, session.FileFormat);
         await TransitionAsync(session, ImportStatus.Parsing, ct);
         var parseStage = await StartStageAsync(sessionId, ImportStageKind.Parse, "Чтение файла…", ct);
         await _hub.Clients.Group(groupName).SendAsync("StageStarted", new { sessionId, stage = "Parse" }, ct);
 
         var parser = _parserFactory.GetParser(session.FileFormat);
         ParseResult parseResult;
+        var parseStartedAt = DateTimeOffset.UtcNow;
         await using (var stream = await _storage.OpenReadAsync(session.FileSnapshot!.RelativePath, ct))
         {
             parseResult = await parser.ParseAsync(stream, mapper.LayoutHint, ct);
         }
+        _log.LogInformation(
+            "Session {SessionId}: ◀ PARSE done за {Elapsed:0} мс — rows={Rows} file-errors={Errors} sheets=[{Sheets}]",
+            sessionId, (DateTimeOffset.UtcNow - parseStartedAt).TotalMilliseconds,
+            parseResult.Rows.Count, parseResult.Errors.Count,
+            string.Join(", ", parseResult.Rows.Select(r => r.Sheet ?? "(no-sheet)").Distinct()));
 
         // Сохраняем file-level ошибки парсинга.
         foreach (var err in parseResult.Errors)
@@ -350,6 +363,9 @@ public sealed class ImportPipeline
             : ImportStatus.Validated;
         await TransitionAsync(session, finalStatus, ct,
             error: validation.FileLevelErrors.FirstOrDefault()?.Message);
+        _log.LogInformation(
+            "Session {SessionId}: ◀ VALIDATE done — finalStatus={Status} valid={Valid} invalid={Invalid} fileErrors={FileErrors}",
+            sessionId, finalStatus, successCount, errorCount, validation.FileLevelErrors.Count);
     }
 
     /// <summary>
@@ -382,6 +398,10 @@ public sealed class ImportPipeline
         var groupName = ImportProgressHub.GroupName(sessionId);
         var mapper = _mapperRegistry.GetByTypeCode(session.ImportTypeCode);
 
+        _log.LogInformation(
+            "Session {SessionId}: ▶ APPLY stage  (mapper={Mapper}, project={Project}, site={Site})",
+            sessionId, mapper.GetType().Name, session.VisaryProjectId, session.VisarySiteId);
+
         await TransitionAsync(session, ImportStatus.Applying, ct);
         var applyStage = await StartStageAsync(sessionId, ImportStageKind.Apply, "Запись в visary_db…", ct);
         await _hub.Clients.Group(groupName).SendAsync("StageStarted", new { sessionId, stage = "Apply" }, ct);
@@ -392,11 +412,20 @@ public sealed class ImportPipeline
             .ToListAsync(ct);
 
         var mappedRows = staged.Select(r => new MappedRow(r.SourceRowNumber, r.Sheet ?? string.Empty, true, r.MappedValues!, [])).ToList();
+        _log.LogInformation(
+            "Session {SessionId}: APPLY входных строк={Count} из {Total} (валидных), вызываем mapper.ApplyAsync…",
+            sessionId, mappedRows.Count, staged.Count);
         var ctx = new ImportContext(
             sessionId, session.VisaryProjectId, session.VisarySiteId, session.UserId,
             SecondaryFileRelativePath: session.FileSnapshot?.SecondaryRelativePath,
             PrimaryFileRelativePath: session.FileSnapshot?.RelativePath);
+        var applyStartedAt = DateTimeOffset.UtcNow;
         var applyResult = await mapper.ApplyAsync(ctx, _visaryDb, mappedRows, ct);
+        _log.LogInformation(
+            "Session {SessionId}: mapper.ApplyAsync вернул applied={Applied} errors={Errors} synthetic={Synthetic} за {Elapsed:0} мс",
+            sessionId, applyResult.AppliedCount, applyResult.Errors.Count,
+            applyResult.SyntheticRows?.Count ?? 0,
+            (DateTimeOffset.UtcNow - applyStartedAt).TotalMilliseconds);
 
         // Обновляем статусы StagedRow + переносим per-row actions из маппера.
         // Actions сохраняем ВСЕГДА, даже если массово apply не удался: журнал
@@ -474,6 +503,10 @@ public sealed class ImportPipeline
             error: applyResult.Errors.FirstOrDefault()?.Message);
         session.CompletedAt = DateTimeOffset.UtcNow;
         await _serviceDb.SaveChangesAsync(ct);
+
+        _log.LogInformation(
+            "Session {SessionId}: ◀ APPLY done — finalStatus={Status} applied={Applied} errors={Errors}",
+            sessionId, finalStatus, applyResult.AppliedCount, applyResult.Errors.Count);
     }
 
     // ───── Stage helpers ─────

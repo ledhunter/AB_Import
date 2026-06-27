@@ -52,8 +52,8 @@
 
 ```dockerfile
 # 1. Base-образы из корп. зеркала (ARG с дефолтом на binary.alfabank.ru)
-ARG DOTNET_SDK_IMAGE=docker-hub.binary.alfabank.ru/dotnet/sdk:10.0-preview-alpine
-ARG DOTNET_ASPNET_IMAGE=docker-hub.binary.alfabank.ru/dotnet/aspnet:10.0-preview-alpine
+ARG DOTNET_SDK_IMAGE=docker-hub.binary.alfabank.ru/dotnet/sdk:10.0-alpine
+ARG DOTNET_ASPNET_IMAGE=docker-hub.binary.alfabank.ru/dotnet/aspnet:10.0-alpine
 
 # 2. Build-stage ENV (отличие от эталона — мы на .NET 10 preview / Alpine в закрытом
 #    контуре, эталон на .NET 8 / Debian с доступным CRL/OCSP):
@@ -157,7 +157,7 @@ RUN dotnet restore <project> --configfile nuget.config
 ### Этап 2 — UI (готово, но требует подтверждения URL'а npm-зеркала)
 
 - [x] Web `Dockerfile`:
-  - [x] base из `docker-hub.binary.alfabank.ru/library/node:20-alpine` / `nginx:1.27-alpine`
+  - [x] base из `docker-hub.binary.alfabank.ru/library/node:20-alpine` / `nginx:1.29-alpine`
   - [x] `NPM_REGISTRY_URL` дефолт — `https://binary.alfabank.ru/artifactory/api/npm/npm_public/`
   - [x] multi-stage: `dev` (Vite) / `build` (npm ci + vite build) / `prod` (nginx)
 - [x] `KiloImportService.Web/nginx.conf` создан (SPA-fallback + security headers, `listen 8080`)

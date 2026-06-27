@@ -50,7 +50,7 @@
     «downgrade» (edge-case при смене мажорной ветки Alpine);
   - **dl-cdn fallback** — независимый резервный путь;
   - **sanity-check** `apk info -v` — DevOps подтверждает результат по логу.
-- **v1.5** (2026-06-19, текущая) — `appsec_v5.xlsx` показал, что v1.4
+- **v1.5** (2026-06-19) — `appsec_v5.xlsx` показал, что v1.4
   **закрыл 9 из 11 CVE** (musl × 2, zlib × 1, 6 OpenSSL CVE с целевой версией
   ≤3.5.6-r0), но остаётся **CVE-2026-45447** (PKCS#7 use-after-free, потенц. RCE)
   на `libcrypto3` и `libssl3` — требует **≥3.5.7-r0**. Корп. mirror
@@ -63,6 +63,15 @@
   никакая команда apk не достанет нужную версию. Решение на стороне DevOps:
   перепривязать `latest-stable` на более свежую Alpine-ветку или поднять
   base-образ aspnet:10.0-preview-alpine.
+- **v1.6** (2026-06-22, текущая) — корневое решение, не патч.
+  Сменили base-образы с `10.0-preview-alpine` на GA-тег `10.0-alpine`
+  и `nginx:1.27-alpine` на `nginx:1.29-alpine`. Microsoft пересобирает GA-теги
+  при каждом security-update'е Alpine — `libcrypto3 ≥ 3.5.7-r0` приезжает
+  в base без apk-upgrade. Preview-тег после ноября 2025 (GA .NET 10) больше
+  не пересобирается — там Alpine 3.20 с `libcrypto3=3.5.1-r0` навсегда.
+  Apk-upgrade блок + verify-блок остаются как **defense-in-depth**: если
+  GA-тег base'а вдруг отстанет (Microsoft не успеет пересобрать), apk
+  попытается дополучить недостающее с корп. mirror'а. См. doc 143.
 
 ---
 

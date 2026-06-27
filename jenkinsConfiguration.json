@@ -3,10 +3,11 @@
     "registryUrl": "binary.alfabank.ru",
     "artifactName": "alfa-building-fm-import",
     "dotNetProjectName": "AB_Import.sln",
+    "_services_note": "artifactName КАЖДОГО сервиса должен совпадать с manifest.app.artifact_id в соответствующем yaml — платформа Альфы ищет образ в registry по этому имени. См. doc 145.",
     "services": [
         {
             "label": "API",
-            "artifactName": "kilo-import-api",
+            "artifactName": "alfa-building-fm-import",
             "dockerFilePath": "KiloImportService.Api/Dockerfile",
             "dockerBuildTarget": "runtime",
             "dockerBuildContext": ".",
@@ -18,7 +19,7 @@
         },
         {
             "label": "Web",
-            "artifactName": "kilo-import-web",
+            "artifactName": "alfa-building-fm-import-web",
             "dockerFilePath": "KiloImportService.Web/Dockerfile",
             "dockerBuildTarget": "prod",
             "dockerBuildContext": "KiloImportService.Web",

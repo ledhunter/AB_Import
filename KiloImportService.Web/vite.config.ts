@@ -78,6 +78,19 @@ export default defineConfig(({ command, mode }) => {
   }
   const backendTarget = env.VITE_BACKEND_URL || 'http://localhost:5000';
 
+  // ─── Reverse-proxy base-path для prod-bundle (см. doc 147) ───
+  // VITE_BASE_URL  — URL-префикс, под которым SPA опубликована (для Vite `base`).
+  //                  ассеты собираются как `<base>/assets/<hash>.js` и т.п.
+  // VITE_API_PREFIX — URL-префикс backend-API. Если фронт и API под одним
+  //                   префиксом — оба равны (`/api/ab-fm-import/`). Если под разными
+  //                   (`/api/ab-fm-import-web/` и `/api/ab-fm-import/`) — задаются отдельно.
+  //
+  // Пусто (по дефолту, локалка) — Vite собирает с `base='/'`, API-вызовы идут на
+  // same-origin без префикса (как было до doc 147). На prod build передаются через
+  // build-args Dockerfile → ENV → loadEnv.
+  const baseUrl = env.VITE_BASE_URL || '/';
+  const apiPrefix = (env.VITE_API_PREFIX || '').replace(/\/$/, ''); // без trailing /
+
   // Логирование одного proxy-канала: req/res/error в формате `[Vite proxy → tag]`.
   // Используется и для Visary, и для собственного backend — чтобы было видно,
   // куда конкретно ушёл запрос.
@@ -116,7 +129,19 @@ export default defineConfig(({ command, mode }) => {
     ...extra,
   });
 
+  // Лог сборки в stdout — видно в Jenkins / `docker build` логе. Помогает
+  // отследить, с какими base/API_PREFIX был собран конкретный bundle.
+  console.log('[vite.config] command=%s mode=%s base=%s apiPrefix=%s', command, mode, baseUrl, apiPrefix || '(пусто)');
+
   return {
+    base: baseUrl,
+    // Прокидываем `apiPrefix` в код через define — фронтенд читает константу
+    // `__API_PREFIX__` в `apiUrl.ts` (см. doc 147). Vite заменяет литералом
+    // на этапе сборки, в bundle это становится строковой константой.
+    define: {
+      __API_PREFIX__: JSON.stringify(apiPrefix),
+      __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
+    },
     // Custom resolver-плагин ставим ПЕРЕД react() — он легковесный и срабатывает
     // только на узкий regex (@alfalab/core-components-*/esm), не мешает остальному.
     plugins: [alfalabEsmDirAlias, react()],

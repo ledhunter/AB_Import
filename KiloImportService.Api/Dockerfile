@@ -12,8 +12,16 @@
 # Дефолты — корп. зеркало Альфы (эталонный путь, см. doc_project/132).
 # Для локальной сборки docker-compose передаёт DOTNET_SDK_IMAGE из .env с дефолтом
 # `mcr.microsoft.com/...` (см. docker-compose.yml secrets: 7 / .env.example).
-ARG DOTNET_SDK_IMAGE=docker-hub.binary.alfabank.ru/dotnet/sdk:10.0-preview-alpine
-ARG DOTNET_ASPNET_IMAGE=docker-hub.binary.alfabank.ru/dotnet/aspnet:10.0-preview-alpine
+#
+# ⚠️ Тег `10.0-alpine` (GA), НЕ `10.0-preview-alpine`. Preview-тег Microsoft
+# больше не пересобирает после GA-релиза .NET 10 (ноябрь 2025) — Alpine-пакеты
+# внутри застряли на старом снапшоте (libcrypto3=3.5.1-r0), приходит CVE-2026-45447
+# (PKCS#7 use-after-free, см. doc 137/143). GA-тег `10.0-alpine` пересобирается
+# Microsoft при каждом security-update'е базового Alpine → libcrypto3 ≥ 3.5.7-r0
+# приезжает в base без необходимости apk-upgrade с корп. mirror.
+# Зеркала: docker-hub.binary.alfabank.ru/dotnet/{sdk,aspnet}:10.0-alpine
+ARG DOTNET_SDK_IMAGE=docker-hub.binary.alfabank.ru/dotnet/sdk:10.0-alpine
+ARG DOTNET_ASPNET_IMAGE=docker-hub.binary.alfabank.ru/dotnet/aspnet:10.0-alpine
 
 # ────────────── Base (runtime) ──────────────
 FROM ${DOTNET_ASPNET_IMAGE} AS base
@@ -172,6 +180,48 @@ RUN set -e; \
         echo "############################################################"; \
     fi
 
+# ────────────── v1.7: Опц. edge-fallback для libcrypto3/libssl3 ──────────────
+# Сценарий из appsec_v6 (2026-06-22): base = 10.0-alpine (GA), Alpine 3.23.4 —
+# apk upgrade подтянул libcrypto3=3.5.6-r0, но в `latest-stable` ещё нет
+# 3.5.7-r0, который закрывает CVE-2026-45447. Edge-ветка Alpine содержит
+# свежий пакет — но переключать ВЕСЬ образ на edge нельзя (тянет несовместимый
+# musl/zlib для GA-runtime'а .NET 10).
+#
+# Решение: точечный `apk add --no-cache --repository=<edge/main> --upgrade
+# libcrypto3 libssl3`. `--repository` действует только на эту команду —
+# /etc/apk/repositories НЕ меняется, никакие другие пакеты из edge не подтягиваются.
+#
+# Дефолт `false` — поведение сборки v1.6 сохраняется (эталон проходит).
+# DevOps включает `ALPINE_OPENSSL_EDGE_FALLBACK=true` только после
+# подтверждения, что edge доступен из Jenkins-агента и не ломает совместимость
+# (apk add тянет dep'ы только при отсутствии libc/runtime'а — у нас оба пакета
+# уже стоят, поэтому apk берёт ровно libcrypto3/libssl3 .so-файлы из edge).
+ARG ALPINE_OPENSSL_EDGE_FALLBACK="false"
+ARG ALPINE_EDGE_REPO_URL="https://dl-cdn.alpinelinux.org/alpine/edge/main"
+RUN if [ "${ALPINE_OPENSSL_EDGE_FALLBACK}" = "true" ]; then \
+        CRYPTO_VER=$(apk info -v libcrypto3 2>/dev/null | head -1 | sed -E 's/^libcrypto3-//'); \
+        MIN_VER="3.5.7-r0"; \
+        LOWER=$(printf '%s\n%s\n' "$CRYPTO_VER" "$MIN_VER" | sort -V | head -1); \
+        if [ "$LOWER" = "$MIN_VER" ]; then \
+            echo "INFO: edge-fallback включён, но libcrypto3=$CRYPTO_VER уже >= $MIN_VER — пропускаем"; \
+        else \
+            echo "INFO: edge-fallback — apk add --repository=${ALPINE_EDGE_REPO_URL} libcrypto3 libssl3 (точечный, /etc/apk/repositories НЕ меняется)"; \
+            if apk add --no-cache --upgrade --repository="${ALPINE_EDGE_REPO_URL}" libcrypto3 libssl3 2>&1; then \
+                NEW_VER=$(apk info -v libcrypto3 2>/dev/null | head -1 | sed -E 's/^libcrypto3-//'); \
+                NEW_LOWER=$(printf '%s\n%s\n' "$NEW_VER" "$MIN_VER" | sort -V | head -1); \
+                if [ "$NEW_LOWER" = "$MIN_VER" ]; then \
+                    echo "OK: edge-fallback — libcrypto3=$NEW_VER >= $MIN_VER, CVE-2026-45447 закрыт"; \
+                else \
+                    echo "WARN: edge-fallback выполнился, но libcrypto3=$NEW_VER всё ещё < $MIN_VER (Alpine edge сам ещё не выпустил)"; \
+                fi; \
+            else \
+                echo "WARN: edge-fallback apk add упал — outbound к ${ALPINE_EDGE_REPO_URL} закрыт?"; \
+            fi; \
+        fi; \
+    else \
+        echo "INFO: edge-fallback ОТКЛЮЧЁН (ALPINE_OPENSSL_EDGE_FALLBACK=false). Если verify-блок выше показал WARN — включить через build-arg."; \
+    fi
+
 # Доп. пакеты через apk add НЕ ставим — в закрытом корп. контуре Jenkins-агент
 # не имеет выхода на dl-cdn.alpinelinux.org (Permission denied на прокси), а
 # подтверждённого корп. Alpine-зеркала у Альфы пока нет (см. doc 132).
@@ -227,12 +277,17 @@ USER app
 # aspnet:alpine без ca-certificates пакета default-путь может не работать;
 # с явным env переменной .NET HttpClient читает наш bundle (созданный выше
 # через ручную конкатенацию).
-ENV ASPNETCORE_URLS=http://+:5000 \
-    ASPNETCORE_TEMP=/tmp \
+#
+# Порт — 8080, как стандарт платформы Альфы. ASPNETCORE_URLS НЕ задаём:
+# helm-чарт платформы инжектит `HTTP_PORTS=8080` в env пода, и .NET 10
+# автоматически биндится на этот порт. Жёсткий ASPNETCORE_URLS вызывал WARN
+# `Overriding HTTP_PORTS '8080' ... Binding to URLs 'http://0.0.0.0:5000'`
+# и заставлял держать Service.target_port=5000 (см. v0.0.1.50-SNAPSHOT log).
+ENV ASPNETCORE_TEMP=/tmp \
     DOTNET_GCServer=1 \
     DOTNET_RUNNING_IN_CONTAINER=true \
     SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
     SSL_CERT_DIR=/etc/ssl/certs
 
-EXPOSE 5000/tcp
+EXPOSE 8080/tcp
 ENTRYPOINT ["dotnet", "KiloImportService.Api.dll"]

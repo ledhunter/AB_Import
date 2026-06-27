@@ -2,9 +2,15 @@ namespace Visary.Api.Dto;
 
 public sealed class VisaryOptions
 {
-    public const string SectionName = "Visary";
+    // Имена секций приведены к эталону `service-dev` (см. doc 145 + doc 132):
+    // конфиг живёт в `EndpointsConfiguration:VisaryApi`, в env маппится как
+    // `EndpointsConfiguration__VisaryApi__Endpoint` (двойное подчёркивание).
+    public const string SectionName = "EndpointsConfiguration:VisaryApi";
 
-    public string BaseUrl { get; set; } = string.Empty;
+    // Имя поля «Endpoint» — тоже эталонное; в helm values платформа Альфы
+    // подставляет `$(WEBAPI_URL)/api` (см. alfa-building-fm-import.yaml).
+    public string Endpoint { get; set; } = string.Empty;
+
     public string BearerToken { get; set; } = string.Empty;
 
     public int SyncPageSize { get; set; } = 200;
